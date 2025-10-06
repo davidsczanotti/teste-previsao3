@@ -10,6 +10,8 @@ import pandas_ta as ta
 from ...binance_client import get_historical_klines, get_current_price
 from .config import load_active_config
 
+position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0}
+
 
 def check_signals(df: pd.DataFrame, params: dict) -> str:
     """
@@ -76,6 +78,7 @@ def main():
     print("Parâmetros carregados:", {k: v for k, v in params.items() if k not in ["ticker", "interval", "days"]})
 
     # Loop principal
+    print("\nIniciando monitoramento... Pressione Ctrl+C para parar.")
     while True:
         try:
             # Carrega um pouco mais de dados do que o necessário para o cálculo das EMAs
@@ -90,17 +93,64 @@ def main():
                 time.sleep(args.poll_interval_seconds)
                 continue
 
-            # Verifica o sinal
-            signal = check_signals(df.copy(), params)
-
             # Exibe o status
             current_price = get_current_price(args.ticker)
             now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
-            if signal != "hold":
-                print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: *** {signal.upper()} ***")
+            # --- LÓGICA DE GESTÃO DE POSIÇÃO ---
+
+            # 1. Se estiver em uma posição, verificar saída
+            if position_state["position"] == "long":
+                if current_price >= position_state["take_profit"]:
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU TAKE PROFIT (ALVO) ***")
+                    position_state["position"] = None
+                elif current_price <= position_state["stop_loss"]:
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU STOP LOSS (PERDA) ***")
+                    position_state["position"] = None
+                else:
+                    pnl = (current_price - position_state["entry_price"]) * params["lot_size"]
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: LONG | P&L: ${pnl:.2f}")
+
+            elif position_state["position"] == "short":
+                if current_price <= position_state["take_profit"]:
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU TAKE PROFIT (ALVO) ***")
+                    position_state["position"] = None
+                elif current_price >= position_state["stop_loss"]:
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU STOP LOSS (PERDA) ***")
+                    position_state["position"] = None
+                else:
+                    pnl = (position_state["entry_price"] - current_price) * params["lot_size"]
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: SHORT | P&L: ${pnl:.2f}")
+
+            # 2. Se não estiver em uma posição, verificar entrada
             else:
-                print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: {signal}")
+                signal = check_signals(df.copy(), params)
+                if signal == "buy":
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: *** ENTRADA COMPRA (LONG) ***")
+                    position_state["position"] = "long"
+                    position_state["entry_price"] = current_price
+                    # Calcula SL/TP (lógica simplificada do backtest)
+                    pullback_window = df.tail(10)
+                    stop_loss = pullback_window["low"].min()
+                    risk = current_price - stop_loss
+                    take_profit = current_price + (risk * params["risk_reward_ratio"])
+                    position_state["stop_loss"] = stop_loss
+                    position_state["take_profit"] = take_profit
+                    print(f" -> Alvo: {take_profit:.2f} | Stop: {stop_loss:.2f}")
+                elif signal == "sell":
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: *** ENTRADA VENDA (SHORT) ***")
+                    position_state["position"] = "short"
+                    position_state["entry_price"] = current_price
+                    # Calcula SL/TP (lógica simplificada do backtest)
+                    rally_window = df.tail(10)
+                    stop_loss = rally_window["high"].max()
+                    risk = stop_loss - current_price
+                    take_profit = current_price - (risk * params["risk_reward_ratio"])
+                    position_state["stop_loss"] = stop_loss
+                    position_state["take_profit"] = take_profit
+                    print(f" -> Alvo: {take_profit:.2f} | Stop: {stop_loss:.2f}")
+                else:
+                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: hold")
 
             # Aguarda o próximo ciclo
             time.sleep(args.poll_interval_seconds)

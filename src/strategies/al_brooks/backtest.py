@@ -294,6 +294,16 @@ def main():
     print(f"Média de Ganho: $ {avg_win:.2f}")
     print(f"Média de Perda: $ {avg_loss:.2f}")
 
+    # Calcula e exibe a duração média dos trades
+    if num_trades > 0:
+        total_duration = sum(
+            (trade["exit_date"] - trade["entry_date"] for trade in closed_trades),
+            timedelta(0),
+        )
+        avg_duration = total_duration / num_trades
+        print(f"Duração Média do Trade: {str(avg_duration).split('.')[0]}")
+
+
     # Opcional: Salvar trades em um arquivo para análise mais profunda
     # pd.DataFrame(closed_trades).to_csv("al_brooks_trades.csv", index=False)
     # print("\nTrades salvos em 'al_brooks_trades.csv'")
