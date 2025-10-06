@@ -10,7 +10,7 @@ import pandas_ta as ta
 from ...binance_client import get_historical_klines, get_current_price
 from .config import load_active_config
 
-position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0, "capital": 100.0}
+position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0}
 
 
 def check_signals(df: pd.DataFrame, params: dict) -> str:
@@ -64,10 +64,13 @@ def main():
     parser.add_argument("--capital", type=float, default=100.0, help="Capital inicial para o paper trading")
     args = parser.parse_args()
 
+    # Inicializa o estado da posição e capital
+    position_state["capital"] = args.capital
+
     print("--- Al Brooks Live Signal Monitor ---")
 
-    # Inicializa o capital
-    position_state["capital"] = args.capital
+    # Limpa o estado da posição para uma nova execução
+    position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
 
     # Tenta carregar a configuração ativa
     active_cfg = load_active_config(args.ticker, args.interval)
@@ -156,7 +159,7 @@ def main():
                     # Calcula SL/TP (lógica simplificada do backtest)
                     pullback_window = df.tail(10)
                     stop_loss = pullback_window["low"].min()
-                    risk = current_price - stop_loss
+                    risk = max(0.001, current_price - stop_loss)  # Evita risco zero ou negativo
                     take_profit = current_price + (risk * params["risk_reward_ratio"])
                     position_state["stop_loss"] = stop_loss
                     position_state["take_profit"] = take_profit

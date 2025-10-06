@@ -6,8 +6,7 @@ import optuna
 import pandas as pd
 
 from ...binance_client import get_historical_klines
-from .backtest import backtest_al_brooks_inside_bar
-from .backtest import plot_backtest as plot_backtest_func
+from .backtest import backtest_al_brooks_inside_bar, plot_backtest
 from .config import AlBrooksConfig, save_active_config
 
 
@@ -156,7 +155,7 @@ def main():
     # Plotar o gráfico do período de validação
     if not df_valid.empty:
         print("\nGerando gráfico do período de validação...")
-        plot_backtest_func(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
+        plot_backtest(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
 
 
 if __name__ == "__main__":
