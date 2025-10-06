@@ -57,7 +57,7 @@ O fluxo de trabalho é simples: atualizar a base de dados, otimizar a estratégi
 Garanta que seu cache local de dados (`data/klines_cache.db`) esteja atualizado com os dados mais recentes da Binance.
 
 ```bash
-poetry run python -m scripts.populate_cache
+poetry run python -m scripts.populate_cache BTCUSDT 1h
 ```
 
 ### Passo 2: Otimizar a Estratégia (Optuna)
@@ -92,4 +92,3 @@ poetry run python -m src.strategies.al_brooks.live
 ```
 
 Você verá o preço atual e os sinais sendo atualizados a cada 10 segundos.
-

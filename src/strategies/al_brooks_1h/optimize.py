@@ -6,8 +6,7 @@ import optuna
 import pandas as pd
 
 from ...binance_client import get_historical_klines
-from .backtest import backtest_al_brooks_inside_bar
-from .backtest import plot_backtest as plot_backtest_func
+from .backtest import backtest_al_brooks_inside_bar, plot_backtest
 from .config import AlBrooksConfig, save_active_config
 
 
@@ -23,12 +22,12 @@ def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
 def make_objective(df_train: pd.DataFrame, lot_size: float):
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
-        ema_fast = trial.suggest_int("ema_fast_period", 5, 15)
-        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 5, 30)
-        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 10, 60)
+        ema_fast = trial.suggest_int("ema_fast_period", 8, 20)
+        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 5, 50)
+        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 10, 100)
 
         risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.5, 3.5, step=0.1)
-        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 1.0, step=0.05)
+        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 2.0, step=0.1)
 
         # Roda o backtest com os parâmetros sugeridos
         try:
@@ -48,7 +47,15 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
         # Métrica de otimização: Profit Factor
         # Queremos maximizar o Profit Factor, mas também garantir que seja lucrativo
         closed_trades = [t for t in trades if "pnl" in t]
-        if not closed_trades:
+        num_trades = len(closed_trades)
+
+        # Penaliza fortemente estratégias com pouquíssimos trades para evitar overfitting
+        min_trades_required = 10
+        if num_trades < min_trades_required:
+            # Retorna um valor negativo que melhora quanto mais perto do mínimo de trades
+            return num_trades - min_trades_required
+
+        if num_trades == 0:
             return 0.0  # Sem trades, sem pontuação
 
         total_profit = sum(t["pnl"] for t in closed_trades if t["pnl"] > 0)
@@ -59,11 +66,7 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
         else:
             profit_factor = total_profit / total_loss
 
-        # Condição: Apenas considere o Profit Factor se o P&L for positivo
-        if pnl <= 0:
-            return pnl  # Retorna o P&L negativo para penalizar estratégias não lucrativas
-
-        return profit_factor
+        return pnl
 
     return objective
 
@@ -95,7 +98,7 @@ def print_summary(title: str, trades: list, pnl: float):
 def main():
     parser = argparse.ArgumentParser(description="Otimizar a estratégia de Al Brooks com Optuna.")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
-    parser.add_argument("--interval", default="15m", help="Intervalo das velas")
+    parser.add_argument("--interval", default="1h", help="Intervalo das velas")
     parser.add_argument("--days", type=int, default=365, help="Dias de dados históricos")
     parser.add_argument("--train_frac", type=float, default=0.8, help="Fração de dados para treino (ex: 0.8 para 80%)")
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote")
@@ -156,7 +159,7 @@ def main():
     # Plotar o gráfico do período de validação
     if not df_valid.empty:
         print("\nGerando gráfico do período de validação...")
-        plot_backtest_func(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
+        plot_backtest(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
 
 
 if __name__ == "__main__":
