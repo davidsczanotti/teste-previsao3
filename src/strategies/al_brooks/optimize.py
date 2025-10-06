@@ -1,11 +1,13 @@
 import argparse
 from datetime import datetime, timedelta, UTC
+import json
 
 import optuna
 import pandas as pd
 
 from ...binance_client import get_historical_klines
 from .backtest import backtest_al_brooks_inside_bar
+from .backtest import plot_backtest as plot_backtest_func
 from .config import AlBrooksConfig, save_active_config
 
 
@@ -30,7 +32,7 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
 
         # Roda o backtest com os parâmetros sugeridos
         try:
-            trades, pnl = backtest_al_brooks_inside_bar(
+            trades, pnl, _ = backtest_al_brooks_inside_bar(
                 df_train.copy(),
                 ema_fast_period=ema_fast,
                 ema_medium_period=ema_medium,
@@ -66,11 +68,36 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
     return objective
 
 
+def print_summary(title: str, trades: list, pnl: float):
+    """Imprime um resumo detalhado do backtest."""
+    print(f"\n--- {title} ---")
+
+    closed_trades = [t for t in trades if "pnl" in t]
+    num_trades = len(closed_trades)
+
+    if num_trades == 0:
+        print("Nenhuma operação foi fechada no período.")
+        print(f"P&L Final: $ {pnl:.2f}")
+        return
+
+    wins = [t for t in closed_trades if t["pnl"] > 0]
+    total_profit = sum(t["pnl"] for t in wins)
+    total_loss = abs(sum(t["pnl"] for t in closed_trades if t["pnl"] < 0))
+
+    win_rate = (len(wins) / num_trades) * 100
+    profit_factor = total_profit / total_loss if total_loss > 0 else float("inf")
+
+    print(
+        f"P&L Final: $ {pnl:.2f} | Trades: {num_trades} | Win Rate: {win_rate:.2f}% | Profit Factor: {profit_factor:.2f}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Otimizar a estratégia de Al Brooks com Optuna.")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
     parser.add_argument("--interval", default="15m", help="Intervalo das velas")
     parser.add_argument("--days", type=int, default=365, help="Dias de dados históricos")
+    parser.add_argument("--train_frac", type=float, default=0.8, help="Fração de dados para treino (ex: 0.8 para 80%)")
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote")
     parser.add_argument("--trials", type=int, default=200, help="Número de trials do Optuna")
     parser.add_argument("--seed", type=int, default=42, help="Semente para reprodutibilidade")
@@ -79,16 +106,20 @@ def main():
     print(f"Carregando dados: {args.ticker} @ {args.interval} por {args.days} dias...")
     df = load_data(args.ticker, args.interval, args.days)
 
-    # Otimização será feita no conjunto de dados inteiro por simplicidade,
-    # mas uma divisão treino/validação seria ideal para um teste mais robusto.
-    df_train = df
+    # Divide os dados em treino (in-sample) e validação (out-of-sample)
+    n = len(df)
+    split_idx = int(n * args.train_frac)
+    df_train = df.iloc[:split_idx].copy()
+    df_valid = df.iloc[split_idx:].copy()
 
-    print(f"Total de {len(df_train)} candles para otimização.")
+    print(f"Total de candles: {n} | Treino: {len(df_train)} | Validação: {len(df_valid)}")
 
     sampler = optuna.samplers.TPESampler(seed=args.seed)
     # Queremos maximizar o Profit Factor
     study = optuna.create_study(direction="maximize", sampler=sampler)
-    study.optimize(make_objective(df_train, args.lot_size), n_trials=args.trials)
+    study.optimize(
+        make_objective(df_train, args.lot_size), n_trials=args.trials, show_progress_bar=True, gc_after_trial=True
+    )
 
     print("\n--- Otimização Concluída ---")
     print(f"Melhor valor (Profit Factor): {study.best_value:.2f}")
@@ -106,23 +137,26 @@ def main():
     active_path = save_active_config(best_config)
     print(f"\nConfiguração ativa salva em: {active_path}")
 
-    # Validar os melhores parâmetros no mesmo conjunto de dados para ver o P&L
-    print("\n--- Validando melhores parâmetros ---")
-    trades, pnl = backtest_al_brooks_inside_bar(
+    # Executa o backtest com os melhores parâmetros nos dados de TREINO
+    trades_train, pnl_train, _ = backtest_al_brooks_inside_bar(
         df_train.copy(),
         **study.best_params,
         lot_size=best_config.lot_size,
     )
+    print_summary("Resultado em Amostra (In-Sample / Treino)", trades_train, pnl_train)
 
-    closed_trades = [t for t in trades if "pnl" in t]
-    num_trades = len(closed_trades)
-    wins = len([t for t in closed_trades if t["pnl"] > 0])
-    win_rate = (wins / num_trades * 100) if num_trades > 0 else 0
+    # Executa o backtest com os mesmos parâmetros nos dados de VALIDAÇÃO
+    trades_valid, pnl_valid, df_valid_indicators = backtest_al_brooks_inside_bar(
+        df_valid.copy(),
+        **study.best_params,
+        lot_size=best_config.lot_size,
+    )
+    print_summary("Resultado Fora da Amostra (Out-of-Sample / Validação)", trades_valid, pnl_valid)
 
-    print(f"Resultado com parâmetros otimizados:")
-    print(f"P&L Final: $ {pnl:.2f}")
-    print(f"Total de Operações: {num_trades}")
-    print(f"Taxa de Acerto: {win_rate:.2f}%")
+    # Plotar o gráfico do período de validação
+    if not df_valid.empty:
+        print("\nGerando gráfico do período de validação...")
+        plot_backtest_func(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ def backtest_al_brooks_inside_bar(
     A lógica principal é a de "reversão" (compra no pullback em tendência de alta).
     """
     if df.empty:
-        return [], 0.0
+        return [], 0.0, df
 
     # 1. Calcular Indicadores
     df["ema_fast"] = ta.ema(df["close"], length=ema_fast_period)
@@ -157,7 +157,7 @@ def backtest_al_brooks_inside_bar(
     # Calcular P&L total
     total_pnl = sum(t.get("pnl", 0) for t in trades)
 
-    return trades, total_pnl
+    return trades, total_pnl, df
 
 
 def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
@@ -185,7 +185,7 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
         if "entry_date" not in trade:
             continue
         try:
-            idx = df_plot.index.get_loc(trade["entry_date"], method="nearest")
+            idx = df_plot.index.get_indexer([trade["entry_date"]], method="nearest")[0]
             if trade["type"] == "long":
                 buy_markers[idx] = df_plot["Low"].iloc[idx] * 0.98
             else:
@@ -194,9 +194,9 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
             continue  # Ignora trades fora da janela de plotagem
 
     if any(not np.isnan(v) for v in buy_markers):
-        addplots.append(mpf.make_addplot(buy_markers, type="scatter", marker="^", color="green", s=100))
+        addplots.append(mpf.make_addplot(buy_markers, type="scatter", marker="^", color="green", markersize=100))
     if any(not np.isnan(v) for v in sell_markers):
-        addplots.append(mpf.make_addplot(sell_markers, type="scatter", marker="v", color="red", s=100))
+        addplots.append(mpf.make_addplot(sell_markers, type="scatter", marker="v", color="red", markersize=100))
 
     # Gera o gráfico
     chart_dir = "reports/charts"
@@ -212,6 +212,7 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
         savefig=filename,
     )
     print(f"\nGráfico do backtest salvo em: {filename}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Backtest para a estratégia de Inside Bar de Al Brooks.")
@@ -260,7 +261,7 @@ def main():
 
     # Executar o backtest
     print("Executando backtest...")
-    trades, total_pnl = backtest_al_brooks_inside_bar(df.copy(), **params)
+    trades, total_pnl, df_with_indicators = backtest_al_brooks_inside_bar(df.copy(), **params)
 
     # Exibir resultados
     print("\n--- Resultados do Backtest ---")
@@ -298,7 +299,7 @@ def main():
     # print("\nTrades salvos em 'al_brooks_trades.csv'")
 
     # Plotar o resultado
-    plot_backtest(df, trades, args.ticker)
+    plot_backtest(df_with_indicators, trades, args.ticker)
 
 
 if __name__ == "__main__":
