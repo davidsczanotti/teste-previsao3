@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# Ambiente virtual
+venv/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Jupyter
+.ipynb_checkpoints
+
+# Diretórios do projeto
+data/
+live_charts/
+reports/
+historico/  # Ignorar dados históricos gerados (ajustar conforme necessidade)
+trascricao-estrategias/  # Ignorar transcrições temporárias
+
+# Logs e bancos de dados
+*.log
+*.sqlite3
+*.db
+
+# Configurações de ambiente
+.env
+.env.local
+.env.*.local
+
+# Arquivos temporários
+.DS_Store
+Thumbs.db
