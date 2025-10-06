@@ -15,6 +15,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = Client("", "", requests_params={"timeout": 20, "verify": False})
 
 
+def get_current_price(symbol: str) -> float:
+    """Busca o preço de mercado mais recente para um símbolo."""
+    ticker = client.get_symbol_ticker(symbol=symbol)
+    return float(ticker["price"])
+
+
 def _download_klines(symbol: str, interval: str, start_ms: int, end_ms: int):
     if start_ms > end_ms:
         return []
