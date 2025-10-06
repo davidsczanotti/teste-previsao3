@@ -59,7 +59,7 @@ def check_signals(df: pd.DataFrame, params: dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Executa a estratégia Al Brooks em modo 'live' (paper trading).")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
-    parser.add_argument("--interval", default="1h", help="Intervalo das velas")
+    parser.add_argument("--interval", default="1d", help="Intervalo das velas")
     parser.add_argument("--poll_interval_seconds", type=int, default=10, help="Intervalo de verificação em segundos")
     parser.add_argument("--capital", type=float, default=100.0, help="Capital inicial para o paper trading")
     args = parser.parse_args()
@@ -85,10 +85,15 @@ def main():
     print("\nIniciando monitoramento... Pressione Ctrl+C para parar.")
     while True:
         try:
-            # Converte o intervalo para minutos (ex: '15m' -> 15, '1h' -> 60)
+            # Converte o intervalo para minutos (ex: '15m' -> 15, '1h' -> 60, '1d' -> 1440)
             interval_unit = args.interval[-1]
             interval_value = int(args.interval[:-1])
-            interval_minutes = interval_value * 60 if interval_unit == "h" else interval_value
+            if interval_unit == "h":
+                interval_minutes = interval_value * 60
+            elif interval_unit == "d":
+                interval_minutes = interval_value * 24 * 60
+            else:  # Assume 'm'
+                interval_minutes = interval_value
 
             # Carrega um pouco mais de dados do que o necessário para o cálculo das EMAs
             days_to_load = (

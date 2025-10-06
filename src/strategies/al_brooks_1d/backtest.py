@@ -217,7 +217,7 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
 def main():
     parser = argparse.ArgumentParser(description="Backtest para a estratégia de Inside Bar de Al Brooks.")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo (ex: BTCUSDT)")
-    parser.add_argument("--interval", default="1h", help="Intervalo das velas (ex: 15m, 1h)")
+    parser.add_argument("--interval", default="1d", help="Intervalo das velas (ex: 15m, 1h, 1d)")
     parser.add_argument("--days", type=int, default=365, help="Dias de dados históricos para o backtest")
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote para cada operação")
     args = parser.parse_args()
@@ -302,7 +302,6 @@ def main():
         )
         avg_duration = total_duration / num_trades
         print(f"Duração Média do Trade: {str(avg_duration).split('.')[0]}")
-
 
     # Opcional: Salvar trades em um arquivo para análise mais profunda
     # pd.DataFrame(closed_trades).to_csv("al_brooks_trades.csv", index=False)

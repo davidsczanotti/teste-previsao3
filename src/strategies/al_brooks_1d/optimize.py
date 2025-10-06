@@ -98,7 +98,7 @@ def print_summary(title: str, trades: list, pnl: float):
 def main():
     parser = argparse.ArgumentParser(description="Otimizar a estratégia de Al Brooks com Optuna.")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
-    parser.add_argument("--interval", default="1h", help="Intervalo das velas")
+    parser.add_argument("--interval", default="1d", help="Intervalo das velas")
     parser.add_argument("--days", type=int, default=365, help="Dias de dados históricos")
     parser.add_argument("--train_frac", type=float, default=0.8, help="Fração de dados para treino (ex: 0.8 para 80%)")
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote")

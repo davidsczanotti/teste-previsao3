@@ -32,21 +32,21 @@ A estratégia foi baseada na transcrição de um vídeo que detalha um setup de 
 
 ## 3. Principais Resultados Alcançados
 
-Após a otimização em um período de 5 anos de dados (`--days 1825`), os resultados do teste *out-of-sample* para o tempo gráfico de **1 hora** foram:
+Após a otimização em um período de 5 anos de dados (`--days 1825`), os resultados do teste *out-of-sample* para o tempo gráfico de **1 dia (1D)** serão preenchidos aqui.
 
 - **Resultado em Amostra (Treino - ~4 anos)**:
-  - **P&L Final**: $ 2126.78
-  - **Trades**: 358
-  - **Taxa de Acerto**: 34.92%
-  - **Profit Factor**: 1.25
+  - **P&L Final**: A ser definido
+  - **Trades**: A ser definido
+  - **Taxa de Acerto**: A ser definido
+  - **Profit Factor**: A ser definido
 
 - **Resultado Fora da Amostra (Validação - ~1 ano)**:
-  - **P&L Final**: $ 889.15
-  - **Trades**: 90
-  - **Taxa de Acerto**: 37.78%
-  - **Profit Factor**: 1.26
+  - **P&L Final**: A ser definido
+  - **Trades**: A ser definido
+  - **Taxa de Acerto**: A ser definido
+  - **Profit Factor**: A ser definido
 
-**Conclusão Principal**: A estratégia se provou **extremamente robusta** no tempo gráfico de 1 hora. A consistência das métricas (especialmente o Profit Factor) entre os dados de treino e os de validação (dados não vistos) é um forte indicativo de que a estratégia não está sobreajustada (*overfitted*) e possui uma vantagem de mercado real e generalizável.
+**Conclusão Principal**: A ser definida após a otimização e validação.
 
 ## 4. Passo a Passo de Como Usar
 
@@ -57,7 +57,7 @@ O fluxo de trabalho é simples: atualizar a base de dados, otimizar a estratégi
 Garanta que seu cache local de dados (`data/klines_cache.db`) esteja atualizado com os dados mais recentes da Binance.
 
 ```bash
-poetry run python -m scripts.populate_cache BTCUSDT 1h
+poetry run python -m scripts.populate_cache BTCUSDT 1d
 ```
 
 ### Passo 2: Otimizar a Estratégia (Optuna)
