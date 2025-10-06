@@ -10,7 +10,7 @@ import pandas_ta as ta
 from ...binance_client import get_historical_klines, get_current_price
 from .config import load_active_config
 
-position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0}
+position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0, "capital": 100.0}
 
 
 def check_signals(df: pd.DataFrame, params: dict) -> str:
@@ -61,9 +61,13 @@ def main():
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
     parser.add_argument("--interval", default="15m", help="Intervalo das velas")
     parser.add_argument("--poll_interval_seconds", type=int, default=10, help="Intervalo de verificação em segundos")
+    parser.add_argument("--capital", type=float, default=100.0, help="Capital inicial para o paper trading")
     args = parser.parse_args()
 
     print("--- Al Brooks Live Signal Monitor ---")
+
+    # Inicializa o capital
+    position_state["capital"] = args.capital
 
     # Tenta carregar a configuração ativa
     active_cfg = load_active_config(args.ticker, args.interval)
@@ -102,25 +106,45 @@ def main():
             # 1. Se estiver em uma posição, verificar saída
             if position_state["position"] == "long":
                 if current_price >= position_state["take_profit"]:
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU TAKE PROFIT (ALVO) ***")
+                    pnl = (position_state["take_profit"] - position_state["entry_price"]) * params["lot_size"]
+                    position_state["capital"] += pnl
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** TAKE PROFIT (ALVO) *** | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
                     position_state["position"] = None
                 elif current_price <= position_state["stop_loss"]:
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU STOP LOSS (PERDA) ***")
+                    pnl = (position_state["stop_loss"] - position_state["entry_price"]) * params["lot_size"]
+                    position_state["capital"] += pnl
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** STOP LOSS (PERDA) *** | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
                     position_state["position"] = None
                 else:
-                    pnl = (current_price - position_state["entry_price"]) * params["lot_size"]
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: LONG | P&L: ${pnl:.2f}")
+                    unrealized_pnl = (current_price - position_state["entry_price"]) * params["lot_size"]
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: LONG | P&L flutuante: ${unrealized_pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
 
             elif position_state["position"] == "short":
                 if current_price <= position_state["take_profit"]:
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU TAKE PROFIT (ALVO) ***")
+                    pnl = (position_state["entry_price"] - position_state["take_profit"]) * params["lot_size"]
+                    position_state["capital"] += pnl
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** TAKE PROFIT (ALVO) *** | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
                     position_state["position"] = None
                 elif current_price >= position_state["stop_loss"]:
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** ATINGIU STOP LOSS (PERDA) ***")
+                    pnl = (position_state["entry_price"] - position_state["stop_loss"]) * params["lot_size"]
+                    position_state["capital"] += pnl
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | SAÍDA: *** STOP LOSS (PERDA) *** | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
                     position_state["position"] = None
                 else:
-                    pnl = (position_state["entry_price"] - current_price) * params["lot_size"]
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: SHORT | P&L: ${pnl:.2f}")
+                    unrealized_pnl = (position_state["entry_price"] - current_price) * params["lot_size"]
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | POSIÇÃO: SHORT | P&L flutuante: ${unrealized_pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+                    )
 
             # 2. Se não estiver em uma posição, verificar entrada
             else:
@@ -150,7 +174,9 @@ def main():
                     position_state["take_profit"] = take_profit
                     print(f" -> Alvo: {take_profit:.2f} | Stop: {stop_loss:.2f}")
                 else:
-                    print(f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: hold")
+                    print(
+                        f"[{now_str}] PREÇO: {current_price:.2f} | SINAL: hold | CAPITAL: ${position_state['capital']:.2f}"
+                    )
 
             # Aguarda o próximo ciclo
             time.sleep(args.poll_interval_seconds)
