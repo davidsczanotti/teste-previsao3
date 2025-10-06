@@ -1,0 +1,71 @@
+Trades fechados: 259 | Win rate: 40.54%
+PF: 2.37 | Avg/Trade: $0.2333 | MDD: -11.11% | Fees: 0.1000%
+[I 2025-10-03 16:57:18,905] Trial 291 finished with value: -568.6953638327687 and parameters: {'ma_short': 17, 'ma_mid': 90, 'ma_long': 217, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 64.77 (64.77%)
+Trades fechados: 263 | Win rate: 41.44%
+PF: 2.48 | Avg/Trade: $0.2463 | MDD: -9.48% | Fees: 0.1000%
+[I 2025-10-03 16:57:21,079] Trial 292 finished with value: -556.0410309962454 and parameters: {'ma_short': 17, 'ma_mid': 88, 'ma_long': 211, 'min_hold_bars': 5, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 59.47 (59.47%)
+Trades fechados: 255 | Win rate: 40.39%
+PF: 2.33 | Avg/Trade: $0.2332 | MDD: -11.83% | Fees: 0.1000%
+[I 2025-10-03 16:57:23,161] Trial 293 finished with value: -568.8514045207028 and parameters: {'ma_short': 18, 'ma_mid': 89, 'ma_long': 220, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 68.62 (68.62%)
+Trades fechados: 281 | Win rate: 40.21%
+PF: 2.72 | Avg/Trade: $0.2442 | MDD: -9.31% | Fees: 0.1000%
+[I 2025-10-03 16:57:25,238] Trial 294 finished with value: -586.4702580598295 and parameters: {'ma_short': 17, 'ma_mid': 88, 'ma_long': 226, 'min_hold_bars': 1, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 56.77 (56.77%)
+Trades fechados: 279 | Win rate: 38.71%
+PF: 2.26 | Avg/Trade: $0.2035 | MDD: -11.76% | Fees: 0.1000%
+[I 2025-10-03 16:57:27,370] Trial 295 finished with value: -618.8542577544231 and parameters: {'ma_short': 16, 'ma_mid': 84, 'ma_long': 213, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 60.43 (60.43%)
+Trades fechados: 259 | Win rate: 40.54%
+PF: 2.37 | Avg/Trade: $0.2333 | MDD: -11.11% | Fees: 0.1000%
+[I 2025-10-03 16:57:29,557] Trial 296 finished with value: -568.6953638327687 and parameters: {'ma_short': 17, 'ma_mid': 90, 'ma_long': 217, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 60.44 (60.44%)
+Trades fechados: 270 | Win rate: 40.37%
+PF: 2.37 | Avg/Trade: $0.2239 | MDD: -10.07% | Fees: 0.1000%
+[I 2025-10-03 16:57:31,876] Trial 297 finished with value: -580.2139052461679 and parameters: {'ma_short': 17, 'ma_mid': 87, 'ma_long': 222, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 57.76 (57.76%)
+Trades fechados: 255 | Win rate: 39.61%
+PF: 2.27 | Avg/Trade: $0.2265 | MDD: -12.29% | Fees: 0.1000%
+[I 2025-10-03 16:57:33,993] Trial 298 finished with value: -575.1885179882782 and parameters: {'ma_short': 18, 'ma_mid': 89, 'ma_long': 215, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Backtest MA Crossover:
+Total P&L: $ 57.77 (57.77%)
+Trades fechados: 274 | Win rate: 39.78%
+PF: 2.29 | Avg/Trade: $0.2108 | MDD: -10.70% | Fees: 0.1000%
+[I 2025-10-03 16:57:36,184] Trial 299 finished with value: -597.2088085832121 and parameters: {'ma_short': 16, 'ma_mid': 87, 'ma_long': 220, 'min_hold_bars': 6, 'cooldown_bars': 0}. Best is trial 176 with value: -537.7867931305913.
+Melhor score: -537.7867931305913
+Melhor configuração:
+{
+  "ticker": "BTCUSDT",
+  "interval": "15m",
+  "days": 365,
+  "lot_size": 0.001,
+  "fee_rate": 0.001,
+  "min_hold_bars": 6,
+  "cooldown_bars": 0,
+  "allow_short": false,
+  "ma_short_window": 17,
+  "ma_mid_window": 89,
+  "ma_long_window": 213,
+  "ma_type": "ema"
+}
+Estatísticas:
+{
+  "pnl": 64.88484300999991,
+  "num_trades": 259,
+  "win_rate": 41.6988416988417,
+  "return_pct": 64.88484300999991,
+  "profit_factor": 2.4442553329060073,
+  "avg_pnl_per_trade": 0.25052062938223907,
+  "max_drawdown_pct": -8.467163614059121,
+  "fee_rate": 0.001
+}
+(teste-previsao3-py3.12) davidsc@davidsc:~/projetos-python/teste-previsao3$ 

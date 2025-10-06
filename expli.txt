@@ -1,0 +1,8 @@
+aqui nesta aplicação vamos fazer varios testes co estrategias de trading, 
+agora temos uma base em sqlite [klines_cache.db](data/klines_cache.db)  
+que por enquanto temos infromações do btc de 15m, mas o principal aqui é trabalhar com 
+deep leaning aporendizagem por reforço, porque estou te explicando isso porque eu 
+quero que organize para mim, 
+o codigo enquanto modificamos ou criamos estrategias novas, 
+vou trazer ideias de estratégias mas vamos tranformar as estrategias em politicas e deixar o 
+agente escolher qual o melhor momento de sair e entrar, e a pontuação é o saldo do trading, positivo e negativo

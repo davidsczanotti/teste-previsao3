@@ -1,0 +1,34 @@
+[project]
+name = "teste-previsao3"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "davidsc",email = "davidsc@zanotti.com.br"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas (>=2.3.3,<3.0.0)",
+    "numpy (>=1.24.3,<2.3)",
+    "matplotlib (>=3.10.6,<4.0.0)",
+    "yfinance (>=0.2.66,<0.3.0)",
+    "pytz (>=2025.2,<2026.0)",
+    "python-binance (>=1.0.29,<2.0.0)",
+    "certifi (<2025)",
+    "mplfinance (>=0.12.10b0,<0.13.0)",
+    "optuna (>=3.6.1,<4.0.0)",
+    "optune (>=0.1.1,<0.2.0)",
+    "pandas-ta (>=0.4.71b0,<0.5.0)",
+]
+
+[tool.poetry]
+packages = [{include = "teste_previsao2", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.9.0"
+djlint = "^1.36.4"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

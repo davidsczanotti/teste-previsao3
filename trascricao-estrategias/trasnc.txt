@@ -1,0 +1,853 @@
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/aN1pNGSJjEQ
+
+00:00:00.000 Neste vídeo você vai aprender a
+00:00:02.220 construir um robô trailer do absoluto
+00:00:03.600 zero para a plataformas erótica que
+00:00:05.700 gerou Este resultado qualquer pessoa
+00:00:07.859 mesmo que não conheça nada de
+00:00:09.240 programação que seguir o passo a passo
+00:00:11.160 desse vídeo será capaz de colocar esse
+00:00:13.139 robô trailer para operar na sua conta
+00:00:14.460 ainda hoje fala pessoal sejam muito
+00:00:17.039 bem-vindos ao meu canal se você não me
+00:00:18.900 conhece meu nome é Danilo Leandro sou
+00:00:20.880 engenheiro Trader e programador de robôs
+00:00:22.800 se você gostou da ideia desse conteúdo
+00:00:24.840 já manda aquele like para curtir esse
+00:00:27.119 vídeo agora bora lá programar esse robô
+00:00:29.160 vem comigo
+00:00:35.360 e no vídeo de hoje vamos desenvolver
+00:00:37.739 juntos no robô utilizando o indicador
+00:00:39.600 muito pedido aqui no canal que eu estou
+00:00:41.700 castico lento mas vamos trazer uma
+00:00:43.200 aplicação um pouco alternativa talvez de
+00:00:45.899 um jeito que você nunca utilizou antes
+00:00:47.940 de definir o setup que o robô vai seguir
+00:00:49.980 para fazer suas entradas e sua saídas e
+00:00:52.320 você não sabe existem diferentes tipos
+00:00:54.420 de estocásticos eu vou plotar no gráfico
+00:00:56.280 para a gente ver juntos a diferença para
+00:00:58.020 isso basta você clicar com o botão
+00:00:59.219 direito no gráfico e ser indicador e nós
+00:01:01.440 temos aqui o estocástico lento que eu
+00:01:03.359 vou adicionar aqui no gráfico o
+00:01:04.739 estocástico pleno e também estocástico
+00:01:06.720 rápido vou clicar Ok bloqueie aqui os
+00:01:09.420 três indicadores né os três estocachos
+00:01:11.760 deixar um pouco maior aqui para
+00:01:13.140 facilitar aqui a comparação veja que
+00:01:15.180 quando plotamos aqui o estocástico ele
+00:01:16.920 vem com duas linhas a linha Clara e a
+00:01:19.200 linha verde nessa linha Clara aqui é a
+00:01:21.299 indicação do valor do estocástico e a
+00:01:23.100 linha verde é uma média da mesma maneira
+00:01:24.720 tanto pro lento para o pleno e para o
+00:01:27.659 rápido nesse caso no nosso setup de hoje
+00:01:29.520 eu vou trazer para você uma forma um
+00:01:31.500 pouco
+00:01:32.159 aplicativo Então nós não vamos utilizar
+00:01:33.479 a média que eles tocaste então para isso
+00:01:35.460 basta clicar duas vezes na média colocar
+00:01:37.380 que período um que ele vai ficar
+00:01:38.640 exatamente a média vai ficar exatamente
+00:01:40.020 em cima do valor do estocástico então
+00:01:42.060 teremos apenas uma linha para cada
+00:01:43.920 estocarstico aqui vamos primeiro ver a
+00:01:45.900 diferença entre os três tipos de
+00:01:47.700 estocástico e as diferenças vem de
+00:01:49.560 acordo com o nome né então estocástico
+00:01:51.000 rápido é o mais rápido entre os três
+00:01:52.740 Então veja só que ele possui muito mais
+00:01:54.240 ruídos aqui em sua movimentação por sua
+00:01:56.399 vez estocástico lento é o mais lento
+00:01:58.200 aqui entre os três ele tem uma
+00:01:59.640 movimentação mais suavizada e o pleno é
+00:02:02.520 tá entre o rápido e o lento Tá ele tem
+00:02:05.520 ele não é tão rápido quanto estocacho
+00:02:07.560 rápido e não é lento quanto lento então
+00:02:09.300 se você der um zoom Em algumas situações
+00:02:10.919 vai ficar mais perceptível a diferença
+00:02:13.020 entre o estocástico lento e a
+00:02:14.879 movimentação aqui do Pleno Ok no robô de
+00:02:17.280 hoje eu vou aplicar e tocar Chico lento
+00:02:18.900 mas vou deixar no código também as
+00:02:20.700 funções tanto do stocástico Pleno quanto
+00:02:22.860 de estocástico rápido pra que você
+00:02:24.239 também possa fazer os seus próprios
+00:02:25.800 testes com os outros tipos de estocagem
+00:02:27.959 para definir agora o setup eu vou tirar
+00:02:29.819 aqui os outros e tocaráticos deixar
+00:02:31.500 apenas lento para explicar para você
+00:02:33.900 como vai funcionar aqui o nosso setup de
+00:02:36.180 hoje para a definição do robô e para
+00:02:38.459 esse setup precisaremos pilotar aqui
+00:02:39.959 duas linhas definir dois valores aqui no
+00:02:42.180 estocástico que nós chamaremos de linha
+00:02:44.160 de sobrecomprado e sobrevivendo para
+00:02:46.019 isso basta clicar com o botão direito do
+00:02:47.760 mouse aqui na escala de valores
+00:02:48.900 propriedades grade fixa marcar aqui Grid
+00:02:51.780 horizontal vou remover aqui esses
+00:02:53.819 valores e vou colocar aqui o valor de 75
+00:02:55.500 e 25 Ok ele vai pilotar aqui as duas
+00:02:58.560 linhas para a gente definindo aqui a
+00:03:00.420 linha superior como sobre compra e a
+00:03:03.120 linha inferior como sobre venda bem
+00:03:05.160 definindo isso vamos aqui agora ver como
+00:03:07.680 que faremos as entradas e as saídas
+00:03:09.599 dessa operação muita gente utiliza essas
+00:03:11.760 duas linhas né sobre comprada e sobre
+00:03:13.800 vendida para definir o momento de
+00:03:15.420 comprar e vender que uma vez definidos
+00:03:17.040 aqui as linhas e sobre comprado e
+00:03:19.080 sobrevivendo para esse tipo de setup
+00:03:20.940 normalmente utiliza-se a seguinte ideia
+00:03:23.400 né quando estocástico ele está na região
+00:03:25.800 de sobre compra vende o papel imaginando
+00:03:28.379 que o preço já subiu o suficiente para
+00:03:30.180 começar a reverter da mesma maneira
+00:03:32.040 quando stocástico está indicando sobre
+00:03:33.720 vendido imagine-se que é um momento de
+00:03:35.580 comprar esse papel porque a tendência é
+00:03:38.040 ele reverter então muita gente aplica
+00:03:40.260 esse setup vendendo a cinco estocástico
+00:03:42.720 passa para a região de sobrecomprado
+00:03:45.120 porém como esse exemplo aqui perceba que
+00:03:47.700 nesse momento o papel continuou subindo
+00:03:49.920 mesmo estocástico indicando aqui já
+00:03:52.459 estar na região de sobrecomprado e o
+00:03:55.319 estocástico permaneceu sobre essa região
+00:03:57.739 todo esse movimento então se você
+00:03:59.760 tivesse de fato vendido nesse ponto você
+00:04:02.459 teria uma movimentação contra muito
+00:04:04.980 grande então a forma que eu acredito uma
+00:04:07.379 das formas mais inteligentes de você
+00:04:08.819 utilizar o estocástico utilizando
+00:04:10.980 regiões sobre comprados sobre vendido é
+00:04:13.080 você buscar operacionalizar Apenas
+00:04:15.599 quando estocar te corromper essa linha
+00:04:17.519 para baixo mostrando uma forte tendência
+00:04:20.459 dele chegar aqui mais rapidamente
+00:04:22.260 possível na linha de baixo de sobrevidos
+00:04:25.380 quando a gente sairia então nós
+00:04:27.360 venderemos sempre com estocástico cruzar
+00:04:29.280 a linha sobre a compra de cima para
+00:04:30.900 baixo como duas situações e nós vamos
+00:04:33.419 sair da operação tanto se o estocástico
+00:04:36.660 uma vez que estivermos posicionado na
+00:04:38.160 venda cruzar né voltar a cruzar a linha
+00:04:40.320 de sobre compra para cima ou ela
+00:04:42.419 encontrar na stocástico encontrar a
+00:04:44.460 linha de baixo lá do sobre vendido
+00:04:46.320 poderemos ter entrado aqui nessa região
+00:04:48.600 daí iríamos com Stop curto caso
+00:04:50.820 estocástico volte a subir volte a romper
+00:04:53.880 a linha de sobre compra para cima no
+00:04:55.740 momento que ela romper novamente para
+00:04:57.060 baixo vamos realizar uma nova venda e
+00:04:59.100 sairíamos aqui com ganho a cinco
+00:05:00.900 estocacho cruzar a linha inferior a
+00:05:03.060 linha de sobre vendido da mesma maneira
+00:05:05.100 vamos comprar quando o estocástico
+00:05:07.440 cruzar de baixo para cima a linha de
+00:05:09.840 sobrependido e vamos sair da operação
+00:05:11.639 quando o stocástico cruzar para cima da
+00:05:15.120 linha de sobrecomprado da mesma maneira
+00:05:17.460 aconteceria situações como essa e
+00:05:19.620 poderemos ter comprado aqui quando o
+00:05:21.720 estocástico cruzou de baixo para cima a
+00:05:23.580 linha de sobre vendido mas ele voltou a
+00:05:26.160 cruzar para baixo a mesma linha de
+00:05:28.139 sobrependido estando posicionado então
+00:05:30.120 nessa situação aqui comprar aqui tá
+00:05:32.759 iremos com um Stop curto nesse box da
+00:05:35.460 mesma maneira que aqui teríamos um ganho
+00:05:37.500 entrando aqui caindo nesse Box acima ou
+00:05:41.280 esse outro aqui comprando nessa região e
+00:05:43.500 saindo nessa região pronto uma vez
+00:05:45.240 definido o setup vamos começar a
+00:05:46.979 programar juntos esse robô todas as
+00:05:49.259 semanas subo novos vídeos sobre
+00:05:50.940 estratégias automatizadas e
+00:05:52.860 desenvolvimento de robôs de forma
+00:05:54.300 simples e você gostaria de aprender a
+00:05:56.400 desenvolver seus próprios robôs para
+00:05:57.780 operar sozinho por você no mercado
+00:05:59.220 financeiro se inscreva agora no nosso
+00:06:00.960 canal Não esqueça de habilitar o Sininho
+00:06:02.460 para você não perder nenhum vídeo e
+00:06:04.080 receber os códigos prontos em primeira
+00:06:05.820 mão para iniciarmos vou sugiro que você
+00:06:07.800 baixe se ainda não baixou o nosso código
+00:06:09.900 fonte base que Vai facilitar não somente
+00:06:12.120 você desenvolver esse robô de hoje
+00:06:13.860 rapidamente como qualquer outro robô
+00:06:15.960 também de forma muito rápida e prática
+00:06:17.880 para isso basta você acessar aqui Ah o
+00:06:20.039 menu estratégias loja de estratégia
+00:06:21.660 clicar aqui na lupa e filtrar por Danilo
+00:06:24.000 Leandro bom maximizar essa janela aqui e
+00:06:26.580 uma vez que você filtrou aqui né por
+00:06:28.199 Danilo Leandro confira seu autor
+00:06:29.759 realmente sou eu para evitar qualquer
+00:06:31.199 confusão outros autores apareceram aqui
+00:06:33.960 todas as estratégias que a gente tem
+00:06:36.360 disponível na loja da nelogica hoje são
+00:06:38.400 essas mas a gente vai continuar subindo
+00:06:39.840 novas estratégias para vocês e hoje vou
+00:06:42.120 sugiro que você baixe esse modelo de
+00:06:43.979 execução aqui que é gratuito basta você
+00:06:46.440 clicar aqui no botão gratuito vai
+00:06:48.300 aparecer essa janela trazendo as
+00:06:50.220 informações sobre o nosso código base
+00:06:52.080 que eu vou reforçar aqui um desafio
+00:06:53.460 lançado nos últimos vídeos assim que a
+00:06:55.740 gente ultrapassar 1.500 pessoas
+00:06:57.419 utilizando o nosso código base esse
+00:06:59.819 nosso código base sem que a gente
+00:07:01.319 ultrapassar aqui 1.500 pessoas
+00:07:02.819 utilizando eu vou trazer para você um
+00:07:04.680 código base ainda mais completo com
+00:07:06.479 ordens ou de entrada e saída que Vai
+00:07:08.520 facilitar muito você criar qualquer
+00:07:10.440 automação já com ordem oco estabelecida
+00:07:13.380 que vai permitir você fazer inclusive
+00:07:14.940 back testes e saber qual o melhor
+00:07:17.220 performance Qual que é a melhor Range de
+00:07:19.319 take Profit Stop loss então manda ver
+00:07:21.599 compartilha para você compartilhar basta
+00:07:23.880 você clicar nesse botãozinho nessa
+00:07:25.860 setinha aqui que tem no canto superior
+00:07:27.660 direito e ao clicar nesse botão basta
+00:07:29.520 copiar o link para você compartilhar com
+00:07:32.220 seus amigos e naqueles grupos de Traders
+00:07:33.960 também você vai estar ajudando essas
+00:07:35.520 pessoas também que esse código base
+00:07:37.259 poder criar um robô de qualquer setup
+00:07:39.180 praticamente que deseja feito isso
+00:07:40.680 compartilhado aí para a gente bater o
+00:07:42.660 desafio juntos basta você clicar aqui
+00:07:44.220 nesse botão assinar Não se preocupe que
+00:07:46.319 você vai assinar porém é totalmente
+00:07:47.580 gratuito esse código para você ok é um
+00:07:50.099 código fonte totalmente aberto para você
+00:07:51.780 poder manipular e criar seus próprios
+00:07:53.759 robôs uma vez que você assinou vou
+00:07:55.560 fechar aqui eu não vou assinar Porque eu
+00:07:56.819 já tenho ele aqui no meu Profit basta
+00:07:58.680 você vir aqui estratégia editor de
+00:08:00.840 estratégias vai abrir aqui nosso editor
+00:08:02.639 estratégia Vou colocar aqui para o lado
+00:08:03.900 para organizar melhor essa janela e você
+00:08:06.360 uma vez que baixou lá da loja da
+00:08:08.400 analógica o nosso código base basta você
+00:08:10.620 clicar nesse ícone assim que você clicar
+00:08:12.720 vai abrir o menu do lado esquerdo e a
+00:08:14.520 sua compra né o seu código que você
+00:08:16.139 acabou de baixar vai aparecer aqui em
+00:08:17.819 estratégias compradas basta você abrir
+00:08:19.379 essa pastinha e vamos aparecer aqui
+00:08:21.300 todas as estratégias que você já baixou
+00:08:22.800 da loja inclusive o nosso código base
+00:08:25.020 aqui para você utilizar para criar
+00:08:26.340 praticamente qualquer robô que deseja eu
+00:08:28.319 já tenho esse código aqui na minha
+00:08:29.460 máquina então simplesmente eu vou colar
+00:08:31.740 a mesma coisa que você clicar duas vezes
+00:08:33.419 sobre o código você acabou de baixar
+00:08:35.940 feito isso você primeiro passo Você vai
+00:08:38.099 clicar aqui em salvar como e vai dar um
+00:08:39.899 nome para essa estratégia que nós vamos
+00:08:41.820 criar hoje eu vou colocar aqui como
+00:08:43.440 Clube do robô underline Esse
+00:08:46.220 ficou YouTube clicar em salvar Lembrando
+00:08:49.560 que esse nome não pode ter espaço pode
+00:08:51.240 usar underline sem problemas mas não
+00:08:52.920 pode ter espaço entre as palavras entre
+00:08:55.620 as letras ali uma vez que estamos já
+00:08:57.300 aqui com código salvo ali com o nome que
+00:08:59.519 nós temos basta você ler aqui é
+00:09:01.320 importante caso você não tenha tido
+00:09:02.640 ainda contato com o nosso código né
+00:09:04.260 alguns recados importantes aqui se você
+00:09:06.899 ainda não segue segue a gente nas redes
+00:09:08.459 sociais estão aqui os links e aqui
+00:09:09.779 embaixo está o código Prontinho com os
+00:09:12.779 três simples Passos aqui para a gente
+00:09:14.339 criar praticamente qualquer automação
+00:09:15.899 daqui para baixo nós não precisaremos
+00:09:17.820 alterar nada para criar essa automação
+00:09:21.060 de hoje então vamos iniciar deixa só
+00:09:22.980 aumentar um pouco a fonte aqui para
+00:09:24.600 facilitar para vocês a visualização
+00:09:26.279 assim ficar melhor então para você criar
+00:09:28.200 esse robô de hoje ou qualquer outro que
+00:09:29.820 você desejar basta seguir
+00:09:31.680 espaços indicados aqui no documento
+00:09:33.120 primeira coisa que vamos precisar fazer
+00:09:34.860 aqui como está indicado declarar as
+00:09:37.080 variáveis nesse caso aqui a gente vai
+00:09:38.399 utilizar uma única variável estou
+00:09:40.019 cástico e nós vamos colocar o tipo real
+00:09:43.500 e uma vez que a gente declarou a
+00:09:45.120 variável que vamos utilizar basta seguir
+00:09:47.100 os passos abaixo Então vamos primeira
+00:09:48.600 coisa Vamos carregar aqui o indicador
+00:09:50.940 que vamos utilizar para isso não vamos
+00:09:52.680 utilizar o estocástico lento né então
+00:09:54.240 vamos trazer aqui a variável estocástico
+00:09:56.519 dois pontos igual para a gente receber o
+00:09:58.680 valor do estocástico através da função
+00:10:00.360 Slow stocástica e nós vamos utilizar
+00:10:03.120 aqui o parâmetro inteiro né para definir
+00:10:06.180 aqui o período esse período a gente pode
+00:10:08.279 colocar simplesmente direto aqui por
+00:10:10.200 exemplo o período 9 e fechar e veja que
+00:10:12.420 ele tem a possibilidade ele pede aqui na
+00:10:14.459 ele passa ajuda aqui pra gente que a
+00:10:16.380 obrigação é a gente passar o período e
+00:10:18.060 nós temos aqui também a possibilidade de
+00:10:19.560 passar outros valores como valor da
+00:10:21.839 Média tipo da Média mas como nós vamos
+00:10:24.180 utilizar apenas a linha do estocar acho
+00:10:26.760 que eu vou passar aqui apenas a
+00:10:28.140 informação do estocástico Então o
+00:10:29.880 período estocástico será nove
+00:10:31.080 simplesmente essa informação já é o
+00:10:33.300 suficiente caso você queira fazer essa
+00:10:35.640 operação aqui fazer esse robô para
+00:10:37.380 outros tipos estocástico eu vou colocar
+00:10:40.140 aqui também abaixo a possibilidade de
+00:10:42.240 você ter por exemplo aqui o full stock
+00:10:44.880 castic e é o pleno e também a
+00:10:47.160 possibilidade de você fazer os testes aí
+00:10:48.899 utilizando o fast estoquestic e é o
+00:10:52.440 estocástico rápido eu vou deixar essas
+00:10:54.060 duas linhas aqui comentadas aqui no
+00:10:56.100 código mas basta você quando desejar
+00:10:58.440 fazer os seus testes utilizando
+00:11:00.180 estocástico diferente basta colocar aqui
+00:11:01.860 no caso stocástico lento Duas Barras
+00:11:03.899 como essa né E você tá comentando essa
+00:11:06.060 linha e tirar aqui as Duas Barras do
+00:11:08.579 outro estocástico e aí você vai fazer o
+00:11:10.500 seu backstreche baseado aqui por exemplo
+00:11:11.880 não estocar ficou pleno e no estocástico
+00:11:14.459 rápido eu vou deixar aqui um comentário
+00:11:20.060 rápido
+00:11:24.800 para você ok então vou comentar a linha
+00:11:27.899 de baixo e manter aqui apenas diz
+00:11:29.519 comentado né Sem comentários aqui no
+00:11:31.560 plástico lento que vamos utilizar hoje
+00:11:33.360 aqui para fazer nossos testes com este
+00:11:35.579 robô uma vez que já fizemos aqui o passo
+00:11:37.620 1 já indicamos já carregamos aqui o
+00:11:39.540 valor do indicador Vamos para o passo 2
+00:11:41.399 que é definir os sinais de entrada para
+00:11:43.140 isso eu vou tirar essas duas barras aqui
+00:11:44.579 do sinal de compra como fala aqui tá já
+00:11:47.279 tá aqui ajuda para você quando você for
+00:11:49.079 criar então aqui é para colocar a
+00:11:50.700 configuração de sinal de entrada de
+00:11:51.959 compra e para isso basta né você precisa
+00:11:53.940 retirar as Duas Barras como que eu fiz
+00:11:55.620 ele para tirar o comentário e aqui nós
+00:11:57.120 vamos colocar a regra na regra de
+00:11:58.920 entrada para fazer a entrada de compra
+00:12:01.079 na operação como nós vamos comprar o
+00:12:03.360 papel com esse setup que acabamos de
+00:12:05.459 definir anteriormente Vamos colocar aqui
+00:12:07.200 a regra nós precisamos fazer o
+00:12:08.579 cruzamento da linha só para recapitular
+00:12:10.440 nós temos aqui a linha de sobre venda
+00:12:12.720 quando o stocástico ele vier de baixo
+00:12:15.720 para cima cruzando essa linha de sobre
+00:12:18.720 venda de baixo para cima Nós faremos a
+00:12:21.899 compra exatamente nesse cruzamento e
+00:12:24.240 para definir esse cruzamento precisamos
+00:12:26.040 ter dois valores o valor referente ao
+00:12:28.920 momento atual da Barra que acabou de
+00:12:30.779 fechar
+00:12:31.500 numa execução ao fechamento do candle
+00:12:33.959 precisaremos também tem a informação
+00:12:35.220 anterior para fazer essa comparação e
+00:12:37.320 essa comparação precisaria dedicar que a
+00:12:39.540 informação anterior precisa ser menor
+00:12:41.220 que a informação atual ou seja esse
+00:12:43.560 momento mostraria que ocorreu um
+00:12:45.600 cruzamento dessa linha sobre vendido E
+00:12:48.120 para isso vamos voltar aqui na parte de
+00:12:49.980 cima do código antes da variável antes
+00:12:51.959 de vara aqui vamos adicionar aqui
+00:12:53.399 parâmetro tá isso aqui não seria
+00:12:55.200 Tecnicamente necessário mas Vai
+00:12:57.300 facilitar os seus testes para você fazer
+00:12:59.760 um backstast e outro papel você utilizar
+00:13:01.800 períodos diferentes para o estocástico é
+00:13:04.380 níveis diferentes de da linha de sobre
+00:13:06.060 compras sobre venda então aqui nós vamos
+00:13:07.680 definir três valores e vai ser o período
+00:13:10.139 dois tocarástico e vamos colocar aqui
+00:13:12.660 inicialmente como 9 que você pode
+00:13:14.160 alterar nos seus testes Vamos colocar
+00:13:16.019 aqui também a linha de sobre compra E aí
+00:13:18.660 é sobre compra como nós colocamos lá no
+00:13:20.940 gráfico quando simulamos o valor de 75 e
+00:13:23.639 sobre venda então colocar aqui abreviana
+00:13:25.980 sobreviver colocar aqui o valor de 25 tá
+00:13:28.680 mas você pode nos seus testes vir aqui
+00:13:30.240 alterar a primeira coisa fazer a
+00:13:32.100 considerar que o parâmetro dentro aqui
+00:13:33.540 do estocástico esse parâmetro é uma vez
+00:13:35.579 que a gente altera o nove Ali vai valer
+00:13:37.260 né independente do tipo de stocástico
+00:13:39.240 que você está utilizando e nós vamos
+00:13:40.800 utilizar aqui na comparação desse valor
+00:13:42.720 né do estocástico aqui na nossa regra de
+00:13:44.940 sinal de entrada nós vamos utilizar os
+00:13:46.920 valores sobre compra e sobre venda
+00:13:48.540 definidos aqui em cima o nome não
+00:13:50.639 importa tá você pode colocar o nome que
+00:13:52.139 você preferir vou colocar sobre ser
+00:13:53.820 sobre V para ficar um nome um pouco
+00:13:55.560 menor aqui facilitar Nossa leitura do
+00:13:57.300 código então quando vai acontecer a
+00:13:58.800 compra quando o estocástico no momento
+00:14:01.380 anterior e a gente indica que o valor
+00:14:03.300 número 1 então se você quisesse
+00:14:04.920 verificar o valor pois momentos para
+00:14:07.260 trás né dois Box dois candles para trás
+00:14:09.060 você colocaria aqui número dois Nós caso
+00:14:11.339 aqui a gente só vai comparar O Valor
+00:14:12.660 anterior com o valor atual Então se o
+00:14:14.579 estocástico anterior ele estava abaixo
+00:14:17.160 da linha sobre vendido parentes e o
+00:14:21.600 estocástico atual então não indico aqui
+00:14:23.940 nenhum valor eu poderia indicar aqui por
+00:14:25.920 exemplo zero tá poderia também deixar
+00:14:27.600 dessa maneira por maior do que a linha
+00:14:29.880 sobre vendido então evitar com essa
+00:14:32.339 comparação aqui sabendo que está
+00:14:34.139 ocorrendo o cruzamento do estocástico O
+00:14:36.600 Valor anterior era menor que aquela
+00:14:38.100 linha e o valor atual é superior ou seja
+00:14:40.440 ocorreu um cruzamento da linha entre os
+00:14:43.199 trocartico e a linha de sobre vendido
+00:14:45.060 essa comparação essa regra já valida a
+00:14:48.480 compra o momento que deve ser comprado
+00:14:49.800 muita gente pergunta Poxa como que eu
+00:14:51.899 consigo por exemplo no caso de gráfico
+00:14:53.579 de ranco como eu consigo não fazer a
+00:14:55.500 entrada Por exemplo quando tem aqueles
+00:14:57.540 roncos né que não tem Volume naqueles
+00:14:59.880 tempos do GAP você pode simplesmente
+00:15:01.320 colocar aqui também uma verificação de
+00:15:03.180 volume porque aqueles box do GAP do
+00:15:05.880 renco ele não tem Volume então você pode
+00:15:07.440 vir aqui colocar volume acima de zero
+00:15:09.360 Então você também coloca uma verificação
+00:15:10.860 e o volume daquele Box é acima de zero
+00:15:13.980 então ou seja o seu código do backtest
+00:15:16.079 ele não vai executar ali o backstage
+00:15:18.000 naqueles ranks né que não possuem volume
+00:15:20.339 lógica já mexeu nisso mas se você
+00:15:22.620 gostaria de saber como fazer teria essa
+00:15:24.600 verificação aqui OK Eu vou tirar Mas
+00:15:26.820 você já sabe agora como colocar aí no
+00:15:28.920 seu código só para facilitar aqui o
+00:15:30.720 entendimento didática aqui para quem
+00:15:32.639 está aprendendo mas sem problema nenhum
+00:15:34.500 Você poderia colocar ali a verificação
+00:15:36.540 do volume e agora o sinal de venda você
+00:15:38.220 pode fazer exatamente inverso Então vou
+00:15:40.199 copiar aqui essa regra vou colar aqui
+00:15:42.120 embaixo e a gente precisa fazer o quê
+00:15:43.560 alterar né então se o estocástico
+00:15:46.019 estiver o estocástico anterior por maior
+00:15:48.120 do que a linha do sobrecomprado que a
+00:15:50.579 linha superior e o estocástico atual por
+00:15:52.620 menor do que a linha do sobrecomprado
+00:15:55.139 então vende tá então a regra é
+00:15:57.240 exatamente a mesma só que a diferença
+00:15:58.260 que para comprar eu preciso do
+00:16:00.180 cruzamento de baixo para cima da linha
+00:16:02.459 de sobre vendido que a linha inferior e
+00:16:04.680 o cruzamento de cima para baixo da linha
+00:16:07.399 sobrecomprado me indica o momento de
+00:16:09.899 vender Pronto agora que terminamos aqui
+00:16:11.699 é um passo dois basta a gente fazer
+00:16:13.440 agora o terceiro e último passo que será
+00:16:15.899 definir os sinais de saída como nós já
+00:16:19.079 fizemos lá atrás da definição agora
+00:16:20.459 basta a gente vem aqui colocar no código
+00:16:22.079 aqui seguindo passo a passo aqui do
+00:16:24.420 código precisaremos retirar aqui as Duas
+00:16:26.459 Barras do início da linha e colocar aqui
+00:16:28.560 a definição da regra de saída Qual que é
+00:16:30.600 a regra de saída vamos lá são duas né
+00:16:32.279 uma vez que nós compramos ao cruzar né o
+00:16:34.860 estocástico cruzar a linha de
+00:16:35.940 sobrevendido de baixo para cima que
+00:16:37.560 definimos aqui em cima precisamos agora
+00:16:39.420 sair em duas situações primeira quando o
+00:16:41.759 estocástico por superior e a linha de
+00:16:45.060 sobrecomprado ou A segunda situação é
+00:16:48.180 quando tem a inversão né quando a gente
+00:16:50.279 imaginava que o estocástico subiria mas
+00:16:52.680 ele voltou a ficar abaixo da linha de
+00:16:55.199 sobrevendido Então essa segunda
+00:16:56.639 programação essa segunda situação como
+00:16:58.560 que nós colocamos aqui quando o
+00:17:00.540 estocástico por menor e a linha de sobre
+00:17:03.360 vendido e aqui já tá indicando para nós
+00:17:06.419 né que o stop C Ou seja a saída de
+00:17:08.400 compra uma vez que estivermos comprado
+00:17:10.160 ocorrerá tanto quando o estocástico for
+00:17:13.020 maior do que a linha superior que nós
+00:17:15.839 chamamos aqui sobre comprado
+00:17:17.099 inicialmente tem um valor de 75 e nós
+00:17:20.579 colocamos aqui nesse parâmetro que você
+00:17:21.839 mesmo pode alterar ou por isso nós
+00:17:24.119 indicamos aqui ou quando o stocástico
+00:17:26.819 for menor do que o valor de sobre
+00:17:29.040 vendido que a linha inferior indicada o
+00:17:31.860 valor 25 inicialmente mas você também
+00:17:33.540 pode alterar aí no seus testes uma vez
+00:17:36.059 definido então a saída de compra Vamos
+00:17:37.679 definir a saída de venda uma vez que
+00:17:40.260 tivermos posicionado na venda que
+00:17:42.059 ocorreu quando estocagem cruzou de cima
+00:17:44.280 para baixo a linha de sobrecomprado
+00:17:46.380 precisamos então definir aqui os dois
+00:17:48.360 momentos de saída aqui nós consideramos
+00:17:50.400 lá no setup primeira é quando o
+00:17:52.559 estocástico cruzar para baixo né ficou
+00:17:55.440 menor na verdade a gente não vai ver o
+00:17:57.120 cruzamento em cima quando ele for menor
+00:17:58.559 do que a linha sobre vendido que a linha
+00:18:00.960 inferior ou abre e fecha parentes quando
+00:18:03.960 estocástico voltar né ser maior do que a
+00:18:07.440 linha de sobre comprado sobre C E aí
+00:18:09.960 nesse caso aqui estoparíamos curtinho
+00:18:11.940 então ele vai lá no nosso target que nós
+00:18:14.340 desejamos né que o estocástico desça
+00:18:16.559 nesse caso na venda ou se ele voltar a
+00:18:19.320 subir que a gente Stop curtinho assim
+00:18:21.480 que estocagem ficar superior né acima do
+00:18:24.600 stop C pronto terminado agora eu passo
+00:18:26.340 três seu código já está 100% pronto para
+00:18:28.740 você colocar esse robô para rodar e
+00:18:30.900 fazer dos próprios testes para aquelas
+00:18:32.760 pessoas que vão colocar esse código para
+00:18:34.620 rodar em gráfico de reenco e tem dúvida
+00:18:36.539 com relação aos box de GAP que eu havia
+00:18:39.419 comentado Vou colocar aqui a regra para
+00:18:40.799 evitar né que é automação Aqui faça
+00:18:42.660 tanto entrada quanto saída naqueles box
+00:18:45.240 mesmo que as proteções fica na loja que
+00:18:46.860 já coloca mas vou colocar aqui também
+00:18:48.000 para você evitar para Que o seu backstre
+00:18:49.740 seja assertivo então para isso basta
+00:18:51.660 você colocar aqui a verificação de
+00:18:53.340 volume então o volume precisa ser maior
+00:18:54.960 que zero tanto para fazer a entrada de
+00:18:57.120 compra eu vou copiar aqui essa
+00:18:58.799 informação quanto para fazer também a
+00:19:00.600 entrada de venda e aqui nós vamos
+00:19:02.280 colocar a verificação também na saída
+00:19:04.559 para isso eu vou colocar um parênteses
+00:19:06.419 aqui para isolar ar condicional ou vou
+00:19:08.880 colocar uma condicional e o volume da
+00:19:11.160 mesma maneira aqui tanto para tá aí da
+00:19:13.140 de compra quanto para a saída de venda e
+00:19:15.480 colocar a regra que também do volume ser
+00:19:17.460 maior que zero ou seja nesse caso aqui
+00:19:19.320 que ele tá fazendo E aí mais um
+00:19:21.419 aprendizado aqui nos nossos vídeos para
+00:19:23.220 você nós estamos fazendo uma condicional
+00:19:24.720 ou seja ele vai sair da operação de
+00:19:27.539 compra nesse caso tanto se estocástico
+00:19:29.580 passar a ser maior que a linha de sobre
+00:19:32.100 compra do valor sobre compra ou o
+00:19:34.320 estocástico passar a ser menor que o
+00:19:36.120 valor de sobrevenda e ele só vai sair
+00:19:38.039 quando o volume daquele Box né no caso
+00:19:40.799 do reenco Mas vai ser verificado também
+00:19:43.140 caso seja qualquer outro tipo de gráfico
+00:19:45.480 caso o volume seja maior que zero ou
+00:19:47.700 seja adicionando essa condicional você
+00:19:50.100 está garantindo que nem a sua entrada
+00:19:52.260 nem a saída vai acontecer caso você
+00:19:55.080 esteja rodando no gráfico de ranco
+00:19:56.760 naqueles box de GAP e agora com código
+00:19:59.880 do nosso robô Prontinho vamos realizar
+00:20:01.980 juntos aqui o backtest e vamos testar
+00:20:03.660 esta configuração para isso vamos
+00:20:06.000 utilizar aqui o papel rente três vamos
+00:20:08.940 utilizar mil ações e vamos mudar aqui o
+00:20:12.000 período do gráfico vamos utilizar aqui
+00:20:14.220 então um gráfico de renco no 30r feito
+00:20:16.919 isso vamos clicar em Play aqui qual será
+00:20:18.960 o resultado desse E aí tá gostando desse
+00:20:21.960 conteúdo então não se esqueça de se
+00:20:23.880 inscrever no canal e habilitar o Sininho
+00:20:25.320 para você não perder nenhum novo vídeo e
+00:20:27.299 receber os códigos prontos em primeira
+00:20:29.100 mão e se você acredita que esse tipo de
+00:20:31.080 conteúdo pode ajudar outras pessoas
+00:20:32.700 compartilhe com seus amigos manda
+00:20:34.380 naquele grupo de Traders e vamos juntos
+00:20:36.179 criar uma grande comunidade pronto tá
+00:20:39.240 executado aqui o resultado do backtest
+00:20:40.980 Olha só o gráfico o gráfico muito bom
+00:20:43.140 totalmente ascendente aqui ao longo do
+00:20:45.660 tempo claro existe Drogal existem perdas
+00:20:48.240 não existe robô que ganha sempre vamos
+00:20:50.640 clicar agora em resumo para ver o
+00:20:51.900 resultado Olha só resultado muito bom
+00:20:53.820 Paulo do líquido Total aqui de mais de
+00:20:56.160 38 mil reais nesse período no ano de
+00:20:58.080 2023 percentual de acerto de 68% quase
+00:21:01.700 69%. ó beirando 70 né Muito bom e vamos
+00:21:04.919 fazer o teste que nós sempre fazemos
+00:21:06.539 sempre sugiro você fazer o teste de
+00:21:08.220 slipped para verificar se de fato essa
+00:21:10.080 operação aqui tem que ser vencedora ou
+00:21:12.539 não né Pelo menos para você avançar para
+00:21:14.160 os próximos testes não significa também
+00:21:15.539 que a gente colocar esse depende aqui
+00:21:17.100 que você vai amanhã colocar na conta
+00:21:18.480 real com tudo que você tem que não é
+00:21:20.160 essa metodologia que a gente ensina aqui
+00:21:21.960 no canal Então faça os seus próprios
+00:21:23.460 bactérias coloque para rodar na conta
+00:21:25.080 simulação veja como se comporta E aí sim
+00:21:28.020 para todos decisão você vai ou não para
+00:21:30.240 conta real não com essa automação aqui
+00:21:32.159 mas com qualquer outra tá então primeira
+00:21:34.080 coisa primeiro teste básico aqui do
+00:21:36.000 backtest que a gente sugere fazer você
+00:21:37.500 colocar slipse e verificar qual o
+00:21:39.240 comportamento né qual o resultado que
+00:21:40.620 traria né que se você aumenta um dois
+00:21:42.480 zipped e esse resultado já passa a ser
+00:21:44.220 negativo como a gente já fala em outros
+00:21:45.720 vídeos a sugestão que você nem avance é
+00:21:47.820 que você realmente trabalha para
+00:21:49.260 melhorar aqui essa estratégia colocar
+00:21:51.539 filtros por exemplo para fazer menos
+00:21:53.340 operações e fazer com que mesmo com
+00:21:55.080 slipses você colocando slipses aqui na
+00:21:58.260 sua operação e você continue tendo
+00:22:00.240 resultados positivos tá Eu Não sugiro
+00:22:02.340 você colocar aí passar para uma conta
+00:22:04.260 real uma operação que talvez com dois
+00:22:06.600 recipiente o resultado já passa a ser
+00:22:08.280 negativo Claro é casos e caso mais
+00:22:10.320 importante que você faça de forma
+00:22:11.700 consciente passo a passo e não pule
+00:22:13.500 etapas tá não vai logo para conta real
+00:22:15.539 com nenhuma operação com nenhuma
+00:22:17.159 automação aí antes que você teste
+00:22:19.080 direitinho tá então eu coloquei dois
+00:22:21.059 zpas aqui continua bem positivo e o
+00:22:23.220 resultado Vou colocar aqui cinco seis
+00:22:24.919 positiva 10 ainda continua positivo
+00:22:27.360 então você pode aí colocar a quantia de
+00:22:29.400 slidez ver se faz sentido você e você
+00:22:31.679 evolui para uma conta simulação e veja
+00:22:33.480 como está operação que vai se comportar
+00:22:35.760 ao longo do tempo mas me pareceu muito
+00:22:37.799 promissora aqui em operações né Você
+00:22:40.620 pode clicar aqui também gráfico e
+00:22:42.120 verificar aqui de fato o stop continua
+00:22:44.760 aqui Teoricamente controlado né curto e
+00:22:48.120 o stop Gain aqui de Fato né a saída no
+00:22:50.880 take Profit ele pega uma certa média mas
+00:22:53.159 é muito mais vencedora né quase 70% de
+00:22:56.039 acerto aqui pelo backtest você pode
+00:22:57.840 fazer você mesmo testes nesse código né
+00:23:00.419 então por exemplo aqui eu vou tirar aqui
+00:23:02.340 a saída Considerando o retorno ali do
+00:23:04.919 estocástico para a posição inicial né e
+00:23:07.020 o que vai acontecer vamos ver aqui qual
+00:23:08.580 vai ser o resultado vamos ver aqui pelo
+00:23:10.020 resumo vou dar um play ó diminuir um
+00:23:11.700 pouco o valor do resultado líquido em
+00:23:14.700 compensação Olha só o percentual de
+00:23:16.740 assertividade mais de 80% né Qualquer
+00:23:19.380 operação que você consegue uma certa
+00:23:21.960 atividade né um percentual de operações
+00:23:24.000 vencedoras mais que 80%, tá claro
+00:23:27.120 aumentou o Drogal porque agora o nosso
+00:23:29.220 Stop passou a ser maior de fato e você
+00:23:31.380 consegue ver de forma perceptível aqui
+00:23:33.900 quando você vem em operações Então
+00:23:36.059 passou a acertar muito mais porém os
+00:23:38.400 stops ficaram maiores que que você pode
+00:23:40.080 fazer por exemplo para fazer seus testes
+00:23:42.659 existe aqui em risco como você limitar
+00:23:45.120 né a perda então o limite de perda aqui
+00:23:47.280 por exemplo eu vou colocar aqui só como
+00:23:49.080 um exemplo didático vou colocar um valor
+00:23:50.700 de 3.000 vou pedir para reiniciar o
+00:23:53.159 código veja só e agora não deixe passar
+00:23:55.380 aqui né Muito de r$ 3.000 de perda tá eu
+00:23:58.440 ganho aqui não alterou em nada a gente
+00:24:00.299 não mudou nesse caso pode ser alterado
+00:24:02.220 sim e por exemplo uma operação que
+00:24:04.080 estava sendo perdedora pastor você
+00:24:06.059 vencedora antes de eu colocar se limite
+00:24:08.220 de 3.000 poderia alterar SIM o seu
+00:24:10.620 resultado também das operações
+00:24:12.120 vencedoras tá então vou voltar aqui para
+00:24:14.220 resumo Olha só voltou aqui já aumentou
+00:24:16.260 um pouco resultado né já era 28 passou
+00:24:18.240 para 30 percentual de acerto continuou
+00:24:20.460 igual e melhorou aqui o Drogal né o
+00:24:22.860 dropdal tava acima de 20% passou aqui e
+00:24:25.080 ficar em 18%. tá então isso aqui é só um
+00:24:27.659 exemplo de uma alteração que você pode
+00:24:29.400 fazer
+00:24:30.840 aí no seu código eu vou voltar aqui a
+00:24:33.539 configuração Inicial e outras alterações
+00:24:35.400 que você pode fazer é testar em outros
+00:24:37.440 ativos nesse caso aqui tá hate 3 você
+00:24:39.659 pode mudar o período do estocástico
+00:24:41.460 Nesse caso a gente tá usando 9 você pode
+00:24:43.320 alterar também os valores de sobrevidos
+00:24:45.299 sobre comprado e encontrar configurações
+00:24:47.039 que talvez seja mais vencedoras do que
+00:24:49.080 essa daqui e uma forma que você pode
+00:24:50.460 encontrar melhores resultados é melhor
+00:24:52.440 esse parâmetros de acordo com o papel
+00:24:54.120 que você gostaria de rodar esse robô
+00:24:56.039 você pode utilizar o Profit Ultra que
+00:24:58.080 nesse caso aqui você viria no menu Ultra
+00:25:00.000 otimização de parâmetros clicar aqui em
+00:25:02.220 Nova otimização E aí seguir o passo a
+00:25:03.960 passo que eu ensino no outro vídeo que
+00:25:05.340 eu vou deixar aqui no card também na
+00:25:06.480 descrição mostrando passo a passo como
+00:25:08.159 você utiliza o Profit Ultra se você não
+00:25:10.260 tem o Profit Ultra você pode entrar no
+00:25:12.299 site da nelote que utilizar por 15 dias
+00:25:14.220 lá hoje atualmente eles estão
+00:25:15.900 disponibilizando esse teste para você
+00:25:17.400 Mas de fato assinatura do Profit Ultra é
+00:25:19.860 r$ 500 diretamente ou seja não é barato
+00:25:22.440 mas vou trazer um benefício para você e
+00:25:24.179 hoje já é um apoiador aqui do canal que
+00:25:26.520 faz parte do plano Elite né então você
+00:25:28.919 além de receber o código fonte correto
+00:25:31.200 eu vou trazer para vocês também algumas
+00:25:33.000 alternativas de testes que a gente fez
+00:25:35.220 aqui no Profit Ultra Então vou trazer
+00:25:36.720 mastigado assim você não precisa gastar
+00:25:38.520 investir r$ 500 no Profit Ultra para
+00:25:40.799 apenas fazer os seus testes Então vou
+00:25:42.960 colocar aqui junto com o código assim
+00:25:45.179 que você como membro Elite aqui do canal
+00:25:46.860 do YouTube então agradecendo você que
+00:25:48.840 sempre nos apoia você vai ter também o
+00:25:50.940 código além do código Pronto já a
+00:25:52.740 indicação de alguns testes que nós
+00:25:54.059 fizemos Claro não se apegue aquilo né
+00:25:55.740 aquilo é só um indicador para você
+00:25:57.059 também começar a fazer outros testes
+00:25:58.559 Então vou trazer para você aqui a
+00:26:00.000 indicação por exemplo do teste que nós
+00:26:01.620 fizemos aqui tanto com mini índice com
+00:26:03.600 mini dólar que muita gente gosta que
+00:26:04.919 gerou esse resultado aqui para o mini
+00:26:06.539 índice e esse outro resultado aqui para
+00:26:08.039 o mini dólar ou seja são resultados
+00:26:09.360 também muito promissores que pode ser
+00:26:11.100 base aí para você continuar os seus
+00:26:13.440 próprios testes e para quem faz parte do
+00:26:15.480 clube dos códigos né que quem não sabe
+00:26:17.220 dos códigos você tem acesso a todos os
+00:26:19.380 códigos aqui do canal além dessa
+00:26:21.179 indicação Mas vamos colocar também a
+00:26:22.860 tabela com milhares ali é de combinações
+00:26:25.380 para você poder verificar nessa tabela e
+00:26:27.840 partida ali melhorar as suas otimizações
+00:26:30.299 então são maneiras da gente retribuir
+00:26:32.279 todo esse apoio que vocês têm tido e
+00:26:33.900 facilitar né além de você não precisar
+00:26:35.520 investir uma nova ferramenta você ter aí
+00:26:37.500 mais parâmetros já mastigados para a
+00:26:39.840 partir de seus testes e como você pode
+00:26:41.039 colocar ainda hoje esse robô para rodar
+00:26:42.840 aí na sua própria conta para fazer seus
+00:26:44.820 próprios testes você pode simplesmente
+00:26:46.140 tirar um print aqui desse código né tô
+00:26:48.659 passando aqui para você tirar um print
+00:26:49.740 aí e você copiar todos os detalhes não
+00:26:52.020 esquecendo de nenhum detalhe aí para não
+00:26:53.880 ter nenhum erro no seu código ou você
+00:26:55.500 pode também gratuitamente baixar esse
+00:26:57.539 código completo Claro sem nenhuma
+00:26:59.460 daquelas vantagens que eu falei que a
+00:27:00.840 gente vai colocar os outros testes né
+00:27:02.640 com mini dólar e outros ativos também
+00:27:04.620 mas você pode baixar gratuitamente esse
+00:27:06.600 código e não ter o risco de você tentar
+00:27:08.520 copiar aí linha linha e esquecer um
+00:27:10.620 ponto e vírgula e fazer com que esse
+00:27:11.820 robô perca dinheiro em vez de ganhar né
+00:27:13.500 como nós mostramos aqui no backstage E
+00:27:15.120 como você consegue baixar esse código
+00:27:16.799 completo A primeira forma para você ter
+00:27:18.600 acesso a esse código fonte completo é
+00:27:20.520 uma super novidade aqui no canal é você
+00:27:22.320 se tornar um membro apoiador ou se
+00:27:24.000 tornar um membro apanhador do clube
+00:27:24.960 Elite você tem acesso direto aos códigos
+00:27:27.900 Fontes mais recentes desenvolvidos aqui
+00:27:30.179 no canal e para você se tornar um membro
+00:27:32.039 apoiador basta você clicar no botão logo
+00:27:33.840 abaixo do vídeo chamado seja membro ou
+00:27:36.360 também na descrição do vídeo tem lá um
+00:27:38.100 link para você se tornar um membro
+00:27:39.600 apoiador a segunda forma para você ter
+00:27:41.159 acesso a esse código fonte completo é
+00:27:43.260 você se tornar um membro do clube dos
+00:27:44.940 códigos e ao entrar para o clube dos
+00:27:46.620 códigos você não terá acesso apenas a
+00:27:48.900 este código fonte completo você passar a
+00:27:51.120 ter acesso a todos os códigos Fontes que
+00:27:53.640 nós já desenvolvemos aqui no canal do
+00:27:55.500 YouTube desde lá do início do canal seus
+00:27:57.840 benefícios do clube dos códigos não para
+00:27:59.760 por aí você também terá acesso a todos
+00:28:01.799 os códigos Fontes que desenvolvermos
+00:28:03.600 juntos aqui no YouTube por 12 meses este
+00:28:06.419 e todos os outros benefícios você
+00:28:08.220 confere lá na página o link está na
+00:28:10.260 descrição desse vídeo e a terceira forma
+00:28:11.820 para você ter acesso a esse código fonte
+00:28:13.559 completo é você entrando lá na nossa
+00:28:15.480 comunidade no telegram lá no telegram
+00:28:17.520 disponibilizarei o link para você baixar
+00:28:19.200 esse código fonte inteiramente grátis
+00:28:21.179 mas seja rápido porque esse link está
+00:28:23.220 disponível por poucos dias e se você
+00:28:25.140 entrar na nossa comunidade e o link ele
+00:28:27.000 já não estiver disponível não tem
+00:28:28.679 problema você estando em nossa
+00:28:30.179 comunidade ficar por dentro das
+00:28:31.620 novidades aqui do clube do robô Trader e
+00:28:33.840 para você entrar na nossa comunidade do
+00:28:35.460 telegram basta você clicar no link que
+00:28:37.140 está na descrição desse vídeo te espero
+00:28:38.760 lá muito obrigado por você ter assistido
+00:28:40.500 esse vídeo até aqui espere de coração
+00:28:42.240 que esse conteúdo tenha te ajudado e se
+00:28:44.279 lembre que eu não vou descansar até você
+00:28:46.020 ganhar dinheiro com o seu próprio robô
+00:28:47.400 Trader te vejo lá no próximo vídeo até
+00:28:49.200 lá valeu
+00:28:50.230 [Música]

@@ -1,0 +1,42 @@
+{
+  "ticker": "BTCUSDT",
+  "interval": "15m",
+  "days": 120,
+  "train_frac": 0.8,
+  "lot_size": 0.001,
+  "fee_rate": 0.0005,
+  "best_params": {
+    "window_high": 37,
+    "window_low": 59,
+    "atr_period": 14,
+    "atr_mult": 3.9937025700647752,
+    "use_ema": true,
+    "ema_period": 246,
+    "allow_short": false,
+    "lot_size": 0.001
+  },
+  "train_metrics": {
+    "pnl": 0.46849850999991527,
+    "num_trades": 57,
+    "win_rate": 38.59649122807017,
+    "return_pct": 0.004684985099999153,
+    "profit_factor": 1.3103164431756507,
+    "avg_pnl_per_trade": 0.00821927210526167,
+    "max_drawdown_pct": -0.1301508481181844,
+    "gross_profit": 29.210189999999976,
+    "gross_loss": 22.29247000000006,
+    "fee_rate": 0.0005
+  },
+  "valid_metrics": {
+    "pnl": 5.331045320000012,
+    "num_trades": 11,
+    "win_rate": 45.45454545454545,
+    "return_pct": 0.05331045320000012,
+    "profit_factor": 2.9080263062802665,
+    "avg_pnl_per_trade": 0.4846404836363647,
+    "max_drawdown_pct": -0.05122460853617662,
+    "gross_profit": 10.05959000000001,
+    "gross_loss": 3.4592499999999995,
+    "fee_rate": 0.0005
+  }
+}

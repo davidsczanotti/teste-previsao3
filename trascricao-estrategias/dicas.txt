@@ -1,0 +1,750 @@
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/QVjxV3wqsAQ
+
+00:00:00.240 Fala galera, beleza? Começando mais um
+00:00:01.719 vídeo. Que horas que você pode montar
+00:00:03.639 uma operação? Que horas que você pode
+00:00:05.120 pegar o trade, participar de um bom
+00:00:06.799 movimento, sem ficar entrando
+00:00:08.360 antecipado, sem ficar tomando stop
+00:00:10.240 desnecessário, sem entrar em
+00:00:11.960 configuração que nem validada, tá? que
+00:00:14.120 nem configurou nada ali. Vamos entender
+00:00:16.239 sobre isso porque os melhores pontos de
+00:00:18.080 entrada vem a partir da leitura gráfica
+00:00:20.480 correta e você vai sempre montar o trade
+00:00:22.880 no lugar certo e na hora certa a partir
+00:00:25.119 desses detalhes que eu vou te mostrar,
+00:00:26.439 porque de fato isso aqui é bem objetivo.
+00:00:28.400 Então vamos direto ao ponto aqui. Olha,
+00:00:30.560 todas essas técnicas funcionam para
+00:00:32.159 todos os mercados, tá? Mini índice, mini
+00:00:34.480 dólar, mercado de Forex, criptomoedas,
+00:00:36.680 mercado americano. Aqui no time do
+00:00:38.440 Excelência Trade, que é o nosso ambiente
+00:00:39.960 de prática, a gente trabalha com todos
+00:00:41.440 os mercados. Então é super tranquilo e
+00:00:43.399 funciona também para todos os tempos
+00:00:44.840 gráficos, vai do seu gosto. Então deixa
+00:00:46.960 o dedo no like, se inscreva no canal se
+00:00:48.960 você não for inscrito. Bora começar com
+00:00:50.440 esse conteúdo que a proposta é virar uma
+00:00:52.239 chave no seu desenvolvimento. Olha,
+00:00:54.000 nesse cenário aqui no gráfico, a gente
+00:00:56.079 vai ter uma possibilidade de compra. Por
+00:00:58.120 que que a gente vai ter uma
+00:00:59.000 possibilidade de compra aqui? Vamos
+00:01:00.640 começar a fazer uma leitura correta
+00:01:02.519 desse movimento que a gente vai chegar
+00:01:03.960 ali no ponto de entrada para entender
+00:01:05.840 isso. Olha, se a gente for ver aqui, a
+00:01:07.600 gente tem uma tendência de alta gigante
+00:01:10.000 nesse ativo aqui. Eu tô no gráfico de 5
+00:01:12.280 minutos, tá? Mas igual eu falei, é a
+00:01:14.040 mesma coisa em qualquer tempo gráfico.
+00:01:15.960 Nesse caso, eu tô aqui nos 5 minutos,
+00:01:18.000 porque a gente vai encontrar muita coisa
+00:01:19.439 nesse tempo gráfico, especificamente
+00:01:22.119 nesse contexto operacional aqui, mas é a
+00:01:24.280 mesma coisa em qualquer tempo gráfico.
+00:01:25.960 Tendência de alta, para quem não sabe, é
+00:01:27.560 quando o mercado tá subindo muito mais
+00:01:29.400 do que caindo. Mercado vem subindo muito
+00:01:31.920 mais do que caindo, vem fazendo topos e
+00:01:33.920 fundos ascendentes, que são topos cada
+00:01:36.399 vez mais altos, tá vendo? E fundos cada
+00:01:39.040 vez mais altos. Básico, né? Tendência de
+00:01:41.600 alta normal. Então o mercado vem
+00:01:43.240 estabelecendo isso daqui, ó. Tá vendo?
+00:01:45.399 Vários topos e fundos ascendentes.
+00:01:47.600 Mercado vai subindo, subindo sem parar.
+00:01:49.600 Então ele tá subindo muito mais fácil do
+00:01:51.759 que caindo há bastante tempo. Isso é uma
+00:01:54.000 tendência de alta. Logo, se você
+00:01:55.799 encontrar uma possibilidade de compra a
+00:01:58.320 favor da tendência de alta, essa
+00:01:59.920 possibilidade de compra tem muito mais
+00:02:01.640 contexto, muito mais potencial do que as
+00:02:04.039 possibilidades de venda. Não que não
+00:02:05.920 gere vendas, claro que sim. Só aqui em
+00:02:08.318 cima, nessa movimentação meio lateral
+00:02:10.080 que ele começou a fazer, ó, aqui tem uma
+00:02:12.040 setinha. Isso aqui é compra que a gente
+00:02:13.640 mapeou com antecedência aqui no ambiente
+00:02:15.360 de prática lá do time. Isso aqui já é
+00:02:17.080 uma venda, a gente mapeou em detalhes
+00:02:18.720 com antecedência. Aqui já é outra
+00:02:20.280 compra. Aqui já é outra venda, aqui já é
+00:02:21.879 outra compra. e vai gerar uma compra
+00:02:23.400 aqui agora que eu vou mostrar para vocês
+00:02:24.879 em detalhes o contexto operacional e o
+00:02:27.200 ponto de entrada para você pegar esses
+00:02:28.879 trades no lugar certo e na hora certa,
+00:02:31.519 que é o objetivo nosso aqui nesse
+00:02:32.959 momento. Mas só para você entender, tá
+00:02:35.080 vendo, tem algumas vendas aqui com,
+00:02:37.080 aliás, essa e essa aqui são vendas com
+00:02:39.599 ótimos desenvolvimentos, mesmo sendo
+00:02:41.920 contra tendência. Por quê? Porque teve
+00:02:43.840 um contexto operacional sólido ali que
+00:02:46.200 veio mostrando para nós essa
+00:02:47.840 oportunidade sendo criada. Agora, se
+00:02:50.360 você tem uma tendência de alta sólida e
+00:02:52.760 você participa de um cenário bom de
+00:02:54.840 contexto que tá a favor dessa tendência,
+00:02:57.200 no caso, se a tendência de alta, um
+00:02:59.080 cenário comprador, né, uma oportunidade
+00:03:00.760 de compra, tende a se desenvolver de
+00:03:02.480 maneira mais fluida, tende a ser
+00:03:04.200 movimentos maiores, tende a ter uma
+00:03:06.280 assertividade maior também, tende a ser
+00:03:08.640 um movimento mais fácil, sabe? Porque
+00:03:10.400 você tá seguindo o fluxo do mercado, o
+00:03:12.799 flow aqui que é todo de alta. Igual
+00:03:15.200 falei, tendência de alta nada mais é do
+00:03:17.040 que um movimento que sobe muito mais do
+00:03:19.440 que desce há bastante tempo. Então visto
+00:03:22.360 isso, a gente consegue perceber que o
+00:03:24.280 mercado de forma geral ele começou a
+00:03:25.920 consolidar um pouco. Mas olhando de
+00:03:28.239 perto aqui, ó, nesse movimento aqui no
+00:03:30.040 gráfico de 5 minutos, já tá até marcado.
+00:03:32.439 Olha só que interessante esse movimento
+00:03:33.879 que o mercado fez. Tá vendo essa puxada
+00:03:36.000 forte que o mercado fez aqui para cima?
+00:03:37.799 Olha só. Ele primeiro deu uma puxadona
+00:03:40.480 para cima, né? Que foi exatamente aqui,
+00:03:43.120 ó. Essa puxada grande que ele fez é
+00:03:46.920 interessante porque logo em seguida o
+00:03:48.959 mercado começou a andar de forma
+00:03:50.159 lateral, tá vendo? Então ele deu uma
+00:03:52.000 puxadona para cima e ficou andando de
+00:03:55.079 forma consolidada logo depois. Que que
+00:03:57.560 isso nos mostra, pessoal? Pode ser uma
+00:03:59.640 estrutura de Wof, que é uma estrutura de
+00:04:01.760 acumulação, ou uma estrutura de
+00:04:03.640 distribuição, que seria uma estrutura
+00:04:06.239 lateral de compras institucionais. ou
+00:04:08.799 uma estrutura lateral de vendas
+00:04:10.319 institucionais. Quando é acumulação, é
+00:04:12.439 compras institucionais. Quando é
+00:04:13.760 distribuição, é vendas institucionais. E
+00:04:16.238 como que a gente sabe se é vendas ou se
+00:04:17.639 é compras? Se isso aqui é uma
+00:04:19.560 acumulação, uma distribuição? Porque tem
+00:04:21.478 uma diferença grande. Se tá, se tá
+00:04:23.600 acontecendo nessa lateralidade
+00:04:26.120 uma acumulação, o mercado vai gerar aqui
+00:04:28.360 uma tendência de alta, ele vai começar a
+00:04:29.919 subir. Se é uma distribuição, ele vai
+00:04:31.680 começar a cair depois e vai gerar uma
+00:04:33.400 tendência de baixa. Então, quando a
+00:04:35.680 gente vê uma consolidação como essa e o
+00:04:38.039 mercado depois de puxar forte para cima
+00:04:41.320 dessa forma
+00:04:43.400 e ficar andando de lado lá em cima, tá
+00:04:45.479 vendo?
+00:04:46.759 A resistência da estrutura lateral,
+00:04:48.720 naturalmente essa linha aqui de cima, o
+00:04:50.360 suporte é a linha de baixo. Isso da
+00:04:52.080 estrutura consolidada, ele fica bem mais
+00:04:54.199 próximo da resistência, bem mais próximo
+00:04:56.639 da parte superior e tem dificuldade em
+00:04:59.000 vir aqui embaixo. Isso é pressão de
+00:05:00.720 demanda. Isso mostra que nessa
+00:05:02.880 consolidação, nesse movimento lateral,
+00:05:05.039 tá ocorrendo aqui um certo grau de
+00:05:06.759 pressão de demanda e fraqueza de oferta.
+00:05:09.520 Porque querendo ou não, por mais ruim
+00:05:11.560 que seja uma região de resistência e por
+00:05:14.320 mais ruim que seja uma região de
+00:05:15.800 suporte, que são essas linhas de baixo e
+00:05:17.759 linhas de cima, o suporte é uma região
+00:05:19.639 de demanda, por mais fraquinho que seja,
+00:05:21.680 e a resistência é uma região de oferta,
+00:05:23.880 por mais fraquinha que ela seja. Então,
+00:05:25.639 quando o mercado ele fica muito colado
+00:05:27.080 na resistência e longe do suporte, ele
+00:05:29.199 mostra que a demanda tá mais forte do
+00:05:30.800 que a oferta. Logo, tá ocorrendo aqui
+00:05:33.120 muito provavelmente compras
+00:05:34.960 institucionais. E a única coisa que faz
+00:05:37.120 o mercado disparar daqui onde ele tá lá
+00:05:39.960 para cima e fazer um bom movimento de
+00:05:42.080 alta é as compras institucionais. Nada
+00:05:44.919 impulsiona o mercado para cima se não
+00:05:46.639 for o capital institucional. Isso
+00:05:48.240 qualquer mercado, em qualquer lugar do
+00:05:50.680 mundo, a qualquer momento, qualquer
+00:05:52.440 tendência de alta tem o envolvimento de
+00:05:54.639 grandes institucionais montando posições
+00:05:56.639 de compra. Por isso que o mercado tá
+00:05:58.080 subindo. Vendas, a mesma coisa. Se o
+00:06:00.120 mercado cai legal é porque tem grandes
+00:06:01.919 vendas institucionais do movimento. Isso
+00:06:03.600 é um fato, tá? Agora, então, se aqui tem
+00:06:07.080 características de pressão de demanda,
+00:06:08.880 compras institucionais, isso tende a
+00:06:10.880 gerar tendência de alta e é um baite
+00:06:12.639 indicativo para nós. Tem essa setinha
+00:06:14.400 aqui que de fato o mercado veio subindo,
+00:06:16.639 tá vendo? E ele gerou uma compra lá no
+00:06:18.400 tempo gráfico menor que a gente chegou a
+00:06:19.919 mapear em detalhes por conta dessa
+00:06:21.880 estrutura de acumulação aqui. Mas não é
+00:06:24.000 o que eu quero mostrar para vocês. Lá na
+00:06:26.080 frente ele vai gerar uma compra por
+00:06:27.560 conta disso aqui também. E aí, olha o
+00:06:30.039 que que o mercado veio fazendo aqui de
+00:06:31.160 novo, pessoal. Veio consolidando de
+00:06:32.919 novo. Tá vendo? Nessa consolidação a
+00:06:35.520 gente consegue marcar fundos nivelados.
+00:06:37.880 Quando o mercado nivela fundos, toda vez
+00:06:40.479 que você vê fundos nivelados, ó, fundo,
+00:06:43.199 fundo, aí tem um outro fundo aqui, vai
+00:06:45.199 ter outro fundo aqui, tá vendo esses
+00:06:46.840 fundinhos nivelados? Isso cria região de
+00:06:49.360 liquidez. Embaixo desses fundos, no
+00:06:52.000 caso, embaixo dessa linha, tudo aqui
+00:06:53.919 embaixo é uma região de liquidez de
+00:06:55.840 demanda. É comum que institucionais
+00:06:58.639 montem posições de compra embaixo de
+00:07:01.360 fundos nivelados assim. Ou seja, o
+00:07:03.400 mercado fura essas regiões, stop a
+00:07:05.680 maioria dos traders, porque que que
+00:07:07.840 fundos nivelados faz pra maioria dos
+00:07:10.160 operadores? Cria suporte e a maioria dos
+00:07:13.039 traders fica comprando em suportes, né?
+00:07:15.960 E aí coloca os seus stop loss embaixo.
+00:07:17.879 Que que o mercado faz? Stopa todo mundo.
+00:07:20.319 E aí já tá um um detalhe sobre aquilo
+00:07:22.440 que a gente estava falando, né? o
+00:07:23.680 momento certo de pegar um trade. Se você
+00:07:25.720 usa as técnicas erradas, você vai
+00:07:27.680 naturalmente montar trades no lugar
+00:07:29.520 errado, como se fosse certo, porque você
+00:07:31.560 tá seguindo uma técnica, mas a técnica
+00:07:33.520 não é o ideal, não é a melhor
+00:07:36.160 possibilidade que você poderia estar
+00:07:37.599 usando ali para localizar oportunidades.
+00:07:39.960 Então, se você fica comprando no
+00:07:41.440 suporte, seu stop fica aqui embaixo.
+00:07:43.800 Frequentemente a gente vê os movimentos
+00:07:45.479 de capturas de liquidez todos os dias.
+00:07:47.759 Em todos os mercados a gente vê as
+00:07:49.159 capturas, são esses movimentos. Esse
+00:07:51.240 mercado vem aqui embaixo, fura o
+00:07:52.960 suporte, stopa todo mundo e depois ele
+00:07:55.280 desenvolve o movimento de alta. Isso a
+00:07:56.800 gente vê frequentemente. Então, quando a
+00:07:59.360 gente vê fundos nivelados, o certo é
+00:08:01.440 você entender que embaixo deles tá cheio
+00:08:03.400 de liquidez de demanda. Pode entrar
+00:08:05.639 demanda institucional empurrando o
+00:08:07.120 mercado para cima quando ele furar os
+00:08:08.680 fundos. E a maioria dos traders tá
+00:08:10.720 comprando antes da hora em cima dos
+00:08:12.440 fundos e não depois de furar eles. Pelo
+00:08:14.680 contrário, né, o trader normal, além de
+00:08:16.759 comprar em cima do suporte e colocar os
+00:08:18.280 seus stop loss embaixo, na hora que o
+00:08:20.440 suporte é rompido, o trader normal fica
+00:08:22.919 vendendo, né? Porque ele fala assim:
+00:08:24.080 "Suporte rompido vira resistência". Ele
+00:08:26.080 sai tacando venda aqui embaixo, sendo
+00:08:28.000 que é justamente onde ele deveria estar
+00:08:29.599 comprando, entendeu? E ele já foi
+00:08:31.199 stopado que ele comprou antes da hora e
+00:08:33.159 por aí vai. Então ele ele compra antes
+00:08:35.159 da hora, é estopado e depois vende aonde
+00:08:36.839 era para comprar. é exatamente o que o
+00:08:38.159 trader normal faz. Isso é extremamente
+00:08:40.039 comum. Eu também já fiz isso lá no
+00:08:41.880 início. Então, faz parte do processo de
+00:08:44.519 da gente entender o que que é o ideal,
+00:08:46.080 que seria isso daqui que a gente tá
+00:08:47.080 entendendo agora, tá? Então isso é
+00:08:48.760 importante. E aí começa um negócio que
+00:08:51.320 faz total diferença para você encontrar
+00:08:53.519 boas oportunidades, ter uma leitura
+00:08:55.279 correta do movimento e entrar no trade
+00:08:57.720 no lugar certo, que é você trabalhar com
+00:08:59.760 confluências. Isso é um negócio que você
+00:09:01.560 tem que aprender a fazer todos os dias.
+00:09:03.880 Confluências é mais de um indicativo,
+00:09:05.959 mostrando que aquela região é favorável
+00:09:08.360 para montar trades, mostrando que aquela
+00:09:10.320 região tem relevância. Por quê? Tem mais
+00:09:12.880 de uma técnica mostrando isso ali pra
+00:09:14.600 gente. Olha só que que isso aqui
+00:09:16.880 representa, pessoal. É uma estrutura de
+00:09:19.360 possíveis compras institucionais com
+00:09:21.279 característica de pressão de demanda,
+00:09:22.959 lembra? Então, pera aí. Aqui tá tendo
+00:09:24.920 muita compra institucional. Embaixo de
+00:09:27.079 fundos nivelados costuma acontecer o
+00:09:28.640 quê? Compras institucionais. Então, pera
+00:09:30.880 aí. Se o mercado furar esses fundos, ele
+00:09:33.079 vai entrar numa liquidez que pode entrar
+00:09:34.600 demanda e ele tá junto aqui da região
+00:09:37.480 aonde muitas compras já estão
+00:09:39.200 acontecendo. Então é uma confluência,
+00:09:41.640 mais de um indicativo de que a demanda
+00:09:43.399 pode entrar de forma relevante nessa
+00:09:45.120 região. Maravilha. Então o mercado ele
+00:09:47.160 realmente vem puxando, olha só, ele
+00:09:49.519 realmente faz aquilo que a gente falou,
+00:09:50.880 ó. Ele visita de fato embaixo dos
+00:09:53.600 fundos, tenta entrar uma demandazinha,
+00:09:55.279 mas isso aqui é muito sutil. O negócio
+00:09:56.959 ele ele quebrar direito, tá? É isso daí,
+00:09:59.360 ó. Tem que vir mesmo aqui para baixo.
+00:10:01.279 Maravilha. Agora ele tá pegando
+00:10:02.720 totalmente a liquidez presente nessa
+00:10:05.040 região que a gente falou, que é tudo
+00:10:06.440 aqui embaixo, tá? Toda essa região
+00:10:08.120 depois de furar os fundos e tá naquela
+00:10:10.000 região aonde muitas compras já estão
+00:10:11.760 acontecendo, né? Sem contar que se você
+00:10:14.200 for ver, ele fez aqui esse movimento
+00:10:16.279 também, ó. 1 2 3. Tá vendo esse
+00:10:19.800 movimento bem expressivo aqui? Toda vez
+00:10:22.240 que o mercado faz movimentos assim de 1
+00:10:24.000 2 3, ele cria liquidez embaixo também. A
+00:10:27.200 mesma liquidez de demanda que eu falei
+00:10:28.680 que tem embaixo de fundos nivelados,
+00:10:30.760 também tem embaixo de fundos
+00:10:32.200 expressivos, assim, porque o trader
+00:10:34.120 normal, quando o mercado se se aproxima
+00:10:36.600 de fundos assim, ele compra e coloca os
+00:10:39.279 seus stop loss embaixo de fundos assim.
+00:10:41.399 Então é muito comum o mercado furar
+00:10:42.639 esses fundos, limpar os stop loss do
+00:10:44.320 trader normal para depois desenvolver
+00:10:46.000 movimentos. Então aqui embaixo desse
+00:10:47.920 fundo também tem muita liquidez, porque
+00:10:50.600 esses movimentos de 1 2 3 criam fundos
+00:10:53.200 relevantes de liquidez. Então aqui, ó,
+00:10:55.480 embaixo desse fundo também tem uma
+00:10:57.639 liquidez exatamente igual tem embaixo
+00:10:59.839 desses fundos aqui. Então, é mais uma
+00:11:02.000 confluência, tá vendo? E é justamente
+00:11:04.160 onde o mercado tá, ó. Ele tá limpando a
+00:11:06.240 liquidez desse fundo, tá limpando a
+00:11:07.720 liquidez desses fundos e tá pegando
+00:11:09.600 naquela região aonde compras já estão
+00:11:11.320 acontecendo de forma eh massiva, né,
+00:11:14.079 pela parte institucional. Então, é muito
+00:11:15.920 indicativo de que o mercado pode começar
+00:11:17.480 a subir. E aí, se você for dar uma
+00:11:19.560 olhada aqui nesse movimento aqui, eu tô
+00:11:21.320 no 5 minutos. a gente pode refinar o
+00:11:23.200 estudo no tempo gráfico de 1 minuto.
+00:11:24.760 Nesse caso, igual eu falei, pessoal,
+00:11:26.399 isso aqui funciona para todos os tempos
+00:11:27.920 gráficos. Então, se você tiver usando,
+00:11:30.279 vamos supor, 4 horas para localizar isso
+00:11:32.440 tudo que eu tô falando aqui, e aí você
+00:11:34.320 vai refinar no no uma hora, por exemplo,
+00:11:36.079 você vai encontrar uma validação para
+00:11:37.800 entrar, entendeu? É legal trabalhar com
+00:11:39.440 esse macro e micro, que seria um tempo
+00:11:41.079 gráfico maior, alinhado com um tempo
+00:11:43.040 gráfico menor, aonde normalmente a
+00:11:45.000 validação de entrada ela vem num tempo
+00:11:47.000 gráfico menor, mas não precisa ser
+00:11:48.959 necessariamente o 1 minuto igual foi
+00:11:51.120 nesse cenário. Pode ser que você esteja
+00:11:52.600 usando 4 horas alinhado com 1 hora.
+00:11:55.240 Logo, o 1 hora é o micro e o 4 horas é o
+00:11:58.360 macro. Nesse caso aqui, o macro foi o 5
+00:12:00.639 minutos e o micro foi o 1 minuto. Desde
+00:12:03.399 que tem essa interrelação de dois tempos
+00:12:05.160 gráficos, um maior e um menor, você já
+00:12:07.240 tá trabalhando ali com um negócio que é
+00:12:08.639 bem interessante, que é o alinhamento do
+00:12:10.800 macro e micro, tá? Olha só, aqui nesse
+00:12:13.240 movimento, o mercado ele vem subindo,
+00:12:14.519 olha o que ele vem fazendo, o interesse
+00:12:16.120 vem entrando, a demanda realmente vem
+00:12:18.880 apresentando o movimento de alta,
+00:12:21.440 mostrando que ela tá entrando. E olha
+00:12:22.800 esse movimento que ele vem criando aqui
+00:12:24.040 agora para nós. Que maravilha. Perfeito.
+00:12:26.560 Se a gente puxar aqui no time da
+00:12:27.680 Excelência Trade, a gente mapeou isso
+00:12:28.880 aqui em detalhes. Olha só, aqui é o
+00:12:30.800 nosso ambiente de prática. Todas as
+00:12:32.320 oportunidades que eu estou de olho ficam
+00:12:33.880 desenhadas aqui com antecedência em
+00:12:35.800 todos os ativos. Mini índice, mini
+00:12:38.079 dólar, mercado de Forex, criptomoedas,
+00:12:40.279 mercado americano. A gente vai nas Dak,
+00:12:42.519 SP, DJ, CHD, Eurosd, GBP USD, as
+00:12:45.959 paridades de Forex, Bitcoin, as
+00:12:47.720 altcoins, mini índice, mini dólar. A
+00:12:49.560 gente trabalha com 16, 17 ativos
+00:12:51.440 diferentes todos os dias e todas as
+00:12:53.160 oportunidades estão ali desenhadas, é só
+00:12:54.760 você seguir. Olha só esse daqui, por
+00:12:56.320 exemplo. Tá vendo? Fundos nivelados é a
+00:12:58.920 liquidez. O mercado vai ter que
+00:13:00.040 capturar, furar os fundos, vai entrar
+00:13:01.760 naquela região que a gente falou. Na
+00:13:03.480 hora que ele subir
+00:13:05.000 e criar uma estrutura de continuidade
+00:13:06.760 alta,
+00:13:07.920 a gente pode comprar, tá vendo? Só
+00:13:10.040 montar a posição de compra. É esse
+00:13:11.639 desenho ali que ele tem que fazer. Então
+00:13:13.040 o mercado tá lá, né? Ele tá limpando a
+00:13:14.680 liquidez dos fundos, igual a gente viu,
+00:13:17.040 ó. Lá,
+00:13:18.680 tá naquela, naquela região, ele tem que
+00:13:20.320 começar a subir bem e criar uma
+00:13:21.959 estrutura de continuidade alta, coisa
+00:13:23.800 que ele não fez ainda.
+00:13:26.320 Só que agora ele tá fazendo, não fez
+00:13:27.920 ainda, que eu digo aqui, ó, nenhum
+00:13:28.880 movimento desse. Aqui ele começou a
+00:13:30.480 subir e aqui ele tá criando a estrutura.
+00:13:32.360 Olha que perfeita. 1 2 3. Puxou para
+00:13:36.160 baixo, quebrou o fundo, puxou para cima
+00:13:38.000 e renovou o topo. Isso daqui é uma
+00:13:39.839 estrutura de continuidade alta, que é o
+00:13:41.320 que a gente estava querendo ver aqui no
+00:13:42.440 time. Ó lá. aquele desenho, tá vendo?
+00:13:45.519 Porque aí ela vai criar uma região que
+00:13:46.800 chama POI,
+00:13:48.800 que fica aqui uma região de demanda para
+00:13:50.480 ponto de entrada. Mercado testando, a
+00:13:52.079 gente tem uma possibilidade de compra de
+00:13:54.079 continuidade. Esse é o ideal. Então, ó
+00:13:55.759 lá, o mercado desenhou ela ali, vai
+00:13:57.000 criar o POI que fica aqui, que é uma
+00:13:58.639 região de demanda. Ele já tá até
+00:14:00.320 testando nesse candle que tá descendo
+00:14:02.079 aqui, ó. Esse candle de baixa, tá vendo?
+00:14:04.800 Que é exatamente isso que ele tinha que
+00:14:06.320 fazer. Tá vendo? Aí na hora que ele
+00:14:07.759 testar onde tá circulado aqui, é onde a
+00:14:09.320 gente pode montar a posição de compra.
+00:14:10.680 tá fazendo isso lá naquela região, tá em
+00:14:12.279 cima do desenho que a gente fez ali. É
+00:14:14.040 só pegar o trade que tá nitidamente
+00:14:16.880 mapeado ali. Então, entrada nessa
+00:14:19.120 região, stop, tem que ficar embaixo dela
+00:14:21.360 para aproveitar movimento que sobe.
+00:14:23.480 Mercado, ele dá uma segurada ali e vem
+00:14:26.399 desenvolvendo o movimento que sobe.
+00:14:28.040 Então esse movimento aqui é um trade
+00:14:29.519 montando ele no lugar certo, no ponto
+00:14:31.920 certo, pro lado certo, com uma leitura
+00:14:35.120 eficiente a partir de uma oportunidade
+00:14:37.279 verdadeira de trade, de compra, nesse
+00:14:39.600 caso, seguindo a tendência de alta,
+00:14:41.079 limpando liquidez em região de
+00:14:43.120 acumulação institucional a partir de
+00:14:45.800 macro e micro alinhado, gatilho de
+00:14:48.000 entrada preciso, stop barato, retorno
+00:14:51.360 grande. Isso aqui é realmente um trade
+00:14:54.000 verdadeiro. Agora a gente vindo aqui
+00:14:55.199 numa outra configuração, um cenário
+00:14:57.440 também de compra, mas num contexto
+00:14:59.120 completamente diferente, aonde não tem
+00:15:01.240 captura de liquidez, mas tem um
+00:15:03.160 alinhamento aqui da lei de oferta e
+00:15:05.120 demanda, muito preciso e muito alinhado.
+00:15:07.759 Olha que bacana isso daqui. Aqui a gente
+00:15:09.600 também tem uma tendência de alta e a
+00:15:11.720 gente vai ter uma boa compra também pelo
+00:15:13.720 fato de est seguindo essa tendência de
+00:15:15.240 alta. O mercado tá subindo, mas nesse
+00:15:17.360 momento ele tá corrigindo um pouco, que
+00:15:19.000 seria esse movimento de baixo, ó. Ele tá
+00:15:21.040 subindo muito, igual a gente viu, baita
+00:15:23.120 tendência de alta. igual lá naquele
+00:15:25.240 outro, mas ele começou a corrigir. Aonde
+00:15:27.759 que essa correção vai parar? Porque o
+00:15:29.560 mercado ele faz isso, né? Ele tá subindo
+00:15:31.759 muito, ele corrige, mas depois ele pode
+00:15:33.639 querer continuar subindo muito. Então,
+00:15:35.480 aonde que essa correção aqui vai parar?
+00:15:38.680 Ela vai parar muit das vezes em uma
+00:15:40.959 região aonde tem um interesse de demanda
+00:15:43.360 relevante. Ela sente demanda, para de
+00:15:45.720 cair e volta a subir. Regiões aonde pode
+00:15:48.199 entrar uma demanda significativa são
+00:15:50.319 pontos importantes pra gente cogitar a
+00:15:52.480 possibilidade do mercado segurar ali e
+00:15:55.120 voltar a subir. Então, se a gente der
+00:15:57.160 uma olhada nesse movimento de alta como
+00:15:58.800 um todo aqui, pessoal, e pegar uma
+00:16:00.639 ferramenta que chama volume profile, a
+00:16:03.000 gente pode puxar lá de baixo até lá em
+00:16:04.959 cima e bum, olha onde a po dá. Tá vendo
+00:16:08.160 essa região de volume concentrado, essa
+00:16:10.880 barra gigante de volume com essa linha
+00:16:12.720 vermelha é a POC, mostrando que aqui
+00:16:15.920 nessa região tem uma concentração de
+00:16:17.759 volume negociado muito grande, mostrando
+00:16:20.000 que é uma região relevante que pode
+00:16:22.079 eventualmente entrar demanda, mas isso
+00:16:24.720 aqui é pouco porque precisamos aqui de
+00:16:27.399 confluências e a gente tem essas
+00:16:29.120 confluências. Além dessa região de POC,
+00:16:31.639 vou tirar ela aqui só pra gente
+00:16:32.680 conseguir visualizar. O mercado criou
+00:16:34.680 aqui uma região de interesse, que é esse
+00:16:37.040 movimento, ó. O mercado sobe, consolida.
+00:16:41.399 vendo que ele consolidou e ele continua
+00:16:43.959 subindo. Toda a região consolidada assim
+00:16:46.040 é justamente aonde a região de grande
+00:16:48.199 volume vai aparecer, porque é uma região
+00:16:50.399 de interesse. Logo, aquela região com
+00:16:54.279 muito volume vai aparecer nas regiões de
+00:16:55.880 interesse. São os pontos de interesse do
+00:16:57.519 gráfico. Regiões de interesse são
+00:16:59.199 consolidações, assim, ó, pequenas
+00:17:00.920 consolidações que o mercado faz em
+00:17:02.880 movimentos de tendência. Ele sobe, ele
+00:17:04.839 lateraliza, ele sobe. Aonde ele
+00:17:06.599 lateralizou, tem muito volume
+00:17:08.000 concentrado. São regiões aonde pode
+00:17:09.959 entrar eventualmente demanda. E se você
+00:17:12.319 for ver outra forma esse movimento, você
+00:17:15.880 vê que é uma estrutura de continuidade
+00:17:17.359 alta também, ó. 1 2 3. Aí ele puxou para
+00:17:21.359 baixo, quebrou o fundo e puxou para
+00:17:23.439 cima, renovando o topo. Lembra daquela
+00:17:26.039 daquele gatilho de estrutura de
+00:17:27.359 continuidade que eu mostrei ali agora?
+00:17:28.840 Querendo ou não tem ele, tá vendo? tá
+00:17:30.280 meio feio, meio estranho, mas desenhou o
+00:17:32.320 cenário. É uma estrutura de
+00:17:34.080 continuidade. Estruturas assim criam a
+00:17:36.120 região de POI, que é uma região de
+00:17:37.960 demanda muito forte que fica aqui nessa
+00:17:39.840 região. Então, pera aí. Tá vendo a
+00:17:41.640 questão que eu tô falando com vocês
+00:17:43.640 desde o início? Confluências.
+00:17:46.200 Essa região é uma região de interesse
+00:17:48.679 porque é uma consolidação na tendência
+00:17:50.840 de alta. Só isso já é uma região de
+00:17:52.679 demanda. Porque toda região de interesse
+00:17:55.919 que, por exemplo, que eu tô nos 5
+00:17:57.240 minutos, região de interesse é essa
+00:17:59.159 consolidação. Toda região de interesse
+00:18:01.600 no tempo gráfico pequeno, no maior, ela
+00:18:04.280 é um order block. Para quem conhece
+00:18:06.120 regiões de order block, às vezes não
+00:18:08.320 sabe disso, mas o order block legítimo,
+00:18:10.480 que são regiões de oferta e demanda
+00:18:12.159 institucionais, se você localiza um
+00:18:14.520 order block no gráfico de 1 hora, lá nos
+00:18:16.880 5 minutos, ele vai ser uma lateralidade,
+00:18:18.679 ele vai ser uma região de interesse, ele
+00:18:20.120 vai ser uma consolidação exatamente
+00:18:21.520 dessa. Então isso aqui no final das
+00:18:23.080 contas é um order block, isso aqui
+00:18:24.960 também é uma região de interesse, isso
+00:18:27.880 daqui é também um POI, que é criado por
+00:18:29.799 essas estruturas de continuidade. Isso
+00:18:31.799 aqui também é uma região aonde o volume
+00:18:34.280 tá muito em cima dessa região que é a
+00:18:37.240 POC do volume profile, mostrando que é
+00:18:38.840 uma baita zona relevante, cheio de
+00:18:41.240 volume, confluências, tá vendo?
+00:18:44.240 É só a POC se não tivesse tudo isso ao
+00:18:46.600 redor não vai ter. Muit das vezes o
+00:18:48.159 mercado vai passar direto, não tem essa
+00:18:49.760 relevância. Agora, só a região, só uma
+00:18:51.840 região. Agora a questão é a confluência,
+00:18:53.799 é a junção das regiões. Elas sozinhas
+00:18:56.480 são boas, elas juntas formam regiões
+00:18:58.840 aonde o mercado vai sentir muito, você
+00:19:00.440 vai ter alta assertividade, porque isso
+00:19:02.280 daqui a gente tá falando de de
+00:19:04.960 confluências, né, de contexto. Então
+00:19:07.120 aqui é uma baita de uma região e o
+00:19:08.679 mercado tá em cima dessa região. Vou
+00:19:10.679 puxar para cá, pro lado, para não
+00:19:11.960 atrapalhar aqui. O mercado tá em cima
+00:19:13.520 dessa região. Que que pode acontecer?
+00:19:15.880 Demanda pode entrar, obviamente a
+00:19:18.120 tendência de alta, uma baita região de
+00:19:19.760 demanda, a demanda pode entrar ali. O
+00:19:22.400 mercado tá criando o que nessa região?
+00:19:24.640 Olha que legal isso daqui, pessoal. Olha
+00:19:26.480 esse movimento que o mercado fez. 1 2 3.
+00:19:30.840 Bem pequenininho, tá vendo? Puxou para
+00:19:32.600 cima, quebrou o topo. Puxou para baixo,
+00:19:34.799 quebrou as mínimas. Isso daqui é uma
+00:19:36.600 estrutura de continuidade baixa.
+00:19:39.559 Estruturas de continuidade baixa criam
+00:19:42.039 regiões de oferta, que chama POI também.
+00:19:45.280 que é um ótimo ponto de entrada para
+00:19:46.880 você vender. Então, muita gente vem e
+00:19:49.600 vende aqui, só que são pessoas que não
+00:19:51.640 estão levando em consideração o contexto
+00:19:53.720 do mercado, que é o mais importante.
+00:19:55.880 Elas estão usando técnicas que são boas,
+00:19:58.080 mas colocando elas em prática fora de
+00:20:00.039 contexto. Isso é o que 99% dos traders
+00:20:02.760 fazem. Eles aprendem boas técnicas, mas
+00:20:05.400 colocam essas técnicas em prática de
+00:20:07.360 forma equivocada. Quando que você coloca
+00:20:09.520 de forma equivocada? Tem muitas formas
+00:20:11.520 de colocar uma técnica boa em prática de
+00:20:13.960 forma equivocada. Mas uma das principais
+00:20:16.000 é você aplicar ela fora do contexto,
+00:20:18.799 fora das regiões que realmente elas
+00:20:20.400 fazem sentido, fora dos lugares aonde
+00:20:22.720 aquilo ali deveria ser desenvolvido. E
+00:20:25.200 aí a pessoa pega aonde desenvolveu em
+00:20:27.200 qualquer lugar, mas o mercado vai criar
+00:20:28.559 coisas em qualquer lugar a qualquer
+00:20:30.640 momento. E a maioria dessas coisas não
+00:20:32.720 tem valor nenhum. Elas não são
+00:20:34.039 verdadeiras oportunidades. As
+00:20:35.799 verdadeiras oportunidades são quando
+00:20:37.360 boas técnicas são desenvolvidas no
+00:20:39.360 contexto certo. Então, por exemplo, qual
+00:20:41.600 que é o contexto aqui? O contexto é
+00:20:43.840 tendência de alta, o contexto é o
+00:20:46.000 mercado em cima de uma região muito
+00:20:47.360 forte que vai entrar a demanda. E aí ele
+00:20:49.280 criou uma baita configuração de venda.
+00:20:52.240 Aliás, ele criou um técnica de venda
+00:20:54.440 aqui que é muito boa, que é esse POI de
+00:20:56.240 venda, só que ele tá completamente fora
+00:20:58.360 do contexto ideal. Aqui vai entrar
+00:21:00.159 demanda, como é que você vai ficar
+00:21:01.159 vendendo aqui? Ou seja, essa venda tá
+00:21:03.679 fora de contexto. Quem vende aqui não
+00:21:05.799 está levando em consideração o contexto.
+00:21:07.640 Esse conceito de venda é ótimo quando o
+00:21:09.720 contexto ao redor é favorável para
+00:21:12.520 vendas. Ou seja, esse conceito técnico é
+00:21:15.480 ótimo quando o contexto é de vendas.
+00:21:17.919 Agora, quando o contexto é de compras,
+00:21:19.559 ele tá fora de contexto, ele não vai
+00:21:21.240 funcionar. Então isso aqui é ótimo,
+00:21:23.159 porque essa região de POI de oferta, ela
+00:21:25.039 vai ser rompida. Se você puxar aqui no
+00:21:27.000 nosso ambiente de prática agora, algumas
+00:21:29.640 horinhas atrás, hoje mais cedo, olha a
+00:21:31.520 gente mapeando esse cenário,
+00:21:34.000 ó. Ó lá, essa região de oferta e já tava
+00:21:36.240 cogitando direto ela ser rompida, porque
+00:21:38.000 não tá num contexto para vendas. Ali não
+00:21:40.120 é lugar de vendas. Então essa
+00:21:41.600 configuração é uma indução ao erro. Ela
+00:21:43.600 tá induzindo os traders a montarem
+00:21:45.279 posições de vendas aonde o mercado vai
+00:21:47.840 subir, coisa que a gente vê todo dia
+00:21:49.440 acontecendo. O mercado ele vai seduzindo
+00:21:51.400 os traders literalmente paraa maioria
+00:21:53.840 dos operadores, paraa grande massa
+00:21:55.679 montar posições pro lado errado do
+00:21:57.480 mercado, pros grandes players ir pro
+00:21:59.440 lado certo. Por que isso? Porque o
+00:22:01.520 mercado precisa de contraparte. Não tem
+00:22:03.600 como grandes institucionais montarem
+00:22:05.760 grandes posições de compra se todo mundo
+00:22:08.320 do mercado também tá interessado em
+00:22:09.720 comprar. Não existe o mercado é a
+00:22:12.200 primeira lei do mercado, né? Oferta e
+00:22:13.840 demanda precisa de contraparte. Para
+00:22:16.000 todo comprador precisa ter vendedor.
+00:22:18.159 Para você montar uma posição de compra
+00:22:19.919 precisa ter uma outra pessoa montando
+00:22:21.840 posições de venda para pra ordem cruzar.
+00:22:24.080 Para você montar posições de venda,
+00:22:25.559 precisa ter outra pessoa montando
+00:22:26.840 posições de compra pra ordem cruzar,
+00:22:28.720 para ter ali justamente essa
+00:22:30.480 contraparte. Então, pro institucional
+00:22:32.520 montar grandes posições de compra, é
+00:22:34.760 preciso de grandes posições de venda
+00:22:36.840 estarem acontecendo mais ou menos no
+00:22:38.760 mesmo lugar. Ou seja, o mercado seduz a
+00:22:41.480 grande massa a montar posições de venda,
+00:22:44.679 aonde os big players vão montar posições
+00:22:47.799 de compra e vai ter contraparte, as
+00:22:49.640 ordens vão cruzar e essas ordens
+00:22:51.679 institucionais vão ser consumadas porque
+00:22:54.320 tem o outro lado para consumar a ordem,
+00:22:56.760 tem a contraparte e o mercado no final
+00:22:58.640 das contas vai pro lado institucional
+00:22:59.960 porque é o capital grande institucional
+00:23:01.360 que tá entrando no mercado. Então a
+00:23:03.200 gente tem aqui um cenário muito bom lá.
+00:23:04.720 Se ele vir criando estruturas de
+00:23:06.840 continuidade alta, que é o POI, tá
+00:23:08.679 vendo?
+00:23:09.600 Depois de romper essa região de oferta,
+00:23:11.279 é só comprar. É o que a gente tava de
+00:23:12.600 olho aqui. Então, o mercado vai romper a
+00:23:14.559 região, ó.
+00:23:16.720 Vendo acabou de romper já, né? Já
+00:23:18.880 rompeu. E ó o POI sendo criado. Acabou
+00:23:20.919 que ele criou logo aqui mesmo, né?
+00:23:24.000 Ó o PO de compra, ó. 1 2 3. Puxa para
+00:23:27.840 baixo, quebrando o fundo. Puxa para cima
+00:23:29.679 e renova topo. Percebe que é a mesma
+00:23:31.720 estrutura que ele criou aqui para baixo,
+00:23:33.400 só que ele criou para cima. Ele criou a
+00:23:35.200 de baixa, agora ele criou a de alta. Só
+00:23:37.240 que a de alta tá tente de contexto, ela
+00:23:38.600 vai funcionar muito bem. O contexto todo
+00:23:40.240 o comprador, ele cria o gatilho de
+00:23:42.159 compra. Antes ele tinha criado um
+00:23:43.720 gatilho de venda dentro do contexo
+00:23:45.159 comprador, entendeu? E aí vai falhar.
+00:23:47.600 Então aqui a gente tem a possibilidade
+00:23:49.000 de compra. O mercado vai testar porque
+00:23:50.799 ele cria aqui o PO, né? Que é uma região
+00:23:52.640 de demanda que fica aqui
+00:23:55.159 no caso, que é o que a gente tinha
+00:23:56.240 mapeado ali. Tá vendo? Na hora que ele
+00:23:58.240 romper, ele tinha que criar esse POI. A
+00:23:59.640 gente vai comprar nele. Ele tem que
+00:24:01.840 voltar para testar, de preferência. Ó,
+00:24:05.279 voltou para testar.
+00:24:08.159 Ele vai gerar a possibilidade
+00:24:09.159 compradora, aqui mesmo nesse teste,
+00:24:11.000 tanto faz. Ele vai gerar a possibilidade
+00:24:13.799 de compra, que tem que andar pelo menos
+00:24:15.039 três para um ali para cima pra gente ter
+00:24:16.960 um cenário factível.
+00:24:19.520 Ele vai e desenvolve o movimento de alta
+00:24:21.559 aqui, que por enquanto não foi tão
+00:24:23.799 comprido, um movimento menorzinho, mas
+00:24:26.039 um bom movimento de alta com uma
+00:24:28.520 probabilidade de desenvolvimento imensa.
+00:24:30.480 Tá desenhado aqui, né? Então só só pegar
+00:24:32.600 o trade, tá simples ali para participar
+00:24:34.520 lá. 5 horas atrás. A gente tava falando
+00:24:36.440 disso lá no time agora a pouco. Aquele
+00:24:38.360 ali é só um detalhe do que a gente
+00:24:39.720 estava conversando. Então, um baita
+00:24:41.960 movimento de continuidade de alta que
+00:24:43.320 pode ainda se estender muito mais porque
+00:24:44.720 é uma baita região de demanda e gerar
+00:24:46.880 trades favoráveis a partir de boas
+00:24:48.600 validações e contexto operacional.
+00:24:50.640 Então, cara, entra no nosso grupo do
+00:24:52.399 Telegram, a gente tem um grupo gratuito
+00:24:53.760 que tá aqui no comentário fixado, vale a
+00:24:56.000 pena. Grupo gratuito cheio de conteúdo
+00:24:57.760 legal, que eu tô sempre mandando lá
+00:24:59.240 vídeos exclusivos, vários detalhes. Me
+00:25:01.320 siga no Instagram, tá cheio de conteúdo
+00:25:02.760 legal lá no meu Instagram. todos os dias
+00:25:04.279 mostrando essas operações acontecendo
+00:25:06.399 nos stories ali, cheio de ouro refinado
+00:25:09.039 lá para você ir aprendendo aos poucos.
+00:25:11.080 Conta comigo qualquer dúvida. Vamos
+00:25:12.640 juntos. Fui. Valeu,

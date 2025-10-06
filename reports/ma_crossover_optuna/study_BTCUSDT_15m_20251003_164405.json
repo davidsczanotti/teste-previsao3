@@ -1,0 +1,27 @@
+{
+  "best_score": -534.4241143990303,
+  "best_cfg": {
+    "ticker": "BTCUSDT",
+    "interval": "15m",
+    "days": 365,
+    "lot_size": 0.001,
+    "fee_rate": 0.001,
+    "min_hold_bars": 7,
+    "cooldown_bars": 2,
+    "allow_short": false,
+    "ma_short_window": 17,
+    "ma_mid_window": 89,
+    "ma_long_window": 234,
+    "ma_type": "ema"
+  },
+  "best_stats": {
+    "pnl": 65.74114107999992,
+    "num_trades": 255,
+    "win_rate": 41.568627450980394,
+    "return_pct": 65.74114107999992,
+    "profit_factor": 2.4911238822163875,
+    "avg_pnl_per_trade": 0.2578083963921565,
+    "max_drawdown_pct": -9.016525547903012,
+    "fee_rate": 0.001
+  }
+}

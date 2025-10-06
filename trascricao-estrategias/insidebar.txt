@@ -1,0 +1,521 @@
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/NPUaXafT-Uk
+
+00:00:00.359 Inside bar. Esse é um termo em inglês
+00:00:02.679 que serve para descrever quando uma
+00:00:05.120 barra é formada dentro da outra. Em
+00:00:08.200 outras palavras, quando a gente tem um
+00:00:10.160 candle, onde a mínima é maior do que a
+00:00:12.679 mínima do candle anterior e a máxima é
+00:00:15.440 menor do que a máxima do candle
+00:00:17.320 anterior, dessa forma a gente pode dizer
+00:00:20.160 que esse candle tá contido dentro do
+00:00:23.560 candle anterior. Embora esse padrão
+00:00:25.840 possa parecer simples, ele esconde uma
+00:00:28.679 estratégia extremamente lucrativa por
+00:00:32.159 trás dele. Nesse vídeo eu vou te mostrar
+00:00:35.280 como que você pode fazer muita grana
+00:00:38.480 operando em side bar. Então fica comigo.
+00:00:42.670 [Música]
+00:00:47.520 Muito bem, só antes da gente começar, eu
+00:00:49.440 preciso me apresentar, especialmente se
+00:00:51.360 você é novo aqui, ainda não me conhece.
+00:00:53.640 Eu sou o Felipe da Bull, trader,
+00:00:55.440 investidor há mais de 10 anos. E você tá
+00:00:57.760 no canal Trade de Valor, melhor lugar
+00:01:00.920 para quem quer aprender a ganhar
+00:01:02.320 dinheiro no mercado financeiro. Aqui
+00:01:04.519 você encontra conteúdos diários que vão
+00:01:07.000 te tornar um trader mais lucrativo e
+00:01:09.759 mais consistente. Se você ainda não é
+00:01:12.799 inscrito, aproveita agora para se
+00:01:14.759 inscrever no canal, ativar o sininho das
+00:01:17.360 notificações e já deixar o teu like.
+00:01:20.000 Assim você não perde nada, nem os nossos
+00:01:22.479 vídeos e nem as lives de fechamento de
+00:01:25.400 mercado que ocorrem todos os dias às 18
+00:01:28.720 horas aqui no canal. Talvez você aí que
+00:01:31.479 tá me assistindo nesse vídeo já conheça
+00:01:33.960 a Inside Bar. Esse padrão foi
+00:01:36.000 popularizado por um dos traders mais
+00:01:38.320 renomados do mundo, o americano Al
+00:01:41.200 Brooks, que inclusive tem três
+00:01:43.159 excelentes livros que eu recomendo
+00:01:45.079 muito. Mas o que você talvez ainda não
+00:01:47.159 saiba é como você pode tirar o maior
+00:01:50.680 proveito desse setup valioso. A maioria
+00:01:54.640 dos conteúdos sobre inside Bar aqui no
+00:01:56.799 YouTube, infelizmente, ensinam pela
+00:01:59.200 metade ou ensinam errado. Esse vídeo
+00:02:02.600 aqui vai ser o manual mais completo que
+00:02:05.799 você vai encontrar sobre esse setup.
+00:02:07.840 Então, bora lá. Primeiro, é importante
+00:02:10.038 que você entenda algumas coisas sobre o
+00:02:12.480 Inside Bar. Esse é um setup que tem duas
+00:02:15.120 aplicações. Ele pode ser utilizado tanto
+00:02:17.360 para operar reversões de preço quanto
+00:02:20.760 continuações de tendência. Em segundo
+00:02:23.920 lugar, como qualquer setup que eu já
+00:02:26.599 mostrei aqui no canal, não adianta nada
+00:02:29.080 você decorar as regrinhas que definem a
+00:02:31.720 estratégia e ignorar o contexto em que
+00:02:35.000 as inside bars aparecem. Não é qualquer
+00:02:37.959 inside bar que você vai querer operar.
+00:02:40.200 Se você quiser ser lucrativo com essa
+00:02:42.720 estratégia, você vai querer operar
+00:02:45.519 sempre a favor da tendência primária do
+00:02:49.200 mercado. Não importa se você busca
+00:02:51.440 reversões de preço ou a continuidade do
+00:02:54.040 movimento que o mercado tá fazendo.
+00:02:56.120 Sempre olhe a tendência maior. A gente
+00:02:58.959 já vai pros gráficos e você vai entender
+00:03:01.280 melhor do que que eu tô falando. Só
+00:03:03.040 antes disso, e por último, mais uma
+00:03:05.239 dica. Quanto maior for o tempo gráfico
+00:03:08.480 que você tiver aplicando essa
+00:03:10.000 estratégia, melhor, mais confiável é a
+00:03:13.440 inside Bar. Isso quer dizer que o inside
+00:03:15.480 bar no gráfico de 5 minutos não vai
+00:03:18.000 funcionar tão bem quanto o inside bar no
+00:03:20.159 gráfico diário ou até mesmo o inside bar
+00:03:22.560 no gráfico semanal. Mas agora chega de
+00:03:25.560 papo, vamos pros gráficos ver como que
+00:03:28.760 tudo isso funciona. Bom, vamos lá.
+00:03:31.080 Então, antes da gente falar de inside
+00:03:32.680 bar, eu primeiro quero mostrar para você
+00:03:34.360 como que eu vou configurar o meu
+00:03:36.519 gráfico, tá bom? Muito simples. Eu vou
+00:03:38.599 est utilizando aqui nesse layout três
+00:03:41.200 médias móveis, tá? Uma média de 10
+00:03:43.400 períodos, uma média de 20 períodos e uma
+00:03:46.360 média de 50 períodos, tá bom? Pra gente
+00:03:48.400 adicionar essas médias é muito simples.
+00:03:50.840 Botão direito aqui no profit, inserir
+00:03:53.120 indicador. Aí você vai digitar média, já
+00:03:55.840 vai aparecer aqui embaixo, ó, média
+00:03:57.480 móvel, tá? clica em inserir aqui em cima
+00:04:00.200 do gráfico. Então, como eu disse, eu vou
+00:04:01.680 colocar uma média de 10 períodos, eu vou
+00:04:03.879 colocar uma outra média de 20 períodos e
+00:04:06.879 eu vou colocar a terceira média de 50
+00:04:09.560 períodos, tá bom? Vamos só mudar as
+00:04:11.480 cores dessas médias e mudar também o
+00:04:14.120 tipo, tá? Eu vou est utilizando as três
+00:04:16.199 médias exponenciais. A média de 10
+00:04:19.358 períodos, eu vou mudar, eu vou colocar
+00:04:21.440 ela vermelha, tá? Aqui, ó, vermelho. Vou
+00:04:24.400 colocar aqui espessura de quatro. Aí eu
+00:04:27.120 vou pegar essa média aqui de 20
+00:04:29.520 períodos, também vou configurar como
+00:04:31.360 exponencial. Vou colocar aqui um branco,
+00:04:33.759 espessura de três. E essa média de 50
+00:04:36.000 períodos aqui, ó, vamos deixar ela
+00:04:37.479 verdinha mesmo. Eu só vou mudar para
+00:04:39.240 exponencial e aumentar um pouco a
+00:04:41.199 espessura, tá bom? Pronto. Então, eu
+00:04:42.880 tenho três médias móveis, tá?
+00:04:44.840 Indicadores, seguidores de tendência.
+00:04:47.120 Tem vídeo aqui no canal, tem vários
+00:04:48.840 vídeos, na verdade, onde eu falo sobre
+00:04:50.320 as médias móveis. Acho que todos estão
+00:04:52.680 familiarizados aí com o conceito deste
+00:04:56.000 indicador. Qual que é a ideia aqui pra
+00:04:58.479 gente poder enxergar com clareza todas
+00:05:01.520 as inside bars deste gráfico? Muito
+00:05:04.639 simples. Botão direito, o próprio profit
+00:05:08.000 já tem uma regra de coloração para
+00:05:11.400 inside bars, tá bom? botão direito no
+00:05:13.960 candle, você vem aqui em inserir, regra
+00:05:16.520 de coloração. Aí você vem aqui, ó, em
+00:05:19.160 mais e você já vai achar aqui, ó, inside
+00:05:22.319 candle. O profit ele não chama de inside
+00:05:24.639 bar, tá? Ele chama de inside, mas na
+00:05:26.479 prática é a mesma coisa. Inside bar,
+00:05:28.199 inside candle. Clica aqui, clica em
+00:05:30.520 inserir no próprio gráfico, tá? Aí você
+00:05:33.080 seleciona aqui o ativo. No caso, eu
+00:05:34.919 peguei aqui como exemplo o gráfico da
+00:05:36.360 Magazine Wiza. Clica em adicionar, dá um
+00:05:38.560 OK e pronto. Galera, percebam que todas
+00:05:41.520 as inside bars estão pintadas de
+00:05:44.520 amarelo, tá? Eu posso pegar aqui, ó,
+00:05:46.919 todo o período vocês vão ver que as
+00:05:48.680 inside bars estão pintadas de amarelo,
+00:05:52.479 todas elas. Tá bom? Qual que é a ideia
+00:05:55.440 aqui então das inside bars? Eu quero
+00:05:57.919 mostrar para você que existem duas
+00:06:00.039 aplicações para este setup. A primeira
+00:06:03.120 aplicação é a aplicação da reversão.
+00:06:06.960 Reversão. Essa é a primeira aplicação. É
+00:06:09.120 a aplicação que eu mais gosto para esse
+00:06:11.360 setup. Então, você tinha um movimento
+00:06:13.919 forte acontecendo aqui, um movimento de
+00:06:16.280 alta, tá vendo? E o mercado resolve
+00:06:19.240 recuar. O mercado resolve recuar. O
+00:06:21.960 mercado recua, ele passa da média de 10
+00:06:25.120 períodos, ele passa da média de 20
+00:06:27.400 períodos, ele não chega na média de 50
+00:06:29.720 períodos. No meio do caminho aqui
+00:06:31.240 aparece o quê? Uma inside bar. Uma
+00:06:33.880 barra. Vejamos. Uma barra que tem a sua
+00:06:37.840 mínima maior do que a mínima do candle
+00:06:40.560 anterior, que tem a sua máxima menor do
+00:06:43.639 que a máxima do candle anterior. Esta
+00:06:45.960 barra aparecendo depois de um recu, mas
+00:06:50.160 dentro de um contexto de tendência,
+00:06:52.759 aonde o mercado não só vem fazendo topos
+00:06:55.319 e fundos ascendentes, mas ele tá com
+00:06:57.440 todas as médias móveis predominantemente
+00:07:00.720 apontadas para cima, é um sinal de
+00:07:03.440 compra, tá? E como é que se dá a compra
+00:07:06.160 aqui? Muito simples. Entrada se houver e
+00:07:09.599 somente se houver superação da máxima, o
+00:07:12.759 stop ele fica ligeiramente abaixo da
+00:07:16.240 mínima do movimento corretivo, tá?
+00:07:18.479 Quando você vai operar a reversão com
+00:07:19.720 inside, o stop não fica abaixo da mínima
+00:07:21.560 da inside bar, como se difunde por aí. O
+00:07:23.639 stop fica abaixo do movimento corretivo.
+00:07:25.759 E o alvo eu considero como sendo duas
+00:07:29.240 vezes o risco projetado para cima.
+00:07:31.720 Então, se o meu risco aqui é de 10%, o
+00:07:34.680 meu alvo vai ser de 20%. O mercado ativa
+00:07:38.879 essa máxima e, portanto, o setup deu
+00:07:40.800 entrada. O mercado demora alguns dias
+00:07:42.960 aqui, ele quase stopa o trade, mas
+00:07:45.599 eventualmente este mercado vai para o
+00:07:48.560 alvo, tá? E aqui você ganhou 20%. Existe
+00:07:52.199 a possibilidade de você trabalhar com um
+00:07:53.759 alvo parcial em duas vezes o risco e um
+00:07:56.599 alvo final em três vezes o risco, tá
+00:07:59.759 bom? existe a possibilidade. Depois,
+00:08:02.000 mais para frente, eu vou te mostrar
+00:08:03.680 quando que você trabalha com três vezes
+00:08:05.800 o risco e quando que você trabalha com
+00:08:07.919 apenas duas vezes o risco, tá bom? Mas
+00:08:10.960 aqui nós temos uma aplicação da Inside
+00:08:13.919 Bar para reversão. Existe outra
+00:08:16.759 aplicação da Inside Bar, que é o que nós
+00:08:19.199 estamos vendo basicamente aqui, que é a
+00:08:21.759 aplicação de continuidade de movimento,
+00:08:25.479 tá? Essa é a segunda aplicação para
+00:08:28.039 esta, este setup, para este para esta
+00:08:30.159 configuração que é a Inside Bar. Então
+00:08:32.399 você tem um movimento de alta
+00:08:34.200 acontecendo, o mercado está subindo, o
+00:08:36.440 mercado ele não perdeu nenhuma média,
+00:08:38.320 ele não encostou em nenhuma média, ele
+00:08:40.039 simplesmente está no movimento
+00:08:41.519 ascendente e no meio do caminho é
+00:08:43.479 formada uma Inside Bar. Bom, eu preciso
+00:08:46.240 te dizer que eu não gosto muito desta
+00:08:48.600 aplicação para Inside Bar, a não ser que
+00:08:51.320 nós estejamos trabalhando com gráficos
+00:08:53.560 semanais, com gráficos mensais para
+00:08:55.760 trabalhar gráfico diário, gráfico de 60
+00:08:57.839 minutos, gráfico de 15 minutos, 10
+00:08:59.519 minutos. Eu gosto de pegar inside bar em
+00:09:01.920 algumas médias móveis chave, fazendo a
+00:09:04.920 reversão do movimento dos preços, tá?
+00:09:07.079 Continuidade. Por que que eu não gosto?
+00:09:09.040 Porque muitas vezes o stop é
+00:09:10.959 pequenininho, então qualquer atividade
+00:09:13.040 do mercado te stopa facilmente. E muitas
+00:09:15.320 vezes as inside bars aparecem em
+00:09:18.120 momentos aonde o preço está longe das
+00:09:21.079 médias móveis. O preço ele está não
+00:09:23.760 próximo das médias, mas longe das
+00:09:25.640 médias. E eu tenho sempre a ideia de que
+00:09:28.040 eu devo comprar próximo das médias e não
+00:09:30.680 longe das médias. Ainda assim, você tem
+00:09:32.839 aqui um stop muito curtinho. Aí sim o
+00:09:35.360 stop fica abaixo da mínima, da inside
+00:09:37.079 bar, o gatilho de entrada fica acima da
+00:09:39.440 máxima e aí você quer pegar o movimento
+00:09:42.200 muito forte de alta, um movimento
+00:09:44.320 realmente assim rápido, tá? Tiro rápido
+00:09:47.959 de alta a continuidade da tendência. Eu
+00:09:50.480 sempre faço uma parcial, ou seja, vendo
+00:09:53.600 metade da minha operação aqui em uma vez
+00:09:56.480 o risco e aí eu finalizo a operação em
+00:09:58.760 duas vezes o risco. Quando tô
+00:10:00.240 trabalhando com continuidade de preço,
+00:10:02.000 eu não pego três vezes o risco, tá? E eu
+00:10:05.320 sempre faço uma parcial, uma vez o
+00:10:07.440 risco. Vamos pegar um outro exemplo
+00:10:09.160 aqui, ó, agora com o gráfico da Marfig,
+00:10:11.760 tá? Perceba, eu tô pegando um gráfico
+00:10:13.600 aqui de Marfig, gráfico semanal, tá? Nós
+00:10:16.360 estamos trabalhando aqui com um período
+00:10:18.200 de mais de um ano de gráfico, quase 2
+00:10:20.360 anos de gráfico. E a gente consegue ver
+00:10:22.560 que existem aqui várias inside bars. E
+00:10:25.440 aqui o que eu falei no começo do vídeo,
+00:10:26.959 você não vai querer operar toda e
+00:10:29.560 qualquer inside bar, não. Você precisa
+00:10:31.720 entender o contexto de mercado. Você
+00:10:33.519 precisa entender que o mercado ele
+00:10:34.880 trabalha com ondas, tá? Onda
+00:10:38.760 de expansão, onda de retração, onda de
+00:10:40.920 expansão, onda de retração. O mercado
+00:10:42.959 trabalha nesses ciclos, ó. Ele expande,
+00:10:45.040 contrai, expande, contrai, expande,
+00:10:47.000 contrai, expande, contrai, expande,
+00:10:48.320 contrai. É por isso que eu não gosto de
+00:10:50.200 trabalhar em side bar de continuidade,
+00:10:52.480 tá? Por quê? Porque geralmente ela
+00:10:54.320 aparece quando o mercado tá esticado em
+00:10:56.200 relação às médias móveis e aí você já
+00:10:59.000 começa a ver o ciclo de contração, tá? O
+00:11:02.519 fim do ciclo de expansão, começo do
+00:11:04.720 ciclo de contração até, tá? Vocês podem
+00:11:07.360 utilizar em sideb como uma maneira de
+00:11:10.600 enxergar um possível fim de ciclo de
+00:11:13.560 expansão dos preços e início de um ciclo
+00:11:16.160 de contração dos preços, tá? Quando que
+00:11:19.000 você vai querer trabalhar em side bar?
+00:11:21.600 Aqui, ó, muita atenção, aqui. Aqui é o
+00:11:25.720 melhor momento para se trabalhar uma
+00:11:27.880 inside bar. Quando o mercado vende um
+00:11:30.399 ciclo de retração, bate nas médias, tem
+00:11:33.800 um contexto de tendência prévio fazendo
+00:11:36.320 topos e fundos ascendentes, ciclos de
+00:11:38.320 expansão e contração, médias apontadas
+00:11:40.639 para cima e surge a inside bar. Tá
+00:11:42.680 vendo, ó? Essa aqui é uma entrada
+00:11:44.440 sensacional. Entrada acima da máxima,
+00:11:47.040 stop abaixo da mínima do movimento
+00:11:49.120 corretivo, alvo duas vezes o risco, ó,
+00:11:51.279 em duas semanas, três semanas, você
+00:11:53.639 pegou aqui 21% de lucro. Depois você
+00:11:57.160 teve mais um ciclo aqui, ó, de retração.
+00:12:00.240 Tá vendo? Essa inside bar eu não quero
+00:12:02.079 operar nem essa. Qual inside bar que eu
+00:12:04.560 vou querer operar? Essa aqui pode ser.
+00:12:07.000 Eu posso trabalhar sem side bar. Tô
+00:12:08.639 dentro de um ciclo de retração próximo
+00:12:10.440 das médias. Aqui no caso eu tinha um
+00:12:12.399 stopzinho de 8%, eu fui stopado. Mas
+00:12:14.720 olha quem surge aqui. Outra inside bar
+00:12:16.760 na cara da média móvel de 20 períodos.
+00:12:19.480 Ótimo. Entrada acima da máxima, stop
+00:12:21.360 abaixo do movimento de de correção e foi
+00:12:23.760 pro meu alvo duas vezes o risco. Aqui
+00:12:25.560 foi quase para três vezes o risco. Eu
+00:12:26.959 peguei aqui 16% também em questão de 4ro
+00:12:29.839 semaninhas. Quando que eu gosto de
+00:12:32.120 trabalhar em side bar? Na ideia de
+00:12:34.320 continuidade de tendência em escalas
+00:12:36.639 gráficas maiores, tá? Semal, mensal.
+00:12:39.519 Aqui eu tô trabalhando, ó, o gráfico
+00:12:41.839 mensal. Deixa eu colocar aqui uma marca
+00:12:43.920 da água um pouco mais forte para você
+00:12:45.720 enxergar. Tá vendo aqui, ó? Um M,
+00:12:47.320 gráfico mensal. Cada candle desse é um
+00:12:49.600 mês. Aqui sim, vale muito a pena você
+00:12:52.639 trabalhar a ideia de continuidade de
+00:12:55.160 tendência. Então você tinha uma inside
+00:12:56.959 bar aqui, ó, ela foi acionada, foi
+00:12:59.279 acionada e foi pro teu alvo, ó, duas
+00:13:02.079 vezes o risco com parcial aqui no meio
+00:13:04.600 do caminho. Olha outra inside bar aqui
+00:13:07.040 de continuidade de tendência. Ela foi
+00:13:08.839 acionada, foi acionada e estopou. Tá
+00:13:10.560 vendo aqui, ó? Show de bola. Outra bela
+00:13:14.079 inside bar que foi pro teu alvo. Você
+00:13:16.399 colocou aqui 12% de lucro. Outra inside
+00:13:19.079 bar aqui. Essa já é uma inside bar de
+00:13:21.120 reversão. Tá dentro de um movimento de
+00:13:22.560 correção de preço. Foi pro teu alvo.
+00:13:24.760 Olha aqui uma inside bar de reversão.
+00:13:26.600 Olha aqui uma inside bar de continuação.
+00:13:28.839 Olha só que show, ó. Quando você pega
+00:13:31.000 essas escalas maiores, tem esses
+00:13:32.720 movimentos de recuos preços para as
+00:13:34.639 médias. Você tem aqui belísssimo setup
+00:13:37.079 para trabalhar em side bar, aqui aqui
+00:13:40.399 inside bar de continuação aqui. Para
+00:13:42.399 você que assistiu até aqui, eu separei a
+00:13:44.680 cereja do bolo. É claro que eu ia deixar
+00:13:47.279 o melhor pro final. Existe um
+00:13:49.639 detalhezinho que pode fazer você virar a
+00:13:52.600 chave completamente da estratégia da
+00:13:54.720 Inside Bar. Só antes de eu te mostrar,
+00:13:56.959 eu preciso te fazer um convite. As vagas
+00:13:59.959 pro meu grupo de acompanhamento estão
+00:14:02.560 abertas e você pode fazer parte da nossa
+00:14:05.120 próxima turma. O grupo de acompanhamento
+00:14:07.600 é nada mais do que um serviço de
+00:14:09.399 assinatura, onde você conta com a
+00:14:11.279 expertise da equipe trade de valor para
+00:14:13.759 buscar as melhores oportunidades de
+00:14:16.240 trade para você. Eu e o meu time
+00:14:18.440 analisamos incansavelmente todo o
+00:14:21.120 mercado para ti. Ações brasileiras,
+00:14:23.199 ações americanas, criptomoedas,
+00:14:26.040 commodities e até opções. É uma forma de
+00:14:29.160 você terceirizar esse trabalho de estudo
+00:14:31.759 de todo o mercado e dos ativos que
+00:14:33.920 possuem exatamente o melhor contexto
+00:14:36.600 para você trabalhar setups, como o
+00:14:38.759 próprio Inside Bar que eu tô mostrando
+00:14:40.759 nesse vídeo. Sempre que aparecer aquele
+00:14:43.120 trade imperdível, aquele trade que você
+00:14:46.240 não pode ficar de fora, a gente te envia
+00:14:48.920 um relatório com tudo que você precisa
+00:14:51.639 saber. Qual ativo operar, a que preço
+00:14:54.639 comprar, onde colocar o stop, onde
+00:14:57.079 colocar os alvos. O mais legal é que a
+00:14:59.240 gente ainda acompanha cada trade do
+00:15:01.279 início ao fim do teu lado. Isso porque
+00:15:03.600 na nossa plataforma você tem acesso a
+00:15:06.360 duas lives exclusivas por dia, centenas
+00:15:09.440 de horas de conteúdo educacional e um
+00:15:11.920 espaço para tirar as tuas dúvidas com a
+00:15:13.959 gente sempre que você quiser e quantas
+00:15:16.519 vezes você quiser. Estar no grupo é uma
+00:15:19.639 maneira de você ter o acompanhamento de
+00:15:22.639 profissionais de mercado que vão fazer
+00:15:24.519 de tudo para você ter os melhores
+00:15:26.600 resultados. Eu te garanto, esse serviço
+00:15:29.440 muda o teu jogo. E para você que se
+00:15:32.639 inscrever no grupo através desse vídeo,
+00:15:34.800 eu ainda tô liberando quatro reuniões
+00:15:37.639 individuais com a minha equipe para você
+00:15:40.079 acompanhar os teus resultados junto com
+00:15:42.639 o meu time e garantir que você tá
+00:15:44.399 ganhando dinheiro. Para se inscrever,
+00:15:46.639 basta clicar no primeiro link que vai
+00:15:49.040 est aqui na descrição e preencher o
+00:15:51.279 formulário com o teu nome, e-mail e
+00:15:54.399 telefone, que a minha equipe vai entrar
+00:15:56.600 em contato com você via WhatsApp assim
+00:15:58.759 que possível. Agora sim, voltando aqui
+00:16:01.079 pro conteúdo do vídeo, o segredo que eu
+00:16:03.440 tenho para te mostrar envolvendo o setup
+00:16:06.399 da Inside Bar é o seguinte. Quando você
+00:16:09.000 olha um gráfico assim, ó, que tem side
+00:16:11.199 bar, você pode ficar confuso quando você
+00:16:14.160 deve ou não deve trabalhar uma inside
+00:16:18.000 bar. Você pode ver que tem side bar de
+00:16:20.120 tudo quanto é tipo, recuando pra média
+00:16:21.880 de 10 períodos, 20 períodos, 50
+00:16:24.160 períodos, tem side bar no meio do
+00:16:25.720 caminho. Eu tenho uma dica extremamente
+00:16:28.240 valiosa para você. Você vai pilotar
+00:16:30.519 junto com o teu gráfico, com essas três
+00:16:32.600 médias móveis, com inside bar, o
+00:16:34.240 indicador chamado afastamento médio, tá?
+00:16:38.199 Já tem vídeo no canal aqui sobre esse
+00:16:39.839 indicador. Esse indicador é extremamente
+00:16:42.839 poderoso e nesse contexto da Inside Bar,
+00:16:45.800 ele é mais poderoso ainda, tá? Porque
+00:16:47.279 você vai unir uma coisa com a outra.
+00:16:49.360 Então, dá dois cliques aqui. Aí você vai
+00:16:51.360 configurar esse indicador, tá? Você vai
+00:16:53.079 dar dois cliques aqui. Você vai
+00:16:54.360 configurar ele pra média exponencial de
+00:16:57.480 50 períodos, OK? Vai clicar em aplicar,
+00:17:00.560 vai dar OK. Bom, a regra é muito clara.
+00:17:03.759 Você só vai operar as inside bars que
+00:17:07.119 aparecerem quando este indicador, vamos
+00:17:09.240 aumentar a espessura dele aqui, ó, para
+00:17:10.760 você poder enxergar. Você só vai operar
+00:17:13.240 as inside bars que o indicador estiver
+00:17:16.280 marcando zero ou muito próximo de zero.
+00:17:20.720 Então, por exemplo, você vai operar essa
+00:17:23.280 inside bar aqui? Não. Você vai operar
+00:17:25.359 essa inside bar aqui, é só se olhar
+00:17:27.079 aqui, ó. O indicador tá marcando 11.
+00:17:28.960 Não, nem essa. Nem essa. Agora você vai
+00:17:31.760 operar essa inside bar aqui. Sim, você
+00:17:34.000 vai querer operar essa inside bar aqui.
+00:17:36.360 Tá vendo por quê? Porque ela está
+00:17:38.760 marcando muito próximo de zero. O
+00:17:41.440 indicador tá 014. Aqui você vai querer
+00:17:44.160 operar em side bar, entrada acima da
+00:17:46.000 máxima, stop abaixo do movimento de
+00:17:48.520 correção, da mínima do movimento de
+00:17:49.880 correção. E aqui sim, teu alvo não vai
+00:17:52.160 ser duas vezes o risco, ele vai ser três
+00:17:54.240 vezes o risco. Sempre você pode fazer
+00:17:56.559 uma parcial em duas vezes o risco aqui,
+00:17:59.080 mas teu alvo final vai ser três vezes o
+00:18:00.919 risco. E olha só que linda operação, que
+00:18:03.039 linda execução. Ele dá entrada no candle
+00:18:05.000 seguinte e em poucos dias essa operação
+00:18:07.720 vai pro teu alvo. Demorou aqui 8 dias pr
+00:18:10.640 você colocar 16%
+00:18:13.200 de lucro no bolso. Vamos ver mais
+00:18:15.520 exemplos aqui, ó. Essa inside bar você
+00:18:17.520 vai operar? Você pode até tentar operar,
+00:18:19.559 eu não operaria. Hum. E essa inside bar
+00:18:21.880 aqui? Não. Olha onde é que tá o
+00:18:23.320 indicador. Você só vai querer operar
+00:18:25.640 inside bars que o indicador, ó, tá
+00:18:27.960 marcando ou zero ou muito próximo de
+00:18:32.039 zero. Tá vendo? Olha aqui, olha essa
+00:18:34.520 inside bar que linda. Alvo três vezes o
+00:18:37.039 risco. Olha, olha o papel indo pro alvo
+00:18:39.679 em questão de 5 dias. 5 dias 9% no teu
+00:18:43.919 bolso. Essa inside bar você vai querer
+00:18:45.880 operar? É uma boa. Olha só. Olha só ela
+00:18:48.520 aqui, ó. Indicador marcando próximo de
+00:18:50.720 zero. Entrada acima da máxima, stop
+00:18:52.559 abaixo do da mínima. Ativou? Não ativou.
+00:18:55.200 Não ativou. Aborto operação. Olha aqui
+00:18:57.640 outra inside bar. Olha o indicador bem
+00:18:59.440 próximo de zero. Show de bola. Show de
+00:19:01.600 bola. Ativou. Tem outra inside bar,
+00:19:04.200 eventualmente ele ativa e ele vai para o
+00:19:06.480 meu alvo em questão de poucos dias
+00:19:08.559 também, 14 dias eu coloquei 12% no
+00:19:11.480 bolso. Então é uma baita dica. Você só
+00:19:14.679 vai operar as inside bars que aparecerem
+00:19:18.400 muito próximas de zero. Aqui só assim
+00:19:22.480 que você vai trabalhar o mercado, tá? Em
+00:19:25.320 nenhuma outra circunstância você vai
+00:19:27.360 trabalhar o mercado. Ah, Felipe, na
+00:19:29.320 venda funciona? side bar na venda
+00:19:31.480 funciona, a ideia é a mesma, só que daí
+00:19:33.559 obviamente o contexto no qual você vai
+00:19:35.919 querer trabalhar o setup, ele também vai
+00:19:38.320 mudar, né? Você vai querer um papel com
+00:19:40.080 topos e fundos descendentes, as três
+00:19:42.520 médias móveis apontadas para baixo de
+00:19:44.760 forma predominante, mas a ideia é a
+00:19:47.600 mesma, tá? Você vai entrar sempre quando
+00:19:50.280 indicador afastamento médio tiver muito
+00:19:53.000 próximo de zero. Aqui você pode
+00:19:55.200 trabalhar em side bar de novo. Alvo,
+00:19:57.360 sempre três vezes o risco projetado para
+00:19:59.480 baixo. Olha aqui. Aqui você fez 28%
+00:20:03.039 em 11 dias, tá? É uma famosa premissa,
+00:20:05.760 né? O mercado sobe de escada, desce
+00:20:07.480 elevador. Na venda é bem gostoso de
+00:20:09.280 trabalhar esse setup porque você ganha
+00:20:11.000 dinheiro muito rápido. Olha aqui de
+00:20:12.159 novo, ó. Outra inside bar. Essa aqui
+00:20:13.679 você não vai operar. Por que que você
+00:20:14.840 não vai operar? Porque olha onde é que
+00:20:15.799 tá o indicador. O indicador tá longe de
+00:20:17.400 zero. Essa aqui você pode tentar operar,
+00:20:19.400 ó. Por quê? O indicador tá bem mais
+00:20:21.280 próximo de zero. Quanto mais próximo de
+00:20:23.159 zero, mais propício dar certo. Tá aqui,
+00:20:25.840 ó. Ativou e deu alvo. Deu parcial, deu
+00:20:28.799 alvo depois. Tá bom. Deu alvo depois.
+00:20:31.120 Aqui, ó. Aqui não tava ruim de
+00:20:32.440 trabalhar, ó. Indicador tá bem próximo
+00:20:34.240 de zero também. Outra inside bar aqui,
+00:20:36.200 ó. Outra inside bar aqui. Tá? Então
+00:20:38.919 assim, galera, a ideia é vocês
+00:20:40.880 trabalharem sempre nessa dinâmica. Bom,
+00:20:44.039 por hoje nós ficamos por aqui. Espero
+00:20:45.880 que você tenha gostado desse vídeo. Se
+00:20:48.480 você gostou, não esqueça de já deixar o
+00:20:51.159 teu like aqui embaixo, de se inscrever
+00:20:53.000 no canal e ativar o sininho das
+00:20:54.640 notificações. Um grande e afetuoso
+00:20:57.039 abraço. Até a próxima.

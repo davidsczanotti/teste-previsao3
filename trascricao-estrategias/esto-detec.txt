@@ -1,0 +1,1058 @@
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/OZTgNrcZhlI
+
+00:00:00.240 Um inscrito aqui do meu canal me procurou, cara, com pedido inusitado. Ele me apresentou um operacional que,
+00:00:05.960 segundo ele, já colocou mais de R$ 30.000 no bolso dele somente esse ano. E não ficou só no papo, não, tá? Ele me
+00:00:12.320 mostrou prints que comprovam esse resultado. E aí ele me fez o desafio, Jean, será que você consegue transformar
+00:00:18.119 o meu operacional em um robô e levar lá pros seus inscritos do canal? Pois bem, cara, eu aceitei o desafio, criei o
+00:00:23.240 robozinho e vou apresentar para vocês no vídeo de hoje o robô com um método que levou esse cara a ganhar mais de R$
+00:00:28.519 30.000 R$ 1.000 somente esse ano. Então, meus amigos, bora aqui pra tela e vamos ver como é que vai funcionar o operacional. Vamos lá, pessoal. Esse
+00:00:35.840 aqui, ó, é o primeiro print que ele me mandou, tá? Ó, conta real da Genial, R$ 36.800,
+00:00:41.440 tá? Ele operou, pessoal, no Bitcoin e também no dólar. O Bitcoin agora ficou bem atrativo, né? Porque a gente consegue operar com um lote bem pequeno,
+00:00:48.360 né? Eles dividiram o lote do Bitcoin em 10, se eu não me engano, tá? Então, antes o que era um lote muito grande do
+00:00:54.079 Bitcoin, hoje você consegue operar bem pequeno. Então, tá traído muita liquidez hoje em dia pro Bitcoin, justamente
+00:01:00.160 porque o tamanho do lote caiu muito, né? E além do Bitcoin, pessoal, ele operou também no dólar. São os dois ativos onde
+00:01:06.240 ele utilizou essa estratégia e conseguiu fazer esse lucro aqui, tá? E aí, pessoal, ele me mandou o vídeo como
+00:01:11.439 operacional, quero mostrar para vocês o vídeo. Depois a gente vai desenvolver o robô, tá? Só para adiantar mais ou menos
+00:01:16.720 para vocês, o operacional dele se baseia em divergências, tá bom? naquele indicador detector de divergências e
+00:01:22.560 também no RSI esto o que que o que acontece, pessoal? Muitas vezes o sinal
+00:01:27.640 não aparece simultâneo. Então ele falou assim: "Jan, às vezes eu tomo decisão baseado mais no detector de divergência,
+00:01:32.880 às vezes no somente no estocástico, mas ambos me apresentam um ótimo resultado. Então faça um com outro que o resultado
+00:01:39.159 vai ficar bom. Beleza? Foi isso que ele me falou. Como aqui nesse canal eu já tenho um vídeo falando sobre detector de
+00:01:44.479 divergências, eu resolvi fazer o vídeo com o indicador RSI estoico, vou mostrar para vocês como é que ele utiliza, tá
+00:01:50.719 bom? Se vocês gostarem desse vídeo, pessoal, esse vídeo aqui bater mais de 1000 likes, tá? Tem que bater mais de 1000 likes, beleza? Eu vou fazer duas
+00:01:57.439 coisas aqui com vocês. A primeira, eu vou deixar o código desse robô na descrição para vocês fazer o download gratuito, beleza? batendo 1000 likes,
+00:02:04.119 vou fazer isso. A segunda coisa, pessoal, é se você interagir aí no meu vídeo e falar assim: "Jan, faça a segunda parte unindo o detector de
+00:02:10.479 divergências com este operacional. Eu vou fazer um vídeo unindo a parte um, que vai ser o o vídeo de hoje com o RSI
+00:02:17.360 estocástico, mas o detector de divergência, porque eu não vou fazer isso tudo em um vídeo só, meus amigos. Isso vai dar um trabalho tremendo para
+00:02:23.239 fazer, tá? Porque o sinal desses dois indicadores, eles não aparecem juntos, eles aparecem em momentos separados. E
+00:02:28.959 eu preciso fazer uma série de tratativas no código para conseguir criar um robô utilizando isso. Mas se a galera pedir
+00:02:34.400 aí nos comentários, eu vou fazer a segunda parte do vídeo incrementando aqui nesse código também o detector de
+00:02:39.879 divergência. Beleza? Bora pro vídeo. Vamos ver o que ele falou para nós. Fala Jan, bom dia. Beleza. É, fazer um videozinho rápido aqui explicando aqui
+00:02:44.959 no operacional que eu uso, tá? Detalhe, eu já fiz acho que uns 30k já com esse operacional te mostra aí. Ele é composto pelo que cara estocástico. Bas,
+00:02:51.280 basicamente é esse cara que eu uso e o detector de divergência. Eu olho bastante a laranja e e rosa aqui, cara. Eu nem me basei nela. Elas são os
+00:02:56.319 [ __ ] Sim, eu gosto de deixar, mas enfim. Aqui, eu me basei nesse cara aqui, esto FR, esto e detector, mas principalmente nesse cara. O que
+00:03:02.040 acontece? Vamos lá, simulando no dia 10, dia 13 aqui, tá? Então assim, ele tá subindo, temos ali a linha e branca e
+00:03:07.080 vermelha, a branca é o D e esse daqui são os parâmetros do IFR, tá? Escala. Já para adiantar para vocês aqui uma coisa, pessoal, esse indicador no módulo
+00:03:13.879 de automação, ele até tem uma função RSI estoico, mas, cara, não tem nada a ver com o indicador original, não tem nada a
+00:03:19.400 ver com o indicador que ele tá usando aqui. Então, a gente vai ter que desenvolver aqui nesse vídeo o indicador do zero, tá bom? realmente fazer o
+00:03:25.280 cálculo matemático para conseguir chegar no valor do RSI estoico. Beleza? Vamos lá. 0 100 período FL 14, o período
+00:03:31.959 estocástico 14 e a suação do K e o D, que são aquelas duas linhas que eu te mostrei. O branco é o K e o D é o vermelho, tá? Aí aqui a porcentagem dos
+00:03:37.400 níveis, né, que eu deixei. OK. Eu dei uma um pause aqui só para explicar. Então o que que eu faço quando essa linha vermelha cruza os 98, linha de 98%
+00:03:43.239 aqui, eu fico esperando o retorno dela. Na hora que ela retorna, eu faço a venda. Basicamente é isso. Aonde me confirma legal, quando aparece o detector aí, cara, eu às vezes eu nem
+00:03:49.439 espero ele ele cruzar aqui, mas eu vou simular para você ver. Vai fechar o qua do 5 minutos aqui. Tá no de 2 minutos, tá? 2 minutos que ele tá querendo cruzar
+00:03:55.239 que na verdade ele já cruzou. Então eu tô de olho ali para ver se vai aparecer o estocástico um pouquinho aqui para ver. Ó, aqui ainda não apareceu o detector, mas aqui eu já tô estudando a
+00:04:00.959 venda já. Aqui eu já tô estudando uma venda. Eu vou dar um pause aqui porque senão o vídeo vai ficar longo, tá? Aqui já abriu o outro cendo. Ali eles já estão iguais, ó. Vai vai meçar a cruzar.
+00:04:06.959 Se mear cruzar aqui eu já abro a venda V. Não pausa para não ficar lá. E abi não. Olho. Tem nada. Aqui ele até apareceu o detector uma
+00:04:12.799 hora ali, mas eu não abri ainda, mas ele apareceu ali para mim. Vamos ver agora se ele vai cruzar. Se ele cruzar abre operação. Na verdade me antecipei um
+00:04:18.440 pouquinho aqui, mas enfim. Ele cruzou a linha ali, tá vendo? abrir a operação e basicamente é isso aí. Então pessoal, o operacional é bem
+00:04:23.680 simples, tá? Quando a gente for integrar o detector de divergências, aí o negócio vai ficar mais complicado. Mas para hoje
+00:04:29.440 a gente vai trabalhar somente com o IFR estocástico, também conhecido como RSI estocástico, que já é bem complexo para
+00:04:35.680 desenvolver aqui, pelo menos pra maioria, beleza? Então aqui em cima, pessoal, eu já tenho desenvolvido o meu indicador RSI esto Stocástico, tá bom? E
+00:04:42.240 aqui embaixo é o original do Profit, beleza? Aqui já tem uma regra de coloração aonde sinaliza pra gente os
+00:04:47.639 pontos de entrada. Então, por exemplo, aqui está no Bitcoin. Beleza? Quando nossa vela aqui pintar de verde, nosso
+00:04:53.560 robô vai fazer uma entrada a mercado. Então, olha só, a gente tinha aqui o IFR estocástico trabalhando abaixo de um
+00:04:59.840 nível que nós vamos determinar. Ele falou em dois, tá? Isso é bem pouquinho. Então, o que acontece? Pra gente poder
+00:05:05.759 testar e ver mais entradas aqui, eu subi para 10. Beleza? O original que ele recomenda é dois. Lembrando que o
+00:05:11.080 original é dois. Coloquei R$ 10,90, pessoal, pra gente poder ver ver mais entradas e eu conseguir exemplificar aqui para vocês. Então, basicamente é
+00:05:17.440 isso aqui, ó. Quando o RSI estocático estiver trabalhando abaixo do nível prédeterminado, tá? E ele passar para
+00:05:23.560 cima, ó, a média dele aqui passar para cima, cruzar aqui esse nível para cima, ele vai sinalizar para nós de verde.
+00:05:28.840 Nosso robô vai fazer uma entrada a mercado e vai fazer um preço médio. Então ele vai fazer entrada e quando o
+00:05:34.160 preço retornar aqui um número X de pontos, o nosso bot adição de uma nova entrada com preço médio. Esse preço
+00:05:40.720 médio você vai poder parametrizar com um contrato, dois, três, quantos você quiser. Ah, já quero fazer a entrada com um. Se vier contra X pontos, eu quero
+00:05:47.560 entrar com mais três. Vai ser possível, tá bom? Mesma coisa aqui na venda. Cruzou para cima de 90, quando ele vem
+00:05:53.440 para baixo de 90, tá? Sinaliza aqui pra gente vermelho. O bote vai fazer uma entrada. Se vier contra X pontos, que
+00:05:59.560 vai ficar parametrizável, o nosso bote vai fazer uma adição de contratos. Quando ele voltar a favor, ele faz a realização no take profit. Beleza? Esse
+00:06:07.039 bote, ele é até simples de ser feito, mas cara, esse cara aqui, ó, tá? O tal do RSI esto é o que é o mais
+00:06:12.720 complicadinho. A gente vai precisar fazer um cálculo matemático para poder chegar nele, porque a função RSI esto
+00:06:18.280 que tem no manual da Nelógica, tá, que tem aqui para o módulo de automação, não tem nada a ver com isso aqui, não tem
+00:06:23.800 nada a ver, tá? Fica bem diferente. Eu vou até fazer para vocês, para vocês verem. Depois a gente vai fazer os cálculos aqui da maneira correta, tá
+00:06:30.520 bom? Então, pessoal, vamos aqui abrir o nosso editor de estratégias. Vai em estratégias. Editor de estratégias.
+00:06:37.199 Vamos colocar aqui pro profit dividir essas janelas internas. Mas vez organizado, vamos clicar aqui em nova
+00:06:42.520 estratégia e vamos começar aí o nosso desenvolvimento. Beleza, pessoal? Vou começar mostrando para vocês como é que
+00:06:47.759 fica com o RSI estocástico que tem aqui no modo de automação para vocês poderem ver que realmente o negócio não
+00:06:54.199 funciona, tá? Então vou chamar uma variável aqui de XRSI. Dois pontos vai receber o RSI Stocast. Beleza? Quando a
+00:07:02.440 gente abre o parêntese aqui, ele fala assim, ó, informa aí o período. Vou jogar aqui um período de 14. Mas beleza, cadê o restante dos parâmetros? É, não
+00:07:09.240 tem, cara, outros parâmetros, tá? Só permite que você coloque o período, beleza? Vamos declarar esta variável
+00:07:14.879 aqui, ó, var. E vamos colocar aqui, ó, XRSI 2 floatrula. Vamos salvar esse
+00:07:21.280 camarada, tá? E vamos inserir ele aqui no gráfico para vocês verem como é que fica isso. Eu vou chamar este código,
+00:07:26.520 pessoal, do seguinte, ó, operacional 30K, beleza? Operacional 30K_line YouTube. Como todos os códigos em que eu
+00:07:33.080 ensino a programação aqui, pessoal, esse também vai fazer parte lá do pack de robôs. O pack de robôs é compilado com todos os robôs que eu tenho aqui no
+00:07:38.160 canal. Já passa um de 100 robôs com o vídeo de hoje, esse robô aqui vai ser um número de 108. Você paga apenas uma vez
+00:07:43.680 e recebe durante um ano todos os robôs que eu criar aqui no canal. Você vai receber os 107 robôs, 108 com esse, mas
+00:07:49.479 um robô a cada novo vídeo que eu trouxer aqui no canal ensinando a programação. Beleza? Valorzinho aí risório. Dá uma
+00:07:55.039 olhadinha no link aqui da descrição, caso você tenha interesse. Fechado? Antes da gente inserir ele como indicador, pessoal, a gente precisa
+00:08:01.280 fazer o quê? A plotagem. Então, plot, abre, fecha parênteses, xrsivírgula. Salvei. Agora vou clicar com o botão
+00:08:07.240 direito, inserir indicador. Vou buscar aqui, ó, operacional 30_line YouTube. Vamos inserir aqui embaixo. Vamos dar um
+00:08:13.479 OK. Então, ó, pessoal, nota, cara, que não tem nada a ver, tá? Esse aqui é o original do Profit. Esse aqui é o que eu criei. Nota que os dois são iguais. E
+00:08:19.879 esse aqui é o que dá para você criar com essa porcaria desse IRSI estocástico que tem aqui no modo de automação. Beleza?
+00:08:26.080 Então, não serve para nada. Vou apagar isso aqui e agora a gente vai começar a brincadeira de verdade, tá bom pessoal?
+00:08:31.560 Só para vocês entenderem o conceito do estocástico, tá? O estocástico, pessoal, ele é baseado nos preços, certo? Então,
+00:08:37.799 quando a gente vai fazer o cálculo de estocático, existe uma fórmula matemática que é utilizada para calcular o estocástico baseado nos preços, tá? O
+00:08:45.279 RSI estocástico, pessoal, nada mais é do que você pegar essa fórmula do estocástico, que é baseada nos preços,
+00:08:51.320 tá? E jogar ele no RSI. Pedi aqui, pessoal, pro chat GPT, ó, me falar o que
+00:08:56.760 é o estocástico. Ele falou assim para mim, ó, o estocástico básico possui duas linhas, a linha K, linha principal, mais rápida, e o D, que é a média, tá? Ele é
+00:09:03.920 a sua visação. Beleza? Então, ele fala assim pra gente, ó, que o estocástico ele é o fechamento atual, ou seja, o fechamento do último candle menos a
+00:09:10.640 menor mínima de X períodos. Então, se eu colocasse assim, período 10, por exemplo, ele capturaria a menor mínima
+00:09:16.200 dos últimos 10 períodos para fazer esse cálculo aqui, tá? Depois aqui embaixo a maior máxima dos últimos 10 períodos, se
+00:09:21.800 o período for 10, menos a menor mínima dos últimos 10 períodos vezes 100 para transformar a escala de 0 a 100. Então esse aqui, pessoal, é o cálculo do
+00:09:28.279 estocástico. Beleza? Agora vamos ver aqui qual que é o cálculo do estocástico baseado no IFR, também conhecido como
+00:09:34.360 RSI. Nota que é a mesma coisa, você pega o RSI atual, depois a menor mínima do RSI de X períodos e divide pelo RSI
+00:09:42.720 máximo dos últimos 10 períodos menos um menor nível de RSI dos últimos 10 períodos, tá? Essa é a fórmula do RSI
+00:09:50.040 estocástico e é ela que a gente vai utilizar para poder criar o nosso bote. Beleza? Então, pedi ajudinha aqui pro
+00:09:55.160 chattando no Google muita coisa furada lá, tá? E aqui o chatpt já me entregou de cara a
+00:10:01.360 resposta que eu precisava, beleza? Então, se a gente vai utilizar o RSI para poder fazer esse cálculo, pessoal,
+00:10:07.000 primeira coisa é capturar o valor do RSI, né? Beleza? Então, como é que funciona a fórmula do RSI aqui no módulo
+00:10:13.200 de automação? É isso aqui, ó. RSI, abre e fecha parênteses. Vamos colocar aqui o período, tá? Período meu RSI, vírgula, o
+00:10:20.839 tipo que vai ser aritmético. Vrgula. Esse período do RSI, pessoal, vou deixar ele aqui, ó, na minha área de inputs,
+00:10:27.079 tá? Então, vou dar um conttrl C aqui, vou jogar aqui em cima, ó. Vou escrever aqui input, conttrl V, abre e fecha
+00:10:32.120 parênteses e vamos deixar padrãozinho aqui 14. Beleza? Ponto vírgula. Agora, pessoal, a gente precisa calcular o
+00:10:38.399 estocástico em cima do RSI, tá? Então, a gente vai pegar aqui o K. cá vai ser o nosso estocástico e ele vai receber
+00:10:45.040 aquela formulazinha que a gente havia conversado, tá? Meu editor vai colocar aí a fórmula para vocês aqui na tela.
+00:10:50.560 Então vai acompanhando aí comigo. Primeira coisa, pessoal, a gente capturar o RSI no momento zero, tá bom? Então vamos escrever assim, ó. X RSI,
+00:10:58.320 abre, fecha cochete, momento zero, tá? Já vou deixar um parênteses aqui na frente porque vai precisar. Então é o
+00:11:03.639 RSI, momento zero menos o meu RSI mínimo. O RSI mínimo, pessoal, é a menor
+00:11:09.120 mínima do RSI em X períodos, tá bom? Então vou colocar o seguinte, ó. Laest ele vai capturar o menor valor Laestre e
+00:11:16.120 fecha parênteses. O menor valor de quem? Do meu X RSI. E o número de períodos em que eu quero capturar essa menor mínima,
+00:11:23.160 que vai ser o período estocástico stocastic. Beleza? Esse período estocástico, pessoal, a gente vai
+00:11:28.399 colocar aqui na nossa input, tá? Que vai ser também 14 período, beleza? Bom, a
+00:11:33.639 parte de cima da nossa fórmula a gente já fez, tá? A gente já fez. Agora a gente precisa fazer a parte de baixo da
+00:11:39.160 nossa fórmula. Então tudo isso aqui, pessoal, eu tenho que dividir. Se eu colocar aqui, ó, e quero ver que tá o parêntese geralzão. Então é isso aí
+00:11:45.519 mesmo, tá? Tá certo. Vou dividir, vou deixar até um espaço assim para ficar mais fácil de visualizar. Vou dividir por o meu RSI máximo menos o meu RSI
+00:11:53.880 mínimo. Meu RSI máximo, pessoal, tem que utilizar a seguinte função raias, que ele vai capturar o maior valor do meu
+00:12:00.880 RSI, XRSI, de um número X de períodos aqui do meu estocástico, tá? E aí eu preciso subtrair ele pelo meu RSI
+00:12:08.639 mínimo, beleza? Que é o meu Laest, que é isso aqui, ó. Tá? Já tá até aqui, ó. Vou até copiar para ficar mais fácil, ó.
+00:12:14.040 Ctrl C, ó. Abre e fecha parênteses. Vou jogar aqui dentro, ó. Ctrl V. Beleza? Vamos ampliar aqui para ficar melhor
+00:12:19.639 para vocês verem. Só que olha só, pessoal, se eu mantiver assim, ó, vai dar errado, né? Por quê? Porque eu tô dividindo por esse e depois subtraindo
+00:12:26.320 por esse. Então, eu preciso colocar um parêntese geral, porque a divisão tem que ser pelo resultado da subtração aqui
+00:12:32.000 dos dois, tá bom? Vamos declarar aqui nossa variável K. Vamos trocar aqui o plot. Vou mandar plotar, pessoal. Tem
+00:12:38.199 que pôr o ponto vírgula aqui, ó. E eu vou mandar pilotar o K, só pra gente ver que é que vai dar, tá bom? Vamos ver se
+00:12:43.399 ficou certo o nosso cálculo. Mandei pilotar aqui, ele tem que mudar o indicador aqui embaixo. Beleza? Ainda
+00:12:48.480 não é o valor do estocástico aqui que a gente quer, tá bom? O valor que a gente vai precisar, pessoal, é do valor
+00:12:54.360 suavizado do nosso estocástico, tá? Mas antes da gente suavizar isso aqui, eu vou multiplicar todo ele por 100 pra
+00:13:01.519 gente transformar a escala, tá bom? Então, coloquei mais um parêntese geral, tá? E multipliquei por 100. Então, o
+00:13:06.560 resultado aqui que tá 020 vai para 20 é 20, né? 20 21 já arredondou aqui pra gente. Beleza? Que que eu vou fazer
+00:13:12.160 agora, pessoal? Vou fazer a sua avisação. Vou calcular aqui, ó, o D. O D, pessoal, vai ser a sua visação do meu
+00:13:17.320 K, que é o meu RSI estoico. Beleza? Então, crio aqui a minha média, abre e fecha parênteses da minha suavização.
+00:13:23.760 Suavacão K, tá? Porque eu vou suavizar o meu K, vírgula o próprio K que eu quero
+00:13:29.320 suavizar. O meu, a minha suavização K, pessoal, é o período, tá? da sua avisação K que vai ser três, conforme o
+00:13:35.519 rapaz ali do vídeo falou pra gente, tá? Falou que tinha que ser de três, beleza? E vamos declarar aqui a nossa variável
+00:13:41.240 D. Agora, ao invés de plotar o K, pessoal, vamos plotar o D e vamos ver se a gente já consegue chegar em algum valor aqui, ó, que fique igual ao
+00:13:47.600 indicador original do profit, igual aquele outro que eu já havia criado. Vamos ver se bate algum valor aqui. Olha lá, ó. A gente acabou de encontrar,
+00:13:53.839 pessoal, o valor do RSI estocástico. Então, o RSI estocástico, pessoal, na verdade não é o estocástico, tá vendo?
+00:14:00.040 Porque o estocástico do EGSI não é o valor K, mas sim a média suavizada, né?
+00:14:05.320 É a suavização do K no período 3. Então, pessoal, o nosso D é esse cara aqui, ó. Tá vendo, ó? Ele já está aqui, ó, 16.93.
+00:14:13.560 Aqui também, ó, 14. Agora, ó, 14,93. Então, nota que nos três indicadores aqui, ó, tá marcando o mesmo valor, ó,
+00:14:19.240 22, ó. Tá batendo certinho, tá vendo? Então, o nosso RSI estocástico, pessoal, é a média do estocástico do RSI. Muito
+00:14:26.320 doido isso aqui, né, cara? Isso aqui deu bastante trabalho para fazer, pessoal. Ó, vou jogar a real pr você. Eu levei uns 40 minutos, cara, pr conseguir
+00:14:33.440 encontrar a fórmula certa, calcular e e fazer bater os valores. Muitas vezes aqui no vídeo parece que as coisas são rápidas, tá? Mas na verdade é que antes
+00:14:40.440 eu já faço esse trabalho, tá? Então, muitas vezes o pessoal fala assim: "Ah, como é que faz isso? Não sei o quê". Cara, não é, não é, as coisas não são
+00:14:46.959 tão simples, tem coisas que você precisa desenvolver, tá bom? Então, você tem que sair do zero, pesquisar, encontrar a fórmula das coisas. Se você quiser fazer
+00:14:53.279 as coisas bonitinho, do seu jeito, do jeito certo. Então, pessoal, programação é desenvolvimento, é criação. Não existe nada pronto, não existe nada assim, ah,
+00:14:59.920 como é que faz isso? E você vai ter resposta de cabeça. Algumas coisas até sim, mas outras coisas você tem que
+00:15:05.120 sentar a bunda na cadeira e estudar, não tem jeito. Beleza? E para você, meu amigo, tá aí batalhando na programação,
+00:15:11.160 quer se desenvolver mais, ou ter um treinamento de programação de robôs. Nesse treinamento, pessoal, te entrego mais de R$ 2.000 de bônus, 30 dias do
+00:15:17.279 meu robô de gradiente linear de bônus e te ensino do zero. Como criar indicadores, como criar regras de
+00:15:22.959 coloração, como criar robôs de preço médio, break evening, trol stop, saídas parciais, enfim, cara, o treinamento é bem completo, tá com mais de 16 horas.
+00:15:29.560 Se você tem interesse em se aperfeiçoar, dá uma olhadinha no link aqui da descrição, fechado? E agora, pessoal, a
+00:15:34.639 gente vai precisar encontrar a média, né, do estocástico, que na verdade é o meu D. Então, vou calcular a média da média. Então, faço isso aqui, ó. Vou
+00:15:40.680 chamar aqui, ó, de suave D, suavização do D. Vai receber uma média, abre e fecha parênteses do período que vai ser
+00:15:46.600 a minha suavização do D, tá? Minha suavização do D, ele vai ficar lá na minha input, tá? Vrgula, o meu próprio D
+00:15:53.160 aqui, que é o que eu quero suavizar, beleza? Coloco aqui ponto vírgula. Vamos declarar esta variável, sua visação d
+00:16:00.839 colocar aqui o valor no nosso input paraa gente poder alterar, tá bom? Aqui era três também. Suavização K e
+00:16:06.480 suavização D era P do TR. Beleza? Vamos mandar fazer a plotagem aqui, pessoal. Então vou colocar assim, ó. Plot dois,
+00:16:12.839 abre e fecha parêntese. Suave D ponto vírgula. Vamos salvar. Vamos ver se bate os valores aqui, ó, com o indicador
+00:16:18.000 original do Profit e também com aquele indicador que eu já havia criado lá no começo. Olha lá, ó. Tá certinho, né? Ó, 57 378
+00:16:25.880 80 4961. Tá batendo certinho, tá? Então os três aqui estão iguais. Eu vou fechar esse cara aqui, não preciso mais, tá? E
+00:16:32.360 eu vou fazer uma alteração aqui para comprovar pr vocês que realmente a formulinha que eu criei aqui, ó, funciona. Então vou trocar aqui pr para
+00:16:39.360 quatro, o K e o D. Beleza? Vou aplicar, vou dar um OK. Agora vou trocar aqui, ó, no meu código, ó, também para quatro.
+00:16:45.000 Vamos ver se bate os valores. Tem que bater. Se não bater, porque ficou alguma coisa errada no meu cálculo aqui, tá bom? Olha lá, salvei, tá batendo o
+00:16:50.880 valor, ó, 53,40, ó, 4997 37. Então, tá batendo certinho. Beleza, pessoal? Vou
+00:16:56.639 tirar esse aqui também, que é o original do Profit. Vamos ficar somente com o indicador que a gente acabou de criar. Di preciso criar o indicador? Precisa,
+00:17:02.000 porque como é que você vai capturar esses valores, né? Como é que a gente vai fazer as entradas, uns níveis lá, se a gente não tem o indicador? Se o
+00:17:07.119 indicador que o profit fornece pra gente não serve, não tem esse cálculo interno aqui, né? Não dá. ele ele teria que ter
+00:17:13.520 um cálculo pronto já com essa fórmula que eu acabei de criar, mas não é assim que tá funcionando o que está disponível
+00:17:19.319 aqui no módulo de automação. Beleza? Então, para facilitar, vamos clicar aqui com o botão direito, propriedades da estratégia. A linha um, pessoal, vou
+00:17:25.480 colocar ela branca, tá? E a linha dois, vou colocar ela vermelha. São as cores que o rapaz passou para nós. Beleza? Vou
+00:17:31.760 dar um aplicar, vou dar um OK. Agora eu salvo. Ele vai trocar as cores aqui, ó, no indicador. Agora, turma, que que a gente vai fazer? Vou colocar assim, ó,
+00:17:38.480 nível da compra. Vou colocar 10 para facilitar os nossos testes. O rapaz lá recomenda dois, tá bom? E o meu nível da
+00:17:45.520 venda que vai ser 90, mas ele recomenda 98. Tá bom? Mas pra gente conseguir
+00:17:50.679 testar melhor aqui, vou colocar esses valores para ficar menos rigoroso e a gente conseguir ver mais entradas. Vou
+00:17:56.120 salvar, pessoal, e vou mandar fazer a plotagem dele aqui também, ó. Plot abre e fecha parênteses, nível da compra
+00:18:02.240 ponto vírgula. Plot 4, abre fecha parênteses, nível da venda ponto vírgula. Salvei, já colocou pra gente
+00:18:08.440 aqui no nosso indicador, ó, os níveis, tá vendo, ó? Já tá aí, ó. Nível da compra aqui embaixo, 10. Nível da venda
+00:18:14.480 ali em cima, 90. Show de bola. Agora a gente já tem aqui uns parâmetros, né, que a gente precisa para começar o
+00:18:19.640 desenvolvimento do robô. Por enquanto, cara, a gente só criou o indicador, só fez aquilo que era necessário para iniciar o desenvolvimento do robô.
+00:18:26.120 Beleza? Mas agora, pessoal, tá molezinha, tá? O que que a gente vai fazer? A gente vai começar aqui criando os nossos sinais. Então, vou criar aqui
+00:18:31.760 meu sinal de compra. O que que vai ser o sinal de compra, pessoal? sinal de compra vai ser esse cara aqui, ó, o Suave D, que é a média do meu
+00:18:38.720 estocástico aqui, né, do meu RSI estocástico. Beleza? Então, a gente vai verificar quando ele estiver abaixo.
+00:18:44.520 Vamos pegar aqui um um exemplo. Quando no período anterior, então olha aqui, ó, no na vela branca, ó. Vamos passar o
+00:18:50.520 mouse em cima, ó. A vela branca, ele estava abaixo do nível inferior, né? E na vela verde ele passou para cima, tá
+00:18:56.240 vendo? Então, houve a intersecção, ó. Ele cruzou, cruzou este patamar aqui. É isso que a gente quer. A gente quer
+00:19:01.919 capturar o momento em que ele vai cruzar. Tá bom? Então, quando meu suave de no momento um for menor do que o meu
+00:19:09.400 nível da compra, vamos colocar aqui entre parênteses e abre e fecha parênteses. O meu suave D for maior do
+00:19:15.960 que o meu nível da compra, suave D aonde, pessoal? No momento zero, né? Eu não preciso pôr colchete zero aqui se eu
+00:19:21.760 não quiser, mas vou colocar só para ficar mais didático aí para vocês. Quando essa situação ocorrer, a gente vai ter um sinal de compra falando pra
+00:19:28.000 gente que é verdadeiro, tá bom? Vamos criar agora também o nosso sinal de venda. Sinal de venda vai ser o quê?
+00:19:33.919 Quando o meu suave D estiver acima do meu nível da venda, então suave D no período anterior for maior do que o meu
+00:19:40.600 nível da venda e o meu suave D no momento zero for menor do que o meu nível da venda, aí a gente vai ter um
+00:19:46.559 sinal de venda sendo verdadeiro, tá? Ponto vírula. Como é que a gente faz para testar se esses caras realmente
+00:19:51.799 estão certos? Primeira coisa, a gente declara eles, tá? Sinal de compra, sinal de venda, declara eles como bulean. Por
+00:19:57.240 quê? Porque ele só vai retornar pra gente verdadeiro e falso, tá? Então é buleano, beleza? E depois a gente cria
+00:20:03.039 aqui uma regrinha de coloração. Se o meu sinal de compra for verdadeiro, então pente bar ab fecha parênteses cl line
+00:20:11.159 pon vírgula. E se o meu sinal de venda for verdadeiro, então pente bar a fecha
+00:20:16.919 aparência 255, que é o código da cor vermelha. Salvo esse cara. Pra gente comparar se aquilo que eu já havia feito
+00:20:22.120 anteriormente ficou correto, a gente vai inserir um novo indicador de preço aqui e vamos inserir a regra de coloração nova. Então, botão direito, inserir
+00:20:28.760 indicador de preço, está aqui em cima. Agora, botão direito em cima dos candles, inserir regra de coloração.
+00:20:34.320 Vamos pesquisar aqui, ó, por operacional 30 YouTube. Insere aqui. OK. Vamos ver se bateu, pessoal. Vamos jogar pra
+00:20:40.600 frente os dois. Ó, aqui tá certo. Aqui bateu. Aqui não bateu. Será que ficou algum parâmetro diferente? Ficou, né?
+00:20:46.880 Aqui tá quatro, ó. No nosso código tá quatro e na regra de coloração, se eu não me engano, tá três. Então vamos salvar aqui com três e ver se ele fica
+00:20:52.640 igual agora. Olha lá. Agora sim, ó. Agora bateu, né? 100%, ó. Tá vendo? porque tinha parâmetros diferentes, por
+00:20:57.880 isso que eu não estava batendo igualzinho, tá? Então agora, cara, ficou 100%, beleza, cara? Agora tá molezinha
+00:21:03.640 demais para criar o bote. Eu vou fazer o seguinte, ó. Se has position for igual a false, então início e fim. Aqui dentro,
+00:21:10.279 pessoal, a gente vai fazer o seguinte, ó. Quando houver o sinal de compra, a gente vai fazer envio de uma ordem de compra, tá? Então aqui eu troco para
+00:21:16.880 buy@mket. Vrgula e aqui, ó, eu troco para sell@market.
+00:21:22.799 Ótimo. Ele vai fazer o envio, então, quando pintar de verde ou de vermelho, tá? Vai fazer o envio da ordem de compra
+00:21:27.880 ou de venda. Beleza? Agora, o que a gente precisa fazer? A gente precisa fazer o nosso aumento de posição, tá bom? Depois a gente vai trabalhar isso
+00:21:33.880 aí, vai colocar o stop loss e o alfo, mas primeiro a gente vai fazer o nosso aumento de posição. Então vou falar assim, ó. Se ele já estiver comprado,
+00:21:40.080 por exemplo, ele entrou na posição de compra, então vou verificar, ó, se esbot ele está comprado, tá? E o meu close,
+00:21:46.120 fechamento do candle que tá ali trabalhando para cima e para baixo, for menor do que o meu by price, que é o preço em que ele entrou, menos a
+00:21:52.640 quantidade x de pontos, vou chamar assim, ó, pontos médios. E o número de contratos do médio, pessoal, chamar
+00:21:57.840 assim, ó, CTO médio for maior do que zero, porque se você não quiser utilizar, você coloca zero, aí ele não
+00:22:03.039 entra aqui nesse laço, tá? Então vai, vai, é mar. Vamos ver que que a gente fez aqui, ó. Imagina o seguinte, ó.
+00:22:08.760 Estou comprado na minha posição. O bote comprou aqui, ó. Comprou aqui, tá? Aí o preço que é o fechamento, close. Tá
+00:22:14.200 trabalhando para cim para baixo ali. O último preço pessoal é sempre fechamento, mas não fechou ainda. Já não interessa. Ele representado pela
+00:22:19.240 variável close. O fechamento. Quando o fechamento ele ultrapassar o valor que eu pré-determinei, que seria o meu buy
+00:22:24.440 price, o preço de entrada. Esse cara aqui é o by price, preço de entrada, tá? Preço da compra, preço médio da compra.
+00:22:30.240 Menos uma quantidade de X de ponto. Então esse cara menos uma quantidade de X de pontos, o ponto que seja, sei lá, 100 pontos, o ponto que fosse aqui. E eu
+00:22:36.919 especifiquei uma quantidade x de contratos, tá? aqui é maior do que zero. Se isso for verdadeiro, então ele vai fazer uma compra a mercado. Beleza? Vai
+00:22:43.480 fazer uma compra a mercado de quanto? Fazer uma compra a mercado do número de contratos que eu mandar aqui, ó. Número de contratos do preço médio. Abre, fecha
+00:22:49.799 parênteses. Coloco aqui, ó, CTO médio, tá? E aqui, ó, abre fecha parênteses, CTO entrada. Número de contratos da
+00:22:56.760 entrada. Cara, se você chegou até aqui, velho, escreve aí nos comentários, cara, passei a parte chata, porque a parte
+00:23:02.240 chata, cara, já foi, tá? que é a parte da programação. E aí eu vou saber se você realmente tá assistindo, tá
+00:23:07.400 interagindo aí com o vídeo e tá curtindo, beleza? Deixa o like se você tiver curtindo. Lembra que esse código vai estar aqui na descrição assim que o
+00:23:13.360 vídeo bater 1000 likes. Então, cara, não custa nada, contribui aí, só deixar o joinha no vídeo para um segundinho e
+00:23:19.159 clica aí no joinha. Fechado, pessoal? O que que a gente vai tem que fazer agora? A gente tem que especificar aqui nas nossas inputs, ó, CTO entrada, tá? Que
+00:23:26.279 vai ser aqui um contratinho. Colocar um contrato na entrada, tá bom? E vou colocar aqui, ó, meu CTO do médio, que é
+00:23:32.799 o contrato do preço médio. Vou colocar de três, tá? Três contratinhos de preço médio paraa gente poder puxar. Beleza? E
+00:23:38.159 aqui, ó, a quantidade x de pontos que eu quero fazer a minha entrada. Beleza? Vamos, como a gente vai trabalhar aqui
+00:23:43.880 no Bitcoin, eu vou colocar aqui 500 pontinhos de entrada se o preço vier contra a nossa posição. Então, o preço
+00:23:49.760 andou contra nossa posição, ele vai fazer uma entrada aí com três contratos, tá? Primeira entrada faz com um e a
+00:23:56.080 reentrada aqui do preço médio ele vai fazer com três. Cara, fiz aqui paraa situação de compra, preciso fazer também
+00:24:01.240 para situação de venda. Então se ele estiver vendido seis soldos e o meu close for maior do que o meu Cell Price
+00:24:06.919 que é o preço médio da venda, mais uma quantidade X de pontos, porque agora ele está vendido. Então se o preço vier
+00:24:12.880 contra, eu quero fazer o aumento da posição, mais quantidade x de pontos e o número de contrato especificado for
+00:24:18.080 maior do que zero, ele vai precisar fazer aqui, ó, uma venda sellos
+00:24:23.159 aqui do preço médio. Beleza, cara? A parte de envio de ordens de saída, eu vou dar um conttrol C, conttrl V, porque, cara, eu já tenho uma dezena de
+00:24:29.880 vídeo explicando como é que faz isso, tá? É muito repetitivo, não vou ficar passando aqui para vocês, mas é fazer o
+00:24:35.200 envio da ordem no alvo, envio de uma ordem no stop, tá? E aqui tem o offset. E aí eu preciso aqui, ó, especificar de
+00:24:40.960 quanto vai ser o meu alvo e o meu stop, tá? Meu alvo e meu stop. Vou colocar aqui um alvo de 500 pontos pro Bitcoin,
+00:24:47.840 tá? Stop aqui eu vou pôr de 1000 e a reentrada aqui, ó, do preço médio tá em 500. Então ele vai fazer uma entrada, colocar um alvo em 500. Se o preço vier
+00:24:54.559 contra, ele vai adicionar mais três contratos com 500 pontos contra e vai colocar o stop de 1000 pontos em relação
+00:25:00.600 ao preço médio. Beleza? Preciso colocar também, pessoal, o meu offset da operação. Que que é o offset? É o quanto
+00:25:05.919 você topa pagar caso o preço venha a conta, tá? Vou deixar aqui para o Bitcoin 500 pontos. Pro dólar, quanto
+00:25:12.200 você vai usar? Você vai usar 10 pontos aqui no offset. Pro mini índice você vai usar 100 pontos, tá? Grava isso. Tá
+00:25:17.279 entendendo, pessoal? Porque é complexo? Uma coisa é eu pegar, fazer o robozinho para eu utilizar ou para algum cliente,
+00:25:22.880 tá? Inclusive, a gente faz robô personalizado para cliente. Caso você tenha interesse, vou deixar um número de celular aqui de WhatsApp na descrição do
+00:25:29.200 vídeo. Você entra em contato lá, fala com o André, ele é da minha equipe e ele vai fazer o orçamento para você, tá bom? Então, uma coisa é a gente fazer o robô
+00:25:35.320 pra gente, outra coisa é fazer um vídeo aqui pro YouTube explicando passo a passo como é que funciona cada detalhe, tá? Então, dependendo aí do engajamento
+00:25:42.320 de vocês, se vocês quiserem a parte dois, eu vou inserir nesse mesmo código o detector de divergências para ele
+00:25:47.960 poder entrar quando acontecer a detecção da divergência ou o sinal aqui do estoco. E aí, após um número X de
+00:25:54.760 candles, por exemplo, ah, aconteceu a divergência, passou o número X de candles, se não dá o sinal de estocástico, ele cancela a operação. Vou
+00:26:01.159 fazer isso aí também para vocês, beleza? Então vai ficar bem mais complexo. O código aqui já tem uma certa complexidade devido ao cálculo
+00:26:07.080 matemático. Não que seja complexo, mas é complexo pra maioria das pessoas que não sabem programar. E se você for observar,
+00:26:13.279 pessoal, não tem nada de diferente do que eu mostrei para vocês em todos os outros vídeos, tá? É sinal de compra, é sinal de venda, é se tá comprado, se tá
+00:26:20.080 vendido, respos igual a falsa a mesma coisa. O que que mudou? Que mudou, cara, foi uma continha matemática que você
+00:26:25.200 aprende lá na quinta série, que é mais, menos e dividir. Não tem segredo nenhum, tá? Agora, o que é que as pessoas têm
+00:26:31.720 que desenvolver? É o raciocínio lógico. O cara me pergunta assim, Jan, no seu treinamento você ensina a fazer a ABCD?
+00:26:37.399 Fala, cara, com o treinamento você vai ser autônomo para desenvolver o que você quiser. Não é porque não está no treinamento que você não vai conseguir
+00:26:43.760 desenvolver. Você só precisa sentar a bunda na cadeira e tentar fazer as coisas, tá? Que uma hora ou outra sai.
+00:26:49.240 Beleza? Então, programação é desenvolvimento. Igual você criar uma planta de um prédio é um desenvolvimento. Você precisa calcular
+00:26:55.919 quanto destaca você vai cavar, dependendo da altura do prédio, do peso. Não é uma coisa que você fala assim: "Não, usa lá um ferro de tanto para não
+00:27:02.799 sei o quê". Não é assim que funciona. Tem que ter um desenvolvimento, tá bom? Tem que ter um raciocínio ali, tá bom? Então é isso aí, tá, turma? O robozinho
+00:27:09.320 tá pronto. Bora testar ele e vamos ver se vai funcionar da maneira que foi programado. Meus amigos, enquanto aí carrega aí o replay, quero mostrar para
+00:27:15.159 vocês como é que tá o resultado do meu bote, tá? Robozinho Black Box. Esse aqui tá rodando na minha VPS da Genel,
+00:27:20.320 infelizmente, pessoal, hoje foi LOS, tá? Não teve jeito. O pessoal fala assim: "Ah, só mostra game". Não, cara, robô da Game e da LOS. Nos dias que eu tô
+00:27:26.559 gravando, eu mostro o resultado que ele deu, tá? É assim que funciona. Então, no dia de hoje, infelizmente, o bote
+00:27:31.720 stopou. Vou mostrar aqui para vocês onde é que foi o stop, ó. Foi aqui, ó. Então, o stop, pessoal, ele é importante, tá?
+00:27:37.200 Senão você pode se arrebentar. Nota que depois aqui ele subiu mais um monte ainda. Então, assim, ó, o dia do stop faz parte, tá? Nessa conta que eu tô
+00:27:43.399 rodando aqui minha, dá genial. Por enquanto tô com um total acumulado aqui de quase R$ 3.000. E infelizmente hoje foi loss de 1000, tá? No mês ele tá com
+00:27:50.240 um loss acumulado de R$ 303. Hoje é dia 4, dia 4 em que eu gravo esse vídeo.
+00:27:55.320 Então tem muita água para rolar ainda durante o mês. Provavelmente ele vai recuperar isso aqui facinho durante a
+00:28:00.519 gravação dos próximos vídeos. Aí eu sempre vou mostrar o resultado, tá? Então vamos ver aí se ele recuperou mesmo. Você vai ficar no loss o mês.
+00:28:06.960 Robô, pessoal, é coisa para médio longo prazo, tá? Você nunca pode pensar em curto prazo. Curto prazo acaba com a
+00:28:12.039 gente. Ah, já, mas não é day trade. Day trade não é curto prazo. É, é curto prazo. Mas se você pensar sempre em resultados de médio, longo prazo, com
+00:28:18.360 certeza você vai ver que vai facilitar muito para você. Vou deixar um vídeo aqui nas telas finais, aonde eu falo sobre essa parte de mentalidade de
+00:28:24.840 trade. Porque assim, pessoal, estratégias existem dezenas, dezenas, centenas de estratégias. Só no meu canal
+00:28:30.640 tem mais de uma centena de robô. E muitas vezes o problema não é só o robô, o problema tá aqui, ó. É na nossa
+00:28:35.880 cabeça, tá? E se a gente conseguir controlar o nosso psicológico, já é meio caminho andado. Assista o vídeo que eu vou deixar para vocês aqui nas telas
+00:28:41.360 finais. Bora ver o replay do dia 2 de setembro como é que teria sido. Mas antes a gente vai precisar carregar no
+00:28:47.279 módulo de automação. Então vamos clicar aqui em estratégias. Automação estratégias. Vou vir nessa aqui que já tá com o replay do Bitcoin. Aqui
+00:28:53.559 pessoal, presta bastante atenção em como você vai parametrizar isso, tá bom? Na aba de entradas vai marcar realizar um jordes quando a condição for satisfeita.
+00:28:59.840 Então no exato instante em que ele cruzar ele já entra. Beleza? Permitir múltiplos envios alterações na mesma
+00:29:05.080 barra. Na base de saída nada no risco, você pode pôr seu objetivo de ganho de perda do dia, tá? E aqui na água de segurança pode deixar padrão aqui. Vamos
+00:29:11.640 selecionar a estratégia operacional 30k. Vou colocar aqui, pessoal, quantos contratos que a gente vai precisar, ó.
+00:29:17.600 Olha só, a gente vai precisar de um contrato paraa entrada, tá? Mais três do preço médio. Então, o total vai ser de
+00:29:23.000 quatro contratos. Vou pôr quatro aqui, ó. Quatro. E o bote vai fazer a gestão da quantidade de contratos por dentro
+00:29:28.480 dele. Se eu limito aqui, por exemplo, em um, quando ele for colocar o médio, ele não vai conseguir colocar três de uma vez, entendeu? Então você tem que pôr
+00:29:34.640 quatro. Qu. Beleza? Vamos clicar aqui em salvar. Lembrando que o rapaz lá ele roda no 2 minutos e no 5 minutos, tá?
+00:29:41.200 Vamos deixar esse camarada aqui de lado e vou mostrar para vocês no código aqui o porqu deixar quatro e quatro e não um,
+00:29:47.360 porque aqui já tá especificado a quantidade de contratos da entrada. Então ele vai mandar somente aquilo que precisa, da mesma forma que aqui já tá
+00:29:53.120 especificado a quantidade de contratos do preço médio, então ele vai mandar somente aquilo que precisa, tá bom? Vamos executar o bichão. Vou soltar o
+00:29:58.880 play aqui e vamos ver se o bichinho vai trabalhar da maneira correta. Olha lá, pessoal. Ele fez a entrada. Olha aqui,
+00:30:04.440 ó. Vamos pausar aqui para ver o que aconteceu. Na primeira vela do dia eu já tinha entrado, tá? Então, caso você não queira pegar a primeira vela do dia,
+00:30:09.640 coloca para iniciar um pouquinho mais tarde, 9:20, 9:30, tá bom? Primeira vela já tinha entrado. Ele fez uma entrada
+00:30:15.039 aqui, ó. Entrou bem atrasado porque o replay tá acelerado. Começo do pregão não tem liquidez. Fez entrada aqui, o
+00:30:20.559 preço retornou 500 pontos, ele fez aumento da posição, tá? Ó, retornou 500 pontos, fez o aumento da posição, já tá
+00:30:26.559 com quatro contratos, colocou o lote lá, ó, na saída, ó, e aí fez a zeragem, bateu no alvo, fez a zeragem, tá? Agora
+00:30:32.480 a gente vai ver uma situação de venda. Olha lá, pessoal. Pintou no exato instante em que pintou de vermelho e ele
+00:30:38.440 já fez a entrada de venda, colocou o alvo da operação. Assim que ele ver a contra 500 pontos, ele vai fazer o
+00:30:44.080 aumento, tá? Vamos ver aí se vai dar tempo dele fazer o aumento ou se ele vai pegar logo o take profit. Olha lá, 500 pontos contra. Pausei, ó, 500 pontos
+00:30:50.640 contra, tá? Fez o aumento da posição. Agora ele tá com quatro contratos, puxou o preço médio, certo? Praticamente no
+00:30:56.720 preço onde fez a primeira entrada. Vamos soltar o play. Enquanto ele não vai para lado nenhum, quero mostrar para vocês uma configuraçãozinha aqui, ó, no bote,
+00:31:03.080 tá? Aqui na edição de parâmetros, pessoal, olha lá, fez a zeragem aqui, tá? Aqui na edição de parâmetros, se você não quiser utilizar o preço médio,
+00:31:09.279 você coloca aqui zero, tá bom? Então, por isso que lá dentro do código eu coloquei assim, ó, se o preço médio, se a quantidade de contrato médio for maior
+00:31:15.679 do que zero, aí ele vai entrar dentro daquele laço. Caso contrário, ele não entra no laço. Então não tem problema você pôr zero aqui, beleza? Pode pôr
+00:31:21.360 zero, caso você não queira utilizar o preço médio, tá bom? Pessoal, se você curtiu o vídeo aí, achou que foi útil,
+00:31:27.039 aprendeu alguma coisa nesse vídeo, deixa o like, se inscreve no canal. Muita gente aqui não é inscrito, beleza? Comenta aí se quer ver a segunda parte
+00:31:33.000 desse vídeo, incluindo o detector divergências. A gente se vê na próxima segunda-feira. Forte abraço a todos e até mais, meus amigos.
+00:31:42.450 [Música]
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/FldtuRyCjYU
+
+00:00:00.160 No vídeo da semana passada, eu mostrei
+00:00:01.640 para vocês o setup de um inscrito que já
+00:00:03.439 rendeu mais de R$ 36.000
+00:00:05.839 somente em 2025. E eu transformei a
+00:00:08.440 estratégia desse meu inscrito em um
+00:00:09.960 robô. Mas aquele setup, meus amigos,
+00:00:11.639 ainda não estava completo. Faltava um
+00:00:13.599 componente que melhore em muito a
+00:00:15.160 performance do robô. E eu pedi para
+00:00:16.760 vocês comentarem se vocês queriam a
+00:00:18.880 parte dois desse vídeo com o setup
+00:00:21.160 completo. E o resultado, meus amigos,
+00:00:22.800 foram mais de 200 comentários pedindo
+00:00:25.439 pela parte dois do setup. Então cá
+00:00:27.960 estamos. Nesse vídeo eu vou mostrar para
+00:00:29.519 vocês como é que vai funcionar o robô
+00:00:31.800 utilizando o filtro de detector de
+00:00:34.040 divergências que vai fazer toda a
+00:00:35.680 diferença no operacional. Esse filtro
+00:00:37.640 ajuda a validar as entradas, evita
+00:00:39.760 sinais falsos e foca somente nos
+00:00:41.680 movimentos que t mais potencial. Se você
+00:00:44.160 assistiu a parte um, já se prepara
+00:00:45.800 porque agora você vai receber o setup
+00:00:47.559 dois completinho. Bora aqui pra tela.
+00:00:49.520 Vamos ver como é que vai funcionar o
+00:00:50.719 bote utilizando o filtro de detector de
+00:00:53.640 divergência. Vamos lá.
+00:00:55.680 Conforme havia mostrado para vocês no
+00:00:57.039 vídeo anterior, aqui está o resultado do
+00:00:59.000 nosso colega, um inscrito aqui do canal,
+00:01:00.920 que fez mais de R$ 36.000 na conta real
+00:01:03.480 dele da Genial, operando esse setup em
+00:01:06.360 Bitcoin e também dólar futuro. Na semana
+00:01:09.280 passada a gente fez a parte um desse
+00:01:10.680 vídeo utilizando o indicador RSI
+00:01:12.720 estocástico, mas o setup ainda não
+00:01:14.320 estava 100% completo. Faltava a
+00:01:16.240 cerejinha no bolo, que é colocar junto
+00:01:18.759 nesse setup o indicador detector de
+00:01:21.159 divergências. Indicador detector de
+00:01:22.799 divergência, meus amigos, é esse aqui,
+00:01:24.280 ó. Tá? Se você der um duplo clique nele,
+00:01:27.040 é possível parametrizar várias coisas
+00:01:29.680 aqui, inclusive escolher quais
+00:01:31.600 indicadores que você quer que ele
+00:01:33.040 detecte a divergência, tá bom? Tem
+00:01:35.240 filtro de MACD, MACD histograma, RSI,
+00:01:37.200 esto Stocático, CCI. O que que a gente
+00:01:39.320 vai fazer nesse vídeo? A gente vai
+00:01:40.600 colocar esse filtro com todos esses
+00:01:42.960 indicadores e aí você vai poder optar
+00:01:45.200 por quantas divergências você vai querer
+00:01:47.640 para poder validar a entrada. Então, vai
+00:01:49.920 funcionar mais ou menos assim. O nosso
+00:01:51.759 bote, ele vai avaliar cinco candles à
+00:01:53.799 esquerda, cinco candles à direita, para
+00:01:55.920 poder determinar se houve uma
+00:01:57.680 divergência ou não. Ele vai avaliar
+00:01:59.960 dessa lista aqui de indicadores quais
+00:02:02.360 estão dando divergência. E aí você vai
+00:02:04.640 poder escolher um número X de
+00:02:06.360 divergências pro nosso bote filtrar as
+00:02:09.038 entradas, tá? Então, supondo, por
+00:02:11.000 exemplo, que você escolheu que tenha que
+00:02:12.840 ter pelo menos cinco indicadores dando
+00:02:15.120 divergência, quando ele passar de cinco,
+00:02:16.959 né, por exemplo, neste caso aqui que deu
+00:02:18.480 sete, ele já teria validado a entrada e
+00:02:20.480 aí sim, quando o estocástico der o
+00:02:21.840 sinal, o nosso bote faria a entrada, tá?
+00:02:24.400 Para esse vídeo, eu vou mostrar para
+00:02:25.440 vocês, para poder facilitar as nossas
+00:02:27.200 entradas aqui somente com um. Então, vou
+00:02:29.239 colocar aqui no nosso setup que se
+00:02:30.640 houver pelo menos uma divergência e
+00:02:32.480 depois o nosso estocástico der o sinal,
+00:02:34.440 o nosso bote vai entrar. Beleza? Então,
+00:02:36.640 como é que vai funcionar o setup
+00:02:38.319 completo para você que não viu a parte
+00:02:39.760 um? Se você não viu ainda a parte um,
+00:02:41.200 recomendo que depois que terminar de
+00:02:43.159 assistir esse vídeo, você vai lá e
+00:02:44.640 assista o vídeo anterior a esse, tá?
+00:02:46.959 Então, o nosso bote, turma, ele vai
+00:02:48.720 detectar a divergência, tá? Aqui houve
+00:02:50.959 uma divergência e aí ele vai avaliar o
+00:02:53.159 nosso RSI estocástico. Se ele estiver
+00:02:55.040 trabalhando aqui, ó, pessoal, acima de
+00:02:56.760 95, quando a média do nosso RSI
+00:03:00.080 estocástico passar abaixo de 95, ele vai
+00:03:03.480 pintar aqui de vermelho e o nosso bote
+00:03:05.080 vai fazer uma entrada a mercado. Supondo
+00:03:07.000 que a entrada foi aqui, tá? Se o preço
+00:03:08.959 resolve voltar o número X de pontos,
+00:03:10.760 nosso bote vai fazer mais uma entrada,
+00:03:12.920 tá? Fazer um reforço de posição, ou
+00:03:15.000 seja, um preço médio. Beleza? Esse preço
+00:03:17.360 médio, ele é opcional para você utilizar
+00:03:19.480 ou não, fechado? Então fica a seu
+00:03:21.560 critério estar utilizando o preço médio
+00:03:23.000 ou não. Se você quiser fazer somente a
+00:03:24.480 entrada seco, sem problema. Vou dar mais
+00:03:26.200 um exemplo aqui para vocês bem claro que
+00:03:28.680 houve aqui no dia 5 para vocês
+00:03:30.879 entenderem 100% aí como é que vai
+00:03:32.640 funcionar, ó. Então aqui, por exemplo, o
+00:03:34.760 nosso indicador detector de divergências
+00:03:36.959 detectou que houve pelo menos uma
+00:03:38.599 divergência que foi no indicador do
+00:03:41.760 MACD. Depois a gente teve o nosso
+00:03:44.319 estocástico trabalhando aqui, ó, abaixo
+00:03:46.439 de cinco. Depois ele cruzou acima de
+00:03:48.640 cinco. Tá vendo? A média cruzou acima de
+00:03:50.159 cinco, pintou de verde. Pintou de verde.
+00:03:52.280 O nosso bote vai entrar a mercado. Se o
+00:03:54.079 preço recuasse aqui o número X de
+00:03:55.519 pontos, ele faria uma entrada adicional,
+00:03:57.799 ou seja, um reforço de posição, preço
+00:03:59.319 médio. Beleza? E aí quando ele for pro
+00:04:01.480 alvo, ele faz a zeragem de posição.
+00:04:03.560 Mesma coisa aqui, pessoal, neste outro
+00:04:05.560 exemplo aqui, ó. O nosso bote detectou
+00:04:07.640 pelo menos uma divergência, tá? Que foi
+00:04:09.560 no MACD. O nosso indicador estava
+00:04:12.040 trabalhando acima de 95. Quando a média
+00:04:15.879 do estocástico passa abaixo de 95, o
+00:04:18.320 nosso bote pinta aqui de vermelho, ele
+00:04:20.600 faz a entrada, coloca o alvo, se o preço
+00:04:22.280 vem contra, ele faz o preço médio. E aí
+00:04:24.360 depois, quando o preço vai a favor, ele
+00:04:26.400 zera todas as posições no alvo. Beleza?
+00:04:28.520 O que é que já está feito? O que já está
+00:04:30.360 feito é esta condição aqui, ó, dois
+00:04:32.000 tocásticos somente, mas a gente não tem
+00:04:33.600 ainda a validação aqui, ó, do detector
+00:04:35.840 de divergências, tá bom? E o detector de
+00:04:37.919 divergências, pessoal, é um fator
+00:04:39.479 determinante aí para que a gente consiga
+00:04:41.240 uma melhora na performance do nosso
+00:04:42.800 robô. Eu vou dividir a tela aqui,
+00:04:44.280 pessoal, e vamos abrir o editor de
+00:04:46.240 estratégias com a estratégia já da
+00:04:48.560 semana passada montada e a gente vai
+00:04:50.639 incrementar este código com as novas
+00:04:53.000 funcionalidades aqui da detecção de
+00:04:54.639 divergências. Beleza, meus amigos? O
+00:04:56.479 código da semana passada já está
+00:04:58.000 disponível para download no vídeo da
+00:04:59.720 semana passada lá na descrição, beleza?
+00:05:01.919 O código incrementado aqui com detector
+00:05:03.759 de divergências, que é o código que a
+00:05:05.199 gente vai terminar essa semana, vai
+00:05:06.759 estar disponível somente para os meus
+00:05:08.320 clientes da assessoria MP, assessoria
+00:05:10.440 trader, que é minha parceira aqui da
+00:05:12.400 Argenial. Caso você não esteja na nossa
+00:05:14.520 assessoria, dá uma olhadinha no link
+00:05:15.639 aqui da descrição. Lá vai ter todas as
+00:05:17.320 instruções para você migrar pra minha
+00:05:18.680 assessoria e ter acesso a Profit Pro
+00:05:20.720 gratuito com uma operação no mês VPS da
+00:05:23.039 Genial gratuita e também ao pack de
+00:05:25.039 robôs aqui da nossa assessoria que eu
+00:05:26.600 acho que deve estar aí com seis robôs
+00:05:28.199 mais ou menos e mais o código de hoje.
+00:05:30.319 Beleza? Tem o contato do Marcos, que é o
+00:05:32.080 assessor aqui. Caso você tenha alguma
+00:05:33.199 dúvida, pode clicar no link, você vai
+00:05:34.680 ser redirecionado para uma página do
+00:05:36.319 WhatsApp e ele vai te atender. Fechado,
+00:05:38.160 turma? Então, bora começar o nosso
+00:05:39.639 desenvolvimento. Meus amigos. Estou aqui
+00:05:41.639 com o manual da Anelógica aberto na
+00:05:43.479 minha tela. Eu vou mostrar para vocês
+00:05:44.680 como é que funciona a função de detecção
+00:05:47.120 de divergência, tá? Ele parece um pouco
+00:05:49.319 complexo, né? Porque tem um monte de
+00:05:50.680 coisa aqui, mas não é tão complexo
+00:05:52.720 assim. E já vou mostrar para vocês. A
+00:05:54.720 função de detecção de divergência,
+00:05:56.639 pessoal, é dada por essa função aqui, ó,
+00:05:58.199 divergência detector. Beleza? Os dois
+00:06:00.919 primeiros campos são o quê? O número de
+00:06:02.680 candles que ele vai avaliar à esquerda e
+00:06:04.280 o número de candles que ele vai avaliar
+00:06:05.479 à direita. E depois você pode escolher
+00:06:08.599 quais indicadores que você quer que ele
+00:06:10.680 faça a detecção da divergência, tá? Se
+00:06:13.280 você colocar, por exemplo, verdadeiro
+00:06:14.960 true e no primeiro campo, ele vai pegar
+00:06:17.360 o MACD. Se colocar true também no
+00:06:19.520 segundo campo, MACD histograma, true no
+00:06:21.199 terceiro, RSI, estocástico e assim por
+00:06:23.080 diante, tá? Então, para cada campo
+00:06:24.800 desse, você vai colocando verdadeiro ou
+00:06:26.599 falso. E aí ele vai detectar somente os
+00:06:29.000 indicadores que você escolher. Beleza?
+00:06:30.840 Existe também, pessoal, com esse
+00:06:32.120 indicador você consegue capturar o quê?
+00:06:34.720 O valor de topo e de fundo, que é esse
+00:06:36.400 cara aqui, ó, o pH, tá? E o PL, ou seja,
+00:06:39.280 ele vai marcar para você o topo e o
+00:06:40.919 fundo. Quando ocorrer um topo, se você
+00:06:43.319 optar pela indexação aqui, ó, que é
+00:06:45.639 opcional, tá? Você você pode usar ou
+00:06:47.800 não. Se você optar pela indexação,
+00:06:49.960 colocar zero, ele vai retornar os
+00:06:51.759 valores de pH e de PL. Ó, ele vai
+00:06:53.400 retornar -1, caso seja um PL, ou seja,
+00:06:55.759 um pivô de de fundo, tá? Zero quando não
+00:06:58.319 for nem topo nem fundo e um quando for
+00:07:00.319 um topo, tá? Ou seja, o pH aqui, tá? Que
+00:07:02.599 é um pivô de de alta, pivô rai, alguma
+00:07:04.560 coisa assim, que é o nome desse dessa
+00:07:06.319 variávelzinha aqui. Beleza? Se você
+00:07:08.360 colocar um dentro desse campo aqui do
+00:07:10.919 indexador, ele vai retornar pra gente o
+00:07:13.440 quê? O número de detecções que
+00:07:15.680 ocorreram, beleza? E aí aqui ele dá um
+00:07:18.360 exemplo, ó. Tá vendo? Ele dar um
+00:07:19.759 exemplo. Divergência detector, cinco
+00:07:22.000 candles à esquerda, cinco candles à
+00:07:23.440 direita e ele quer pegar os três
+00:07:25.080 primeiros indicadores, tá? Que é o MACD,
+00:07:28.000 MACD histograma e também o RSI. Se você
+00:07:30.680 olhar aqui, ó, os três primeiros campos
+00:07:32.639 são esses, tá? Ó, MCD, MCD histograma e
+00:07:34.639 o RSI. Então, colocando o verdadeiro
+00:07:36.680 pros três, ó, ele vai pegar divergência
+00:07:38.960 somente desses três, tá bom? E aí você
+00:07:40.720 coloca um aqui dentro desse campo, que é
+00:07:42.520 o indexador, e ele vai retornar pra
+00:07:44.319 gente então o número de divergências. Se
+00:07:47.080 o número for positivo, por exemplo, mais
+00:07:49.479 3, é porque houveram três divergências,
+00:07:52.800 tá? Divergências de alta. Se for
+00:07:55.919 sinalizado por -3, é porque houve uma
+00:07:58.800 sinalização de divergência de baixas de
+00:08:00.919 três indicadores. Fechado? Então parece
+00:08:03.479 ser meio complexo a forma de de escrever
+00:08:05.720 e tal, mas não é. Vocês vão ver isso
+00:08:07.879 agora, beleza? Se você observar aqui, ó,
+00:08:10.080 quantos campos a gente tem, ó, tem o
+00:08:11.720 número de cendas à esquerda, o número de
+00:08:12.759 cendas à direita e depois a gente tem
+00:08:13.840 aqui, ó, de indicadores. 1 2 3 4 5 6 7 8
+00:08:17.479 9 10 11, tá? Nós temos 11 campos aqui
+00:08:20.479 que a gente pode preencher verdadeiro ou
+00:08:21.879 falso. Eu vou colocar, pessoal, para ele
+00:08:23.520 detectar todos, beleza? Então, a gente
+00:08:25.800 vai preencher basicamente 5,5 e 11 vezes
+00:08:29.080 a gente vai escrever true para ele
+00:08:30.800 permitir capturar a divergência desses
+00:08:32.880 11 indicadores, tá? Então, vamos lá,
+00:08:35.279 vamos começar. Vou criar uma variável
+00:08:37.039 chamada de e ela vai receber o meu
+00:08:39.919 diverge divergência detector. Abre
+00:08:42.760 parênteses. Primeiro campo. Então,
+00:08:44.440 número de candles à esquerda. Vamos
+00:08:46.480 colocar aqui na input. Número candles
+00:08:49.120 esquerda, tá? A gente vai colocar cinco,
+00:08:51.480 que é o padrão. Beleza? Depois número de
+00:08:53.839 candles à direita, que também é cinco,
+00:08:56.480 tá? Vamos trocar aqui de esquerda para
+00:08:58.839 direita, beleza? E aí aqui nos dois
+00:09:01.120 primeiros campos, como eu já coloquei
+00:09:02.600 aqui na minha input, eu coloco assim, ó,
+00:09:04.399 número de candles avaliados, né, à
+00:09:06.360 esquerda, vírgula, o número de candles à
+00:09:09.560 direita, conttrl C, conttrl V aqui, ó,
+00:09:11.839 tá? Vírgula, agora é só escrever,
+00:09:14.160 pessoal, 11 vezes true. Beleza? Deixa eu
+00:09:16.920 fechar essa propaganda da lógica. Só
+00:09:18.560 escrever assim, ó. True. Vou dar um
+00:09:20.279 conttrl C aqui. Conttrl V. 11 x 2 3.
+00:09:23.320 Posso copiar esses três agora para
+00:09:24.600 facilitar, ó. E eu colove,
+00:09:29.040 tenho 12. Então, eu só apago esse último
+00:09:30.839 aqui, ó. Beleza? Fecho o parênteses. Ou
+00:09:32.640 seja, coloquei true para todos os
+00:09:34.720 indicadores. Então, ele vai capturar a
+00:09:36.279 detecção de todos os indicadores, tá?
+00:09:38.399 Todos os indicadores disponíveis,
+00:09:39.760 obviamente, na função. Aqui na frente do
+00:09:42.000 parênteses, eu vou colocar assim, ó,
+00:09:43.519 barra barra vertical e coloco um o
+00:09:45.600 número um aqui dentro, tá? Ponto
+00:09:47.399 vírgula. Para quê? Para ele retornar
+00:09:49.279 para mim o número de divergências que
+00:09:51.079 tem. Beleza? Que que eu faço agora?
+00:09:53.440 Declaro aqui, pessoal, ó, minha variável
+00:09:55.440 de, beleza? Declarei a variável det.
+00:09:57.760 Pronto, sumiu o errinho que já tinha
+00:09:59.040 aqui. Agora, pessoal, falei para vocês
+00:10:00.640 que eu vou permitir que a gente escolha
+00:10:02.240 um número de divergências que pode
+00:10:04.160 ocorrer, tá bom? Então, vou declarar
+00:10:05.959 aqui, ó, um input chamado número
+00:10:07.959 divergência. Abre e fecha parênteses,
+00:10:10.000 vou colocar um aqui dentro, tá? A gente
+00:10:12.000 vai trabalhar acima de um, já vai
+00:10:13.680 permitir entradas, tá bom? E aí, aqui
+00:10:16.120 embaixo, ó, do, a gente vai criar uma
+00:10:18.200 condicional, tá? Vai ser o seguinte, ó.
+00:10:20.120 Se abre e fecha parênteses o meu det
+00:10:22.480 maior, que o meu número de divergências,
+00:10:25.079 beleza? número de divergência está aqui,
+00:10:27.240 ou seja, tô falando para ele de é maior
+00:10:29.160 do que um. É, então beleza. E e não.
+00:10:32.800 Então vou criar, pessoal, dois sinais,
+00:10:35.040 tá? O meu sinal de divergência de compra
+00:10:38.279 que vai receber um, porque nós estamos
+00:10:40.399 avaliando aqui o número de divergências
+00:10:42.200 positivas, beleza? Ponto vírgula. E ao
+00:10:44.959 mesmo tempo eu faço o meu sinal de
+00:10:46.760 divergência da venda receber 0 ponula.
+00:10:51.360 O que que eu tô fazendo aqui, pessoal?
+00:10:52.720 Tô fazendo o seguinte, ó. Os sinais
+00:10:54.399 acontecem em momentos separados, certo?
+00:10:56.639 Então, primeiro eu tenho aqui, por
+00:10:57.920 exemplo, uma detecção de divergência e
+00:11:00.240 lá na frente pode passar um, dois
+00:11:01.920 candles para poder aparecer o sinal do
+00:11:04.440 estocástico. Então, o que que acontece?
+00:11:06.160 Se eu não setar um sinal como um e
+00:11:09.360 segurar ele como um até que aconteça o
+00:11:12.320 sinal da do estocástico, o que vai
+00:11:14.519 acontecer é o seguinte. Na primeira
+00:11:15.880 condição aqui, quando houver a
+00:11:18.040 divergência, ele vai setar para um. No
+00:11:19.680 candle seguinte, que não tem mais
+00:11:20.680 divergência, ele seta para zero. E aí eu
+00:11:22.440 nunca vou conseguir casar as duas
+00:11:24.639 coisas, casar a divergência juntamente
+00:11:26.920 com o sinal de entrada. Vamos ver um
+00:11:28.680 exemplo aqui que demorou para acontecer
+00:11:30.040 o sinal do estocástico. Olha só, por
+00:11:31.959 exemplo, tive uma divergência aqui,
+00:11:33.600 certo? No exato instante em que ocorreu
+00:11:35.399 essa divergência, o pico foi para
+00:11:36.880 quanto? Foi para um, porque houveram uma
+00:11:38.720 divergência, certo? Só que aí passaram
+00:11:40.560 um, dois, um candle, dois candles, três
+00:11:42.279 candles, ou seja, já não existe mais
+00:11:43.720 divergência. Divergência ocorreu aqui e
+00:11:45.839 aí depois eu vou ter meu sinal de
+00:11:47.399 estocástico. Então eu preciso pegar um
+00:11:48.760 sinal, falar assim, ó, aconteceu a
+00:11:50.320 divergência. Então se minha detecção de
+00:11:52.639 divergência for verdadeiro, eu vou falar
+00:11:54.079 assim para ele: "Ó, o sinal da
+00:11:55.680 divergência de compra ocorreu, beleza?
+00:11:57.959 Se ocorrer o sinal da divergência de
+00:11:59.200 compra, eu zero o sinal da divergência
+00:12:00.600 de venda." Basicamente isso. Depois eu
+00:12:02.760 vou testar se esse sinal de divergência
+00:12:04.200 de compra aqui já ocorreu. Depois eu só
+00:12:06.680 aguardo o sinal de compra e sinal de
+00:12:08.079 venda que já é baseado no próprio
+00:12:09.639 estocático. Beleza? E aí, pessoal, eu
+00:12:11.959 pego esse camarada aqui, ó, dou um
+00:12:13.480 contrtrol C, dou um contrtrol V aqui. E
+00:12:15.279 aí, se a minha detecção tá, for maior,
+00:12:18.560 na verdade for menor, beleza? Do que um
+00:12:21.880 número de divergências negativo, eu vou
+00:12:24.839 fazer o meu sinal de compra ir para
+00:12:26.639 zero, tá? Sinal da minha divergência de
+00:12:28.880 compra ir para zero. E o sinal da minha
+00:12:31.040 divergência de venda, eu jogo para um,
+00:12:32.600 porque agora eu tenho uma divergência de
+00:12:34.160 venda. Beleza? Que que eu faço agora, ó?
+00:12:36.519 Pego esses camaradas aqui e declaro
+00:12:38.480 aqui, ó, nas minhas inputs. Posso deixar
+00:12:40.800 ele como float, mesmo que ele não vai
+00:12:43.040 ter casa após a vírgula, posso deixar
+00:12:44.320 ele como float, não tem problema nenhum.
+00:12:45.839 Beleza? Poderia ser inteiro também,
+00:12:47.519 poderia, mas posso deixar aqui como f
+00:12:49.600 sem problema, tá? Que o sinal de menos é
+00:12:51.320 aqui. Beleza? Como é que eu faço para
+00:12:53.480 validar isso aqui? Eu posso fazer o
+00:12:55.240 seguinte, ó, para eu poder saber se
+00:12:56.519 realmente eu tô conseguindo capturar o
+00:12:58.040 número X de divergência e se tá batendo
+00:12:59.600 com o indicador. Como é que eu faço?
+00:13:00.800 Posso fazer um plot, ó. Plot, abre,
+00:13:02.480 fecha, parênteses, ponto vírgula. E aí
+00:13:05.079 eu vou pilotar o resultado aqui do
+00:13:07.079 indicador detector de divergências.
+00:13:08.920 Beleza? Vou salvar esse cara. O nome
+00:13:10.959 dele é Operacional 30K_line YouTube, tá?
+00:13:13.360 Eu vou salvar ele com o nome
+00:13:15.519 YouTube_line P2, tá? De parte dois.
+00:13:18.279 Lembrando que para você que já tem o
+00:13:19.600 pack de robôs, este código vai fazer
+00:13:21.600 parte lá do pack, tá bom? Esse é o robô
+00:13:23.839 de 110, tá pessoal? Eu falei errado da
+00:13:26.120 semana passada que era 108. Na verdade,
+00:13:27.720 o bote da semana passada era o 109 e o
+00:13:29.560 dessa semana é 110. Beleza? Ou seja, uma
+00:13:33.000 vez que você adquire o pack, você leva
+00:13:34.720 110 robôs. E toda vez que eu trouxe um
+00:13:37.279 robô novo aqui no meu canal ensinando a
+00:13:38.760 programação, você recebe este bote em
+00:13:40.959 primeira mão lá no pack pelo período de
+00:13:42.839 1 ano, tá bom? Então você além do 110,
+00:13:45.360 você continua recebendo por um ano todos
+00:13:47.120 os botes que eu trouxer aqui no meu
+00:13:48.720 canal, fechado?
+00:13:51.000 E para você que é da nossa assessoria,
+00:13:52.360 conversa lá com o Marcos. O Marcos vai
+00:13:53.759 fazer o envio desse código aqui para
+00:13:55.639 você. Se você não faz parte da
+00:13:56.880 assessoria, veja os detalhes aqui na
+00:13:58.560 descrição do vídeo para entrar lá pra
+00:14:00.160 nossa assessoria da Genial. Fechado.
+00:14:02.040 Vamos salvar esse cara aqui. E agora,
+00:14:03.639 pessoal, nós vamos inserir este robô
+00:14:06.040 como um indicador. Botão direito,
+00:14:08.440 inserir indicador. A verdade é o
+00:14:10.040 seguinte, ó. Semana passada eu tinha
+00:14:11.639 feito, tinha mandado plotar os
+00:14:13.639 indicadores aqui, ó, do RSI estocástico,
+00:14:15.759 né? Então, como eu quero plotar aqui
+00:14:17.720 agora o meu indicador detector
+00:14:19.320 divergências para ver quanto que ele tá
+00:14:21.680 detectando, eu preciso isolar o
+00:14:23.800 restante. Então, vamos procurar aqui,
+00:14:26.000 pôr aqui, ó, 30k_line YouTube, parte
+00:14:29.279 dois. inserir aqui embaixo. OK. Vocês
+00:14:31.920 vão entender melhor o que é que tá
+00:14:33.399 acontecendo. Não salvei ainda, né? Por
+00:14:35.600 isso que ele não plotou, certo? Ele
+00:14:37.639 plotou o indicador ao invés de plotar o
+00:14:40.440 detector de divergências, tá? Olha lá,
+00:14:42.360 pessoal. Tá vendo aqui que detectou uma
+00:14:44.000 divergência? Ó, para quanto foi aqui, ó?
+00:14:45.800 Foi para um indicador, tá vendo? Vamos
+00:14:47.480 ver alguma outra aqui, ó. Olha só esse
+00:14:49.279 aqui, ó, que detectou quatro. Tá vendo?
+00:14:51.360 Esse aqui, ó, detectou quatro. Vamos ver
+00:14:52.880 para quanto foi o indicador, ó. Foi para
+00:14:54.279 quatro. Olha aqui na escala de preço, ó.
+00:14:55.800 Na escala aqui do lado, ó. Foi para
+00:14:57.079 quatro. Esse aqui, ó, que detectou três
+00:14:59.399 negativo, ó, jogou aqui para mim, ó,
+00:15:01.480 três. Tá vendo, ó? Beleza? Então, toda
+00:15:03.480 vez que eu tenho uma divergência de
+00:15:05.000 compra, ele joga negativo. Toda vez que
+00:15:06.680 eu tenho uma divergência de venda, ele
+00:15:08.440 joga positivo. Então aqui até ficou
+00:15:09.880 errado, né? Cadê? Quando o número de
+00:15:11.800 divergências aqui, ó, minha detecção for
+00:15:13.759 maior, na verdade o negativo é aqui em
+00:15:16.000 cima e não aqui embaixo, tá? Ó, viu como
+00:15:17.639 que é importante você verificar? Se meu
+00:15:19.839 detector de divergências for menor do
+00:15:22.720 que o número X de divergência, então eu
+00:15:25.079 faço meu sinal de compra receber um, meu
+00:15:26.480 sinal de venda receber z0, tá? E aqui se
+00:15:28.600 ele for maior, eu faço meu sinal de
+00:15:31.319 compra aqui, ó, das divergências para
+00:15:32.759 zero e jogo o da compra para um. Beleza?
+00:15:35.519 Posso pôr aqui maior, igual, menor
+00:15:37.199 igual, porque assim ele vai considerar o
+00:15:38.839 valor que está aqui. E não só se for
+00:15:40.319 maior, vai considerar se for maior ou
+00:15:41.639 igual ou menor ou igual, tá? Meus
+00:15:43.720 amigos? Quero mostrar para vocês como é
+00:15:45.000 que tá a performance aqui do meu robô
+00:15:47.000 Black Box por enquanto, pessoal, no dia
+00:15:49.319 de hoje. Aí, ó, vou dar uma ampliada
+00:15:50.560 aqui. Por enquanto, no dia de hoje,
+00:15:52.120 pessoal, trabalhei na casa de R$ 50, tá?
+00:15:54.079 O mercado começou a dar uma derretida
+00:15:55.399 agora e ele tá carregando contratos
+00:15:57.040 aqui, ó. No mês, pessoal, por enquanto,
+00:15:58.639 R$ 733.
+00:16:00.600 No vídeo da semana passada mostrei para
+00:16:01.880 vocês, o bote estava perdendo no mês aí
+00:16:03.880 R 300 e poucos reais. Então, ele
+00:16:05.399 recuperou aqueles 300 e já está 700
+00:16:08.079 positivo. Beleza? Lembrando que aqui é
+00:16:10.120 conta real da Genial. Caso você queira
+00:16:12.600 testar esse robô, pessoal, vou deixar o
+00:16:13.839 link aqui para vocês na descrição de
+00:16:15.720 teste de robôs, tá? Não tem só esse
+00:16:17.720 robô, tem vários robôs aí para você
+00:16:19.040 testar, mas esse robô, cara, é o que tem
+00:16:21.000 performado melhor, que tem dado um maior
+00:16:22.959 resultado na faixa aí de R$ 3.000 por
+00:16:25.000 mês, operando com um contrato em até 10
+00:16:27.040 níveis, tá? Isso é o que ele tem feito
+00:16:28.639 de média aí nos últimos 9 meses, beleza?
+00:16:31.519 Caso tenha interesse em testar esse
+00:16:33.240 robozinho aqui, veja o link então na
+00:16:35.240 descrição do teste de robôs. Você vai
+00:16:36.880 preencher um formulário e vai receber
+00:16:38.519 automaticamente todas as instruções no
+00:16:40.199 seu WhatsApp, tá?
+00:16:42.720 Agora, pessoal, já tá molezinha aqui, ó.
+00:16:44.319 Por quê? Porque eu já criei aqui os meus
+00:16:46.279 sinais de detecção de divergência.
+00:16:48.560 Então, eu já não tenho meu sinal de
+00:16:49.839 compra e de venda aqui, ó, que é do RS
+00:16:51.360 estoico. Só colocar um parêntesezão
+00:16:53.000 assim, ó, fora fora. E aí eu coloco mais
+00:16:55.360 uma condicional, que além do estocástico
+00:16:57.319 aqui ter que cruzar, eu coloco que para
+00:16:59.600 poder comprar, pessoal, o meu sinal da
+00:17:01.880 divergência de compra tem que ter sido
+00:17:03.560 positivo. Beleza? Então, dou um contrtrl
+00:17:05.359 C aqui só para facilitar. Conttrl V e
+00:17:07.520 coloco aqui, ó, entre parênteses, ó.
+00:17:09.559 Apago aqui o ponto vírgula e ponho um
+00:17:12.039 ponto vírgula aqui no final. Faço a
+00:17:14.039 mesma coisa aqui pro meu sinal de venda.
+00:17:16.679 Então coloco aqui um parênteses
+00:17:18.000 geralzão, tá? E aí eu coloco a condição
+00:17:20.599 aqui, ó, do sinal de divergência de
+00:17:23.319 venda, tá? Control V, coloco o
+00:17:25.319 parênteses e faço ele aqui igual a um,
+00:17:27.640 tá? Meus amigos, fazer uma ressalva aqui
+00:17:29.320 com vocês de uma coisa. Muita gente vai
+00:17:31.640 rodar backtest, tá? E quando o cara
+00:17:33.960 clica aqui, ó, para rodar, eu não vou
+00:17:35.360 rodar backtest aqui, pessoal, porque
+00:17:36.640 minha máquina tá muito lenta. Beleza? Tô
+00:17:38.520 gravando tela, tem uns três Metatrader
+00:17:40.840 aqui aberto, tem um monte de coisa e o
+00:17:42.840 negócio tá bem lento mesmo, mas ele dá
+00:17:45.400 um erro de divisão por zero, tá? Para
+00:17:47.440 você evitar isso aí, só faz isso aqui,
+00:17:48.880 ó. Se o meu RSI for maior do que zero,
+00:17:51.640 então aí sim vai fazer o cálculo. Porque
+00:17:54.200 que que acontece? Por que que dá erro de
+00:17:55.440 divisão por zero? Porque como ele vai
+00:17:57.120 capturar lá da série histórica o o valor
+00:17:59.480 do RSI para poder fazer o cálculo, o
+00:18:01.679 primeiro valor do RSI é zero. E aí, como
+00:18:04.000 o meu primeiro RSI é zero, qualquer
+00:18:05.919 número dividido por zero dá erro, né,
+00:18:07.600 pessoal? Não existe zero dividido por
+00:18:09.559 alguma coisa, então não dá problema.
+00:18:11.080 Então o que que você faz? Se o meu XRCI
+00:18:12.840 for maior do que zero, aí sim ele vai
+00:18:14.919 fazer esse cálculo e aí ele elimina esse
+00:18:16.960 erro da divisão por zero. É só você
+00:18:18.760 fazer isso aí que aquele problema já vai
+00:18:20.480 sair, tá bom? Então vamos salvar esse
+00:18:22.240 camarada. Que que eu vou fazer, pessoal?
+00:18:23.799 Vamos carregar aqui no módulo de
+00:18:24.840 automação e vamos ver se o nosso bote
+00:18:26.480 vai funcionar certinho, tá, meus amigos?
+00:18:28.360 Já carreguei aqui o robô no módulo de
+00:18:30.440 automação. Tô com replay carregado aqui
+00:18:32.320 também. Vou abrir aqui os parâmetros
+00:18:33.720 para mostrar para vocês então como é que
+00:18:35.400 ficou, tá bom? Tem um alvo aqui,
+00:18:37.320 pessoal. de 500 pontos, vou jogar aqui
+00:18:39.120 100 pontos porque a gente vai rodar no
+00:18:40.320 índice, tá? Lembrando pessoal que esse
+00:18:42.080 operacional, o rapaz lá que me passou
+00:18:43.840 esse setup, ele falou: "Ó, opera no
+00:18:45.559 dólar ou no Bitcoin". Mas como já tá
+00:18:47.960 mais fácil aqui para mim rodar no
+00:18:49.120 índice, vou rodar no índice mesmo.
+00:18:50.320 Beleza? Vou colocar aqui então um stop
+00:18:52.159 de, sei lá, 300 pontos. Deixo o offset
+00:18:54.600 aqui em 100 pontos para poder rodar no
+00:18:56.799 índice. Número de contratos de entrada,
+00:18:58.520 um. Número de contratos do preço médio,
+00:19:00.280 três. Número de contratos do médio,
+00:19:02.000 então vou colocar aqui, se ele voltar,
+00:19:04.120 vou colocar 100 pontinhos só. Se ele
+00:19:05.799 voltar 100 pontos, ele vai fazer uma
+00:19:07.400 adição de contratos, ou seja, de três
+00:19:08.960 contratos. O nível da compra, então,
+00:19:10.440 ficou 10, o da venda ficou 90. Período
+00:19:12.520 do RSI, tá? Ficou 14, seu caixo 14, a
+00:19:15.760 sua visação 33. O número de divergências
+00:19:18.480 pelo menos um, você pode escolher
+00:19:19.960 quantas divergências você quer, beleza?
+00:19:22.080 E o número de candles analisado à
+00:19:23.919 esquerda ou à direita, cinco em ambos.
+00:19:26.400 Fechado? Vamos dar um OK. Aqui na aba de
+00:19:28.679 entrada, pessoal, você vai marcar
+00:19:29.760 realizar em vídeo de ordens quando a
+00:19:30.840 condição for satisfeita e permitir
+00:19:32.559 múltiplos envios, alterações na mesa
+00:19:34.440 barra, beleza? Coloquei aqui então
+00:19:36.200 quatro contratos, tá? Nos dois campos.
+00:19:38.360 Por quê? Porque a primeira ordem é com
+00:19:39.880 um contrato, já está especificado aqui
+00:19:41.520 no código e a segunda entrada é com três
+00:19:43.320 contratos também está especificado.
+00:19:44.919 Então preciso deixar aqui a quantidade
+00:19:47.240 máxima igual nos dois. Senão ele pode
+00:19:49.240 tentar fazer uma adição de contratos e
+00:19:51.240 não conseguir se você limitar a
+00:19:53.320 quantidade por ordem. Beleza? Vamos
+00:19:55.280 clicar em salvar e sair. Então vamos lá
+00:19:57.320 pessoal. Vou dar o o play aqui no robô.
+00:19:59.640 O nosso replay já está rodando, tá?
+00:20:02.480 Assim que aparecer a divergência, ó, já
+00:20:04.640 detectou aqui uma divergência, tá? Que é
+00:20:07.480 de compra. Beleza? O que falta agora?
+00:20:09.919 Falta a gente ver o nosso estocástico
+00:20:11.960 passar aqui abaixo de cinco e voltar
+00:20:14.159 acima de cinco, tá? Na verdade, eu falo
+00:20:15.679 estocástico, mas é o RSI estocástico,
+00:20:17.520 beleza? Então, uma vez que ela aparece,
+00:20:19.559 nota que a divergência vai até mudando
+00:20:21.000 de lugar, né? Porque ela não fixa a
+00:20:22.679 primeira vez. Conforme ele vai renovando
+00:20:24.559 aqui as as mínimas, ele vai até trocando
+00:20:26.520 o lugar, mas não importa, porque quando
+00:20:28.640 ele passou aqui, ó, ele já fez a
+00:20:29.960 detecção, tá? que houve um número menor
+00:20:32.159 de divergências, tá? Menor do que -1. E
+00:20:35.200 aí ele fez o nosso sinal da divergência
+00:20:36.919 igual a um. Se o sinal da divergência é
+00:20:38.600 um e ocorre aqui a situação do
+00:20:40.520 estocástico, ó, que que ele faz? Ele vai
+00:20:42.360 pintar a vela de verde e vai fazer uma
+00:20:43.960 entrada a mercado. Olha lá, ó. Pintou de
+00:20:45.799 verde, fez a entrada, colocou o alvo. Se
+00:20:48.440 ele retorna aqui sem pontos, ele faz uma
+00:20:50.280 adição de contratos. No caso aqui já
+00:20:52.039 pegou o take profit. Agora vamos ver em
+00:20:53.720 uma situação de venda. E o Black Box,
+00:20:56.080 pessoal, como é que vai, ó? Tem hora que
+00:20:57.559 dá um sustinho, né? Te hora que o
+00:20:58.840 mercado dá um sustinho na gente, dá uma
+00:21:00.240 esticada, mas o robô ele continua
+00:21:02.280 fazendo dinheiro. Por quê? Porque ele
+00:21:03.559 vai carregando contratos, adicionando e
+00:21:05.720 depois vai desovando contratos. Ele
+00:21:07.720 chegou aqui, pessoal, a menos R$ 296, ou
+00:21:10.440 seja, de prejuízo, né? E 171 de lucro
+00:21:12.480 por enquanto no dia, tá? Isso foi o
+00:21:14.200 máximo que ele fez na situação em que
+00:21:15.840 ele está trabalhando aqui, pessoal. Por
+00:21:17.039 enquanto tá com R$ 79 aí de game. Quando
+00:21:19.799 eu clico aqui no total, ele já me mostra
+00:21:21.120 um total aqui de R$ 4.000 de lucro nesse
+00:21:23.840 robô, trabalhando nessa conta, tá?
+00:21:25.200 Porque não faz muito tempo que eu tô
+00:21:26.400 rodando. Caso você queira testar esse
+00:21:28.480 robozinho aqui, pessoal, o Blackbox, dá
+00:21:30.440 uma olhadinha no link aí da descrição,
+00:21:32.080 beleza? Nota aqui, ó. Genial. Conta
+00:21:34.279 real, tá? Ó, PRD significa que é conta
+00:21:36.600 real. Beleza? Bora voltar aqui pro tema
+00:21:39.000 do nosso vídeo e ver a última entradinha
+00:21:41.360 aí que vai ser uma venda, tá? Temos aqui
+00:21:44.400 a detecção de divergência. Ele já
+00:21:46.320 detectou que foi um MACD. Então, olha
+00:21:48.000 só, deixa eu pausar aqui, ó. A detecção
+00:21:49.440 foi aqui, tá? Ou seja, passou uma vela.
+00:21:51.799 Nessa vela aqui não existia mais
+00:21:53.120 divergência, mas o nosso bote ele setou
+00:21:56.159 aqui, ó. Quando ocorreu uma divergência
+00:21:58.559 maior ou igual a um que está aqui, ele
+00:22:00.799 faz o quê? Joga para zero a situação da
+00:22:02.720 compra, né? O sinal da divergência de
+00:22:04.039 compra e joga para um o sinal da
+00:22:05.520 divergência de venda. Se eu tenho uma
+00:22:07.559 sinal de divergência de venda aqui, ó, e
+00:22:09.600 eu tenho a situação do estocástico, ó,
+00:22:11.559 do nosso RSI estocástico, né, passando
+00:22:13.880 aqui, ó, para baixo de 95, ele sinaliza
+00:22:16.360 para nós a venda, coloca o alvo, se o
+00:22:18.000 preço retorna 100 pontos, ele faz a
+00:22:20.760 adição de um contrato, senão se ele for
+00:22:22.120 direto pro alvo, ele faz a saída, tá?
+00:22:24.440 Aqui, que que aconteceu, pessoal? Deixa
+00:22:25.919 eu mostrar para vocês, ó. O que
+00:22:26.840 aconteceu aqui foi o seguinte, ó. Ele
+00:22:27.799 fez uma entrada, ele pegou o alvo, porém
+00:22:29.760 ainda havia condição na mesma vela e ele
+00:22:31.360 fez uma nova entrada. Por quê? Porque
+00:22:32.919 ainda tinha condição nesta vela. Se você
+00:22:35.240 não quiser que ele faça eh uma entrada
+00:22:37.279 nessa vela, pessoal, você vai ter que
+00:22:38.919 fazer uma alteraçãozinha aqui no no
+00:22:41.120 código, que seria o quê? É capturar o
+00:22:42.960 número da vela em que ele fez a entrada.
+00:22:44.880 Então, por exemplo, eu faria o qu,
+00:22:46.279 pessoal? Eu criaria uma variável conte,
+00:22:48.039 tá? Dentro do laço VOT ou sold. Então,
+00:22:50.840 colocaria assim, ó, cont recebe meu
+00:22:52.840 contador de candle ponto vírgula. Faria,
+00:22:56.200 colocaria essa variável cont aqui também
+00:22:58.400 no se sold, ou seja, quando ele entrar
+00:23:00.039 comprado ou vendido, ele armazena o
+00:23:01.400 número da vela. E aí eu falo para ele o
+00:23:03.279 seguinte, ó. Se resposition for igual a
+00:23:05.360 false, mas fazer grosso modo aqui só
+00:23:07.600 para vocês entenderem, tá? Meu contador
+00:23:09.240 de candle for maior do que Conte, tá?
+00:23:12.080 Contador de candle for maior do que
+00:23:13.960 conte, aí sim ele entraria aqui para ver
+00:23:16.400 os sinais de compra de venda. Ou seja,
+00:23:18.440 você nunca vai conseguir entrar duas
+00:23:19.679 vezes na mesma vela porque você
+00:23:21.120 armazenou o número dela. Você falou pro
+00:23:22.720 código o seguinte, ó, minha vela que eu
+00:23:24.320 acabei de entrar, tá? A vela que eu
+00:23:26.200 acabei de sair, porque ele sempre vai
+00:23:27.720 atualizar esse valor enquanto ele
+00:23:28.880 estiver comprado, a vela é a 226. Se o
+00:23:31.760 meu contador de cenda for maior que a
+00:23:33.159 226, aí sim você pode entrar. Se for
+00:23:35.320 igual a 226, ele nem consegue entrar
+00:23:37.080 aqui dentro do laço, tá? E aí seria
+00:23:38.760 somente declarar essa variável conte
+00:23:41.159 aqui como float naquelas nossas
+00:23:43.240 variáveis. Beleza? Mas não vou deixar
+00:23:45.360 assim, vou deixar do jeito que tava. E
+00:23:47.360 aí, caso vocês queiram implementar isso,
+00:23:49.000 é só escrever da maneira que eu mostrei
+00:23:51.080 para vocês aqui nesse vídeo. Fechado,
+00:23:53.120 turma?
+00:23:54.559 Cara, espero que você tenham gostado
+00:23:55.559 desse vídeo. Se você curtiu, lembra de
+00:23:57.000 deixar o like, conversa lá com o
+00:23:58.480 assessor se quiser pegar esse código
+00:24:00.159 aqui. A gente se vê na próxima segunda.
+00:24:01.679 Forte abraço a todos, meus amigos e até
+00:24:03.360 mais.
+00:24:06.030 [Música]
+

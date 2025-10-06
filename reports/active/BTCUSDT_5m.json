@@ -1,0 +1,31 @@
+{
+  "ticker": "BTCUSDT",
+  "interval": "5m",
+  "days": 90,
+  "train_frac": 0.8,
+  "lot_size": 0.1,
+  "day_trade": false,
+  "best_params": {
+    "short_period": 32,
+    "med_period": 75,
+    "long_period": 128,
+    "buy_entry": 40,
+    "sell_entry": 64,
+    "buy_exit": 75,
+    "sell_exit": 22,
+    "invert": true,
+    "lot_size": 0.1
+  },
+  "train_metrics": {
+    "pnl": 2617.7670000000007,
+    "num_trades": 11,
+    "win_rate": 72.72727272727273,
+    "return_pct": 26.17767000000001
+  },
+  "valid_metrics": {
+    "pnl": 441.3039999999994,
+    "num_trades": 4,
+    "win_rate": 50.0,
+    "return_pct": 4.413039999999993
+  }
+}

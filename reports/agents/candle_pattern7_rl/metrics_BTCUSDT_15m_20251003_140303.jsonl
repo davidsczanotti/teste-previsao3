@@ -1,0 +1,3 @@
+{"episode": 1, "steps": 1024, "reward": -22.489474203642494, "trades": 254, "invalids": 417, "idles": 0, "action_hist": [353, 342, 329], "mean_hold_bars": 5.196850393700787}
+{"episode": 2, "steps": 1024, "reward": -30.212093563605897, "trades": 269, "invalids": 418, "idles": 0, "action_hist": [337, 341, 346], "mean_hold_bars": 4.7388059701492535}
+{"episode": 3, "steps": 1024, "reward": -5.94891213786444, "trades": 249, "invalids": 446, "idles": 0, "action_hist": [329, 343, 352], "mean_hold_bars": 5.120967741935484}
