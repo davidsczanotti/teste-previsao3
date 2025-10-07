@@ -64,6 +64,7 @@ trascricao-estrategias/  # Ignorar transcrições temporárias
 *.log
 *.sqlite3
 *.db
+klines_cache.db
 
 # Configurações de ambiente
 .env
