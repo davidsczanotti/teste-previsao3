@@ -64,7 +64,10 @@ trascricao-estrategias/  # Ignorar transcrições temporárias
 *.log
 *.sqlite3
 *.db
+>>>>>>> 7266f6cd9eecd75ef4f9ef42ca88f5f42df26e53
 klines_cache.db
+=======
+>>>>>>> 7266f6cd9eecd75ef4f9ef42ca88f5f42df26e53
 
 # Configurações de ambiente
 .env
