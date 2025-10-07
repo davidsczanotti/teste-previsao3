@@ -22,12 +22,12 @@ def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
 def make_objective(df_train: pd.DataFrame, lot_size: float):
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
-        ema_fast = trial.suggest_int("ema_fast_period", 5, 15)
-        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 5, 30)
-        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 10, 60)
+        ema_fast = trial.suggest_int("ema_fast_period", 5, 20)
+        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 10, 50)
+        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 20, 120)
 
         risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.5, 3.5, step=0.1)
-        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 1.0, step=0.05)
+        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 1.5, step=0.05)
 
         # Roda o backtest com os parâmetros sugeridos
         try:
@@ -44,25 +44,29 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
             trial.set_user_attr("error", str(e))
             return -1e9  # Penaliza configurações que causam erro
 
-        # Métrica de otimização: Profit Factor
-        # Queremos maximizar o Profit Factor, mas também garantir que seja lucrativo
+        # --- Métrica de Otimização Robusta ---
+        # O objetivo é maximizar uma pontuação que equilibra lucro, robustez e número de trades.
+        # Score = (Profit Factor * P&L) / sqrt(num_trades)
+        # Isso penaliza estratégias com poucos trades, que podem ter um Profit Factor alto por sorte.
         closed_trades = [t for t in trades if "pnl" in t]
-        if not closed_trades:
-            return 0.0  # Sem trades, sem pontuação
+        num_trades = len(closed_trades)
+
+        # Penaliza fortemente estratégias não lucrativas ou com pouquíssimos trades
+        if pnl <= 0 or num_trades < 10:
+            return pnl - num_trades  # Retorna valor negativo para penalizar
 
         total_profit = sum(t["pnl"] for t in closed_trades if t["pnl"] > 0)
         total_loss = abs(sum(t["pnl"] for t in closed_trades if t["pnl"] < 0))
 
         if total_loss == 0:
-            profit_factor = 100.0  # Evita divisão por zero, valor alto para 100% de acerto
+            profit_factor = 100.0  # Valor artificialmente alto para 100% de acerto
         else:
             profit_factor = total_profit / total_loss
 
-        # Condição: Apenas considere o Profit Factor se o P&L for positivo
-        if pnl <= 0:
-            return pnl  # Retorna o P&L negativo para penalizar estratégias não lucrativas
+        # A métrica de pontuação
+        score = (profit_factor * pnl) / (num_trades**0.5)
 
-        return profit_factor
+        return score
 
     return objective
 

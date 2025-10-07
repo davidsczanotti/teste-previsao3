@@ -11,7 +11,8 @@ import pandas_ta as ta
 from matplotlib import pyplot as plt
 
 from ...binance_client import get_historical_klines
-from .config import load_active_config
+from .config import AlBrooksConfig, load_active_config
+from .indicators import add_indicators
 
 
 def backtest_al_brooks_inside_bar(
@@ -30,18 +31,12 @@ def backtest_al_brooks_inside_bar(
     if df.empty:
         return [], 0.0, df
 
-    # 1. Calcular Indicadores
-    df["ema_fast"] = ta.ema(df["close"], length=ema_fast_period)
-    df["ema_medium"] = ta.ema(df["close"], length=ema_medium_period)
-    df["ema_slow"] = ta.ema(df["close"], length=ema_slow_period)
-
-    # 2. Identificar Inside Bars
-    # Um candle cuja máxima é menor que a do anterior e a mínima é maior que a do anterior.
-    df["is_inside_bar"] = (df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))
-
-    # 2.1. Calcular Afastamento Médio (em % da EMA Lenta)
-    # abs((close - ema_slow) / ema_slow) * 100
-    df["avg_deviation_pct"] = abs((df["close"] - df["ema_slow"]) / df["ema_slow"]) * 100
+    params = {
+        "ema_fast_period": ema_fast_period,
+        "ema_medium_period": ema_medium_period,
+        "ema_slow_period": ema_slow_period,
+    }
+    df = add_indicators(df, params)
 
     trades = []
     position = None  # Pode ser 'long', 'short' ou None
@@ -295,14 +290,15 @@ def main():
     print(f"Média de Perda: $ {avg_loss:.2f}")
 
     # Calcula e exibe a duração média dos trades
-    if num_trades > 0:
+    # BUGFIX: Apenas trades que realmente fecharam (têm 'exit_date') devem ser considerados.
+    fully_closed_trades = [t for t in closed_trades if "exit_date" in t]
+    if fully_closed_trades:
         total_duration = sum(
-            (trade["exit_date"] - trade["entry_date"] for trade in closed_trades),
+            (trade["exit_date"] - trade["entry_date"] for trade in fully_closed_trades),
             timedelta(0),
         )
-        avg_duration = total_duration / num_trades
+        avg_duration = total_duration / len(fully_closed_trades)
         print(f"Duração Média do Trade: {str(avg_duration).split('.')[0]}")
-
 
     # Opcional: Salvar trades em um arquivo para análise mais profunda
     # pd.DataFrame(closed_trades).to_csv("al_brooks_trades.csv", index=False)

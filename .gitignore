@@ -68,6 +68,7 @@ trascricao-estrategias/  # Ignorar transcrições temporárias
 klines_cache.db
 =======
 >>>>>>> 7266f6cd9eecd75ef4f9ef42ca88f5f42df26e53
+data/klines_cache.db
 
 # Configurações de ambiente
 .env
