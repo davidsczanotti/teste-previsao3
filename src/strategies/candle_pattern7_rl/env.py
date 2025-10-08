@@ -1,13 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, Callable, List
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 
 from ...binance_client import get_historical_klines
-from .policy import Candle as PolicyCandle, default_signal_from_last7, decide_action_from_signal
+from .candlestick_patterns import add_candlestick_patterns
+
+
+@dataclass
+class StepResult:
+    obs: np.ndarray
+    reward: float
+    done: bool
+    info: Dict[str, Any]
+
+
+PATTERNS_TO_USE = [
+    "CDL_ENGULFING",
+    "CDL_HAMMER",
+    "CDL_HANGINGMAN",
+    "CDL_MORNINGSTAR",
+    "CDL_EVENINGSTAR",
+]
 
 
 def _sliding_window_features(
@@ -15,15 +33,13 @@ def _sliding_window_features(
     window: int = 7,
     ma_short_window: int = 7,
     ma_long_window: int = 40,
+    pattern_cols: Optional[List[str]] = None,
 ) -> tuple[np.ndarray, np.ndarray, int, Dict[str, np.ndarray]]:
-    """Build observation features and auxiliary series.
+    """Build observation features and auxiliary series."""
+    pattern_cols = pattern_cols or []
 
-    Features include per-candle normalised body/wick/range values and aggregated
-    statistics. Additional aggregates incorporate short/long moving averages
-    (SMA7 & SMA40) to give the agent trend context.
-    """
-
-    if len(df) < max(window, ma_long_window) + 2:
+    longest = max(window, ma_long_window)
+    if len(df) < longest + 2:
         empty = np.zeros((0, 1), dtype=np.float32)
         return empty, np.zeros((0,), dtype=np.float32), 0, {}
 
@@ -38,11 +54,24 @@ def _sliding_window_features(
     ma_short_prev = ma_short.shift(1)
     ma_long_prev = ma_long.shift(1)
 
-    start = max(window, ma_long_window)
+    # Adicionar ADX
+    adx_df = df.ta.adx(length=14)
+    adx_series = adx_df[f"ADX_14"]
+
+    # Adicionar RSI
+    rsi_series = df.ta.rsi(length=14)
+
+    # Adicionar volume relative
+    vol_rel_series = np.ones(len(df), dtype=float)
+    if "volume" in df.columns:
+        vol_ma = df["volume"].rolling(window=20, min_periods=20).mean()
+        vol_rel_series = df["volume"] / vol_ma
+        vol_rel_series = vol_rel_series.fillna(1.0)
+
+    start = longest
 
     feats: list[np.ndarray] = []
     for idx in range(start, len(df)):
-        # window candles end at idx-1
         o_w = open_s[idx - window : idx]
         h_w = high_s[idx - window : idx]
         l_w = low_s[idx - window : idx]
@@ -73,21 +102,40 @@ def _sliding_window_features(
         ma_short_slope = ma_s - ma_s_prev
         ma_long_slope = ma_l - ma_l_prev
 
-        agg = np.array([
-            greens / window,
-            reds / window,
-            last_close_rel_sma,
-            momentum_rel,
-            avg_range_rel,
-            ma_short_rel_close,
-            ma_long_rel_close,
-            ma_diff_rel,
-            ma_short_slope,
-            ma_long_slope,
-        ], dtype=np.float32)
+        # Adicionar ADX normalizado (0 a 1)
+        adx_val = adx_series.iloc[idx] / 100.0 if not np.isnan(adx_series.iloc[idx]) else 0.5
+
+        # Adicionar RSI normalizado (0 a 1)
+        rsi_val = rsi_series.iloc[idx] / 100.0 if not np.isnan(rsi_series.iloc[idx]) else 0.5
+
+        # Adicionar volume relative
+        vol_rel = float(vol_rel_series[idx]) if not np.isnan(vol_rel_series[idx]) else 1.0
+
+        pattern_feats = np.zeros(len(pattern_cols) * window, dtype=np.float32)
+        if pattern_cols:
+            pattern_feats = df[pattern_cols].iloc[idx - window : idx].values.flatten()
+
+        agg = np.array(
+            [
+                greens / window,
+                reds / window,
+                last_close_rel_sma,
+                momentum_rel,
+                avg_range_rel,
+                ma_short_rel_close,
+                ma_long_rel_close,
+                ma_diff_rel,
+                ma_short_slope,
+                ma_long_slope,
+                adx_val,
+                rsi_val,
+                vol_rel,
+            ],
+            dtype=np.float32,
+        )
 
         candle_feats = np.stack([body, rng, upper, lower], axis=1).astype(np.float32).reshape(-1)
-        feats.append(np.concatenate([candle_feats, agg], axis=0))
+        feats.append(np.concatenate([candle_feats, agg, pattern_feats], axis=0))
 
     features = np.stack(feats, axis=0)
     closes = close_np[start:]
@@ -100,14 +148,6 @@ def _sliding_window_features(
     }
 
     return features, closes.astype(np.float32), start, extras
-
-
-@dataclass
-class StepResult:
-    obs: np.ndarray
-    reward: float
-    done: bool
-    info: Dict[str, Any]
 
 
 class Candle7Env:
@@ -152,9 +192,9 @@ class Candle7Env:
         switch_penalty: float = 0.0,
         switch_window_bars: int = 5,
         # idle shaping
-        idle_penalty: float = 0.0,           # penalização por ficar flat e segurar "Hold" (USD por barra)
-        idle_grace_bars: int = 0,            # período de carência sem penalidade
-        idle_ramp: float = 0.0,              # rampa linear adicional após a carência (penal *= 1 + idle_ramp * (bars - grace))
+        idle_penalty: float = 0.0,  # penalização por ficar flat e segurar "Hold" (USD por barra)
+        idle_grace_bars: int = 0,  # período de carência sem penalidade
+        idle_ramp: float = 0.0,  # rampa linear adicional após a carência (penal *= 1 + idle_ramp * (bars - grace))
         reward_atr_norm: bool = False,
         atr_period: int = 14,
         atr_eps: float = 1e-6,
@@ -197,6 +237,7 @@ class Candle7Env:
         self._df: Optional[pd.DataFrame] = df
         self._base_features: Optional[np.ndarray] = None
         self._closes: Optional[np.ndarray] = None
+        self._heuristic_actions: Optional[np.ndarray] = None
         self._opens: Optional[np.ndarray] = None
         self._atr: Optional[np.ndarray] = None
         self._ma_short: Optional[np.ndarray] = None
@@ -215,12 +256,20 @@ class Candle7Env:
     def _ensure_data(self) -> None:
         if self._df is None:
             from datetime import datetime, timedelta, UTC
+
             start_dt = datetime.now(UTC) - timedelta(days=int(self.days))
             start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
             df = get_historical_klines(self.symbol, self.interval, start_str)
             if df.empty:
                 raise RuntimeError("No data for Candle7Env")
             self._df = df.sort_values("Date").reset_index(drop=True)
+
+        # Add candlestick patterns
+        self._df = add_candlestick_patterns(self._df)
+        # Normalize pattern columns to -1, 0, 1 for feature engineering
+        for pat in PATTERNS_TO_USE:
+            if pat in self._df.columns:
+                self._df[pat] = self._df[pat] / 100.0
 
         # Compute features once per dataset (cache across episodes)
         if self._base_features is None or self._closes is None:
@@ -229,6 +278,7 @@ class Candle7Env:
                 window=7,
                 ma_short_window=7,
                 ma_long_window=40,
+                pattern_cols=[p for p in PATTERNS_TO_USE if p in self._df.columns],
             )
             if len(feats) < 3:
                 raise RuntimeError("Not enough data to build 7-candle features")
@@ -252,9 +302,70 @@ class Candle7Env:
             atr = tr.ewm(alpha=1 / max(1, self.atr_period), adjust=False).mean().bfill().fillna(0.0)
             self._atr = atr.values[self._start_idx :].astype(np.float32)
 
+            # Pre-calculate heuristic actions
+            self._heuristic_actions = self._get_heuristic_actions(self._df)[self._start_idx :].astype(np.int32)
+
+    def _get_heuristic_actions(self, df: pd.DataFrame) -> np.ndarray:
+        """Calculates heuristic actions for the entire dataframe."""
+        pattern_cols = [p for p in PATTERNS_TO_USE if p in df.columns]
+        if not pattern_cols:
+            return np.zeros(len(df), dtype=int)
+
+        # --- Indicadores ---
+        is_bullish_pattern = (df[pattern_cols] > 0).any(axis=1)
+        is_bearish_pattern = (df[pattern_cols] < 0).any(axis=1)
+        ma_long = df.ta.sma(length=40)
+        adx = df.ta.adx(length=14)[f"ADX_14"]
+
+        # Volume filter
+        vol_rel_series = np.ones(len(df), dtype=float)
+        if "volume" in df.columns:
+            vol_ma = df["volume"].rolling(window=20, min_periods=20).mean()
+            vol_rel_series = df["volume"] / vol_ma
+            vol_rel_series = vol_rel_series.fillna(1.0)
+        is_high_volume = vol_rel_series > 1.0
+
+        is_uptrend = df["close"] > ma_long
+        is_downtrend = df["close"] < ma_long
+
+        # --- Filtro de Regime de Mercado (ADX) ---
+        # Só operar se o ADX indicar tendência (ADX > 25)
+        is_trending = adx > 25
+
+        # --- Lógica de Sinais ---
+        # Sinal de entrada Long: padrão de baixa em tendência de baixa
+        buy_signal = is_bearish_pattern & is_downtrend & is_trending
+        # Sinal de entrada Short: padrão de alta em tendência de alta
+        sell_signal = (
+            is_bullish_pattern & is_uptrend & is_trending if not self.long_only else pd.Series(False, index=df.index)
+        )
+
+        # Cria uma máquina de estados para a heurística
+        actions = np.zeros(len(df), dtype=int)
+        position = 0  # 0=flat, 1=long, -1=short
+        for i in range(1, len(df)):
+            if position == 0:
+                if buy_signal.iloc[i]:
+                    actions[i] = 1  # Open Long
+                    position = 1
+                elif sell_signal.iloc[i]:
+                    actions[i] = 3  # Open Short
+                    position = -1
+            elif position == 1:
+                if sell_signal.iloc[i]:
+                    actions[i] = 2  # Close Long
+                    position = 0
+            elif position == -1:
+                if buy_signal.iloc[i]:
+                    actions[i] = 4  # Close Short
+                    position = 0
+
+        return actions
+
     @property
     def observation_size(self) -> int:
-        return (4 * 7 + 10) + 2  # base features + aggregates + position flags
+        self._ensure_data()
+        return self._base_features.shape[1] + 3 if self._base_features is not None else 0
 
     @property
     def action_size(self) -> int:
@@ -284,7 +395,13 @@ class Candle7Env:
         base = self._base_features[self._i]
         pos_long = 1.0 if self._pos == 1 else 0.0
         pos_short = 1.0 if self._pos == -1 else 0.0
-        return np.concatenate([base, np.array([pos_long, pos_short], dtype=np.float32)]).astype(np.float32)
+        # Normaliza a contagem de barras na posição para o intervalo [0, 1]
+        # Usa max_position_bars se definido, senão um valor grande como 200.
+        max_bars = float(self.max_position_bars or 200.0)
+        bars_in_pos_norm = min(self._bars_since_entry / max_bars, 1.0) if self._pos != 0 else 0.0
+        return np.concatenate([base, np.array([pos_long, pos_short, bars_in_pos_norm], dtype=np.float32)]).astype(
+            np.float32
+        )
 
     def step(self, action: int) -> StepResult:
         assert self._base_features is not None and self._closes is not None
@@ -293,42 +410,21 @@ class Candle7Env:
 
         price = float(self._closes[self._i])
         next_price = float(self._closes[self._i + 1])
-        next_open = float(self._opens[self._i + 1]) if (self._opens is not None and (self._i + 1) < len(self._opens)) else next_price
+        next_open = (
+            float(self._opens[self._i + 1])
+            if (self._opens is not None and (self._i + 1) < len(self._opens))
+            else next_price
+        )
         reward = 0.0
         info: Dict[str, Any] = {}
 
         # Heuristic guidance (for BC/gating): compute signal from last 7 candles + MAs
         heur_action: Optional[int] = None
-        try:
-            if self._df is not None and self._ma_short is not None and self._ma_long is not None:
-                data_idx = self._start_idx + self._i
-                if data_idx >= 7:
-                    rows = self._df.iloc[data_idx - 7 : data_idx]
-                    if len(rows) == 7:
-                        last7: List[PolicyCandle] = [
-                            PolicyCandle(
-                                open=float(r["open"]),
-                                high=float(r["high"]),
-                                low=float(r["low"]),
-                                close=float(r["close"]),
-                            )
-                            for _, r in rows.iterrows()
-                        ]
-                        ma_s = float(self._ma_short[self._i])
-                        ma_l = float(self._ma_long[self._i])
-                        ma_s_prev = float(self._ma_short_prev[self._i]) if self._ma_short_prev is not None else ma_s
-                        ma_l_prev = float(self._ma_long_prev[self._i]) if self._ma_long_prev is not None else ma_l
-                        sig = default_signal_from_last7(
-                            last7,
-                            ma_short=ma_s,
-                            ma_long=ma_l,
-                            prev_ma_short=ma_s_prev,
-                            prev_ma_long=ma_l_prev,
-                        )
-                        heur_action = decide_action_from_signal(sig, self._pos, allow_short=not self.long_only)
-                        info["heuristic_action"] = int(heur_action)
-        except Exception:
-            pass
+        if self._heuristic_actions is not None and self._i < len(self._heuristic_actions):
+            base_signal = self._heuristic_actions[self._i]
+            # Simple mapping for now: 1 (buy) -> 1 (open long), 2 (sell) -> 3 (open short)
+            heur_action = base_signal if base_signal == 1 else (3 if base_signal == 2 else 0)
+            info["heuristic_action"] = int(heur_action)
 
         def slip_buy(px: float) -> float:
             return px * (1.0 + self.slippage_bps * 1e-4)
@@ -485,7 +581,9 @@ class Candle7Env:
         done = self._i >= (len(self._base_features) - 1) or (self.episode_len is not None and self._i >= self._end_i)
         return StepResult(obs, float(reward), done, info)
 
-    def run_episode(self, policy_fn: Callable[[np.ndarray], np.ndarray], max_steps: Optional[int] = None) -> Dict[str, Any]:
+    def run_episode(
+        self, policy_fn: Callable[[np.ndarray], np.ndarray], max_steps: Optional[int] = None
+    ) -> Dict[str, Any]:
         obs = self.reset()
         total_reward = 0.0
         steps = 0

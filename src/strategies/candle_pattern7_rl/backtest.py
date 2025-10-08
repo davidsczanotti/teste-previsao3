@@ -1,234 +1,239 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
+import argparse
+import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ...binance_client import get_historical_klines
-from .config import Candle7Config
-from .policy import Candle, default_signal_from_last7, decide_action_from_signal
+from .env import Candle7Env
+
+# Funções forward dos modelos para carregar o cérebro do agente
+from .train import _mlp_forward as reinforce_forward
+from .train_ppo import RunningNorm as PpoRunningNorm
+from .train_ppo import _forward as ppo_forward
 
 
-@dataclass
-class BacktestResult:
-    trades: List[Dict]
-    total_pnl: float
-    stats: Dict[str, float]
-
-
-def _df_to_candle(row) -> Candle:
-    return Candle(open=float(row["open"]), high=float(row["high"]), low=float(row["low"]), close=float(row["close"]))
-
-
-def backtest_last7(
-    df: pd.DataFrame,
-    lot_size: float = 0.001,
-    fee_rate: float = 0.001,
-    min_hold_bars: int = 0,
-    cooldown_bars: int = 0,
-    allow_short: bool = True,
-    initial_capital: float = 10_000.0,
-    signal_fn=default_signal_from_last7,
-) -> BacktestResult:
-    """Backtest a 7-candle pattern policy.
-
-    Decisions are made on the close of bar i-1 using candles [i-7, i-1].
-    Orders are executed at the open of bar i (next bar), to avoid lookahead bias.
-    Single position at a time. Exit on opposite signal (after min_hold_bars).
+def load_agent_policy(model_path: str):
     """
-    df = df.sort_values("Date").reset_index(drop=True)
-    if len(df) < 40:
-        return BacktestResult([], 0.0, {"pnl": 0.0, "num_trades": 0})
+    Carrega os pesos e a função de política de um agente salvo.
+    Detecta se o modelo é PPO ou REINFORCE pelo nome do arquivo.
+    """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Arquivo do modelo não encontrado: {model_path}")
 
-    close_series = df["close"].astype(float)
-    ma_short = close_series.rolling(window=7, min_periods=7).mean()
-    ma_long = close_series.rolling(window=40, min_periods=40).mean()
-    ma_short_prev = ma_short.shift(1)
-    ma_long_prev = ma_long.shift(1)
+    data = np.load(model_path, allow_pickle=True)
+    is_ppo = "ppo_" in os.path.basename(model_path).lower()
 
-    position = 0  # 0 flat, 1 long, -1 short
-    entry_price = 0.0
-    realized_pnl = 0.0
-    trades: List[Dict] = []
-    hold_bars = 0
-    cooldown_left = 0
-    equity_curve = [initial_capital]
-
-    start_idx = max(40, 7)
-
-    # iterate ensuring we have 7 candles ending at i-1 and MA context
-    for i in range(start_idx, len(df)):
-        # prepare last 7 closed candles ending at i-1
-        last7_rows = df.iloc[i-7:i]
-        last7 = [_df_to_candle(r) for _, r in last7_rows.iterrows()]
-
-        # decision based on last7
-        ma_s = float(ma_short.iloc[i]) if not np.isnan(ma_short.iloc[i]) else float(last7_rows["close"].iloc[-1])
-        ma_l = float(ma_long.iloc[i]) if not np.isnan(ma_long.iloc[i]) else float(last7_rows["close"].iloc[-1])
-        ma_s_prev = float(ma_short_prev.iloc[i]) if not np.isnan(ma_short_prev.iloc[i]) else ma_s
-        ma_l_prev = float(ma_long_prev.iloc[i]) if not np.isnan(ma_long_prev.iloc[i]) else ma_l
-
-        signal = signal_fn(
-            last7,
-            ma_short=ma_s,
-            ma_long=ma_l,
-            prev_ma_short=ma_s_prev,
-            prev_ma_long=ma_l_prev,
-        )
-        action = decide_action_from_signal(signal, position, allow_short=allow_short)
-
-        # execution at bar i open (or close if open is missing)
-        price_open_i = float(df["open"].iloc[i]) if not np.isnan(df["open"].iloc[i]) else float(df["close"].iloc[i])
-        t = df["Date"].iloc[i]
-
-        # update cooldown/hold
-        if cooldown_left > 0 and position == 0:
-            cooldown_left -= 1
-        if position != 0:
-            hold_bars += 1
-
-        if action == 1 and position == 0 and cooldown_left == 0:
-            # open long
-            position = 1
-            entry_price = price_open_i
-            hold_bars = 0
-            trades.append({"date": t, "action": "BUY", "price": price_open_i})
-            realized_pnl -= fee_rate * price_open_i * lot_size
-        elif action == 3 and position == 0 and cooldown_left == 0 and allow_short:
-            # open short
-            position = -1
-            entry_price = price_open_i
-            hold_bars = 0
-            trades.append({"date": t, "action": "SELL", "price": price_open_i})
-            realized_pnl -= fee_rate * price_open_i * lot_size
-        elif action == 2 and position == 1 and hold_bars >= min_hold_bars:
-            # close long
-            pnl = (price_open_i - entry_price) * lot_size
-            realized_pnl += pnl
-            trades.append({"date": t, "action": "SELL", "price": price_open_i, "pnl": pnl})
-            realized_pnl -= fee_rate * price_open_i * lot_size
-            position = 0
-            entry_price = 0.0
-            cooldown_left = cooldown_bars
-            hold_bars = 0
-        elif action == 4 and position == -1 and hold_bars >= min_hold_bars:
-            # close short
-            pnl = (entry_price - price_open_i) * lot_size
-            realized_pnl += pnl
-            trades.append({"date": t, "action": "BUY_TO_COVER", "price": price_open_i, "pnl": pnl})
-            realized_pnl -= fee_rate * price_open_i * lot_size
-            position = 0
-            entry_price = 0.0
-            cooldown_left = cooldown_bars
-            hold_bars = 0
-
-        # mark-to-market at close of bar i for equity curve
-        price_close_i = float(df["close"].iloc[i])
-        if position == 1:
-            unreal = (price_close_i - entry_price) * lot_size
-        elif position == -1:
-            unreal = (entry_price - price_close_i) * lot_size
+    if is_ppo:
+        print("INFO: Carregando agente PPO.")
+        if "Wp" in data:
+            # New format
+            params = [
+                data["W1"].astype(np.float32),
+                data["b1"].astype(np.float32),
+                data["W2"].astype(np.float32),
+                data["b2"].astype(np.float32),
+                data["Wp"].astype(np.float32),
+                data["bp"].astype(np.float32),
+                data["Wv"].astype(np.float32),
+                data["bv"].astype(np.float32),
+            ]
         else:
-            unreal = 0.0
-        equity_curve.append(initial_capital + realized_pnl + unreal)
+            # Old format
+            hidden = data["W1"].shape[1]
+            W1 = data["W1"].astype(np.float32)
+            b1 = data["b1"].astype(np.float32)
+            Wp_old = data["W2"].astype(np.float32)
+            bp_old = data["b2"].astype(np.float32)
+            Wv = data["Wv"].astype(np.float32)
+            bv = data["bv"].astype(np.float32)
+            W2 = np.zeros((hidden, hidden), dtype=np.float32)
+            b2 = np.zeros((hidden,), dtype=np.float32)
+            params = [W1, b1, W2, b2, Wp_old, bp_old, Wv, bv]
+        normalizer = PpoRunningNorm(size=params[0].shape[0])
+        if "norm_mean" in data:
+            normalizer.mean = data["norm_mean"]
+            normalizer.M2 = data["norm_M2"]
+            normalizer.count = data["norm_count"][0]
 
-    # force close at end
-    if position != 0:
-        last_price = float(df["close"].iloc[-1])
-        t = df["Date"].iloc[-1]
-        if position == 1:
-            pnl = (last_price - entry_price) * lot_size
-            realized_pnl += pnl
-            trades.append({"date": t, "action": "SELL (final)", "price": last_price, "pnl": pnl})
-            realized_pnl -= fee_rate * last_price * lot_size
-        else:
-            pnl = (entry_price - last_price) * lot_size
-            realized_pnl += pnl
-            trades.append({"date": t, "action": "BUY_TO_COVER (final)", "price": last_price, "pnl": pnl})
-            realized_pnl -= fee_rate * last_price * lot_size
-        equity_curve[-1] = initial_capital + realized_pnl
+        def policy_fn(obs):
+            obs_norm = normalizer.normalize(obs)
+            probs, _, _ = ppo_forward(params, obs_norm)
+            return probs
 
-    closed = [t for t in trades if "pnl" in t]
-    n_trades = len(closed)
-    wins = len([t for t in closed if t["pnl"] > 0])
-    win_rate = (wins / n_trades * 100.0) if n_trades else 0.0
-    total_pnl = float(realized_pnl)
-    ret_pct = (total_pnl / initial_capital * 100.0) if initial_capital else 0.0
+        return policy_fn
+    else:
+        print("INFO: Carregando agente REINFORCE.")
+        params = [data["W1"], data["b1"], data["W2"], data["b2"], data["Wv"], data["bv"]]
 
-    running_max = np.maximum.accumulate(np.array(equity_curve, dtype=float))
-    dd = (np.array(equity_curve) - running_max) / running_max * 100.0
-    max_dd_pct = float(dd.min()) if len(dd) else 0.0
+        def policy_fn(obs):
+            probs, _, _ = reinforce_forward(params, obs)
+            return probs
 
-    gross_profit = sum(max(t.get("pnl", 0.0), 0.0) for t in closed)
-    gross_loss = sum(max(-t.get("pnl", 0.0), 0.0) for t in closed)
-    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
-    avg_pnl = (total_pnl / n_trades) if n_trades else 0.0
-
-    stats = {
-        "pnl": total_pnl,
-        "num_trades": n_trades,
-        "win_rate": win_rate,
-        "return_pct": ret_pct,
-        "profit_factor": profit_factor,
-        "avg_pnl_per_trade": avg_pnl,
-        "max_drawdown_pct": max_dd_pct,
-        "fee_rate": fee_rate,
-    }
-
-    # Prints resumidos
-    print("Backtest 7-Candle Pattern:")
-    print("Total P&L: $ {0:.2f} ({1:.2f}%)".format(total_pnl, ret_pct))
-    print("Trades fechados: {0} | Win rate: {1:.2f}%".format(n_trades, win_rate))
-    print("PF: {0:.2f} | Avg/Trade: ${1:.4f} | MDD: {2:.2f}% | Fees: {3:.4%}".format(
-        profit_factor if np.isfinite(profit_factor) else float('inf'), avg_pnl, max_dd_pct, fee_rate
-    ))
-
-    return BacktestResult(trades, total_pnl, stats)
+        return policy_fn
 
 
-def _load_df(cfg: Candle7Config) -> pd.DataFrame:
-    from datetime import datetime, timedelta, UTC
-    start_dt = datetime.now(UTC) - timedelta(days=int(cfg.days))
-    start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
-    df = get_historical_klines(cfg.ticker, cfg.interval, start_str)
-    if df.empty:
-        raise SystemExit("Falha ao obter dados (cache/Binance) para backtest 7-candle.")
-    return df
+def run_visual_backtest(policy_fn, env: Candle7Env, max_steps: int | None = None):
+    """
+    Executa um episódio usando a política do agente e coleta dados para visualização.
+    """
+    obs = env.reset()
+    done = False
+    steps = 0
+    history = []
+
+    while not done:
+        action_probs = policy_fn(obs)
+        action = int(np.argmax(action_probs))  # Execução greedy
+
+        step_result = env.step(action)
+
+        # Armazena o estado ANTES da ação ser totalmente processada no próximo candle
+        current_info = {
+            "step": steps,
+            "date": env._df["Date"].iloc[env._start_idx + env._i - 1],
+            "close": env._closes[env._i - 1],
+            "action": action,
+            "position": env._pos,
+            "reward": step_result.reward,
+            "trade_action": None,
+        }
+
+        if "trade" in step_result.info:
+            current_info["trade_action"] = step_result.info["trade"]
+
+        history.append(current_info)
+
+        # Se um trade foi fechado (posição voltou a zero), a recompensa é o PnL.
+        if "trade" in step_result.info and env._pos == 0:
+            history[-1]["pnl"] = step_result.reward
+
+        obs = step_result.obs
+        done = step_result.done
+        steps += 1
+        if max_steps and steps >= max_steps:
+            break
+
+    return pd.DataFrame(history)
+
+
+def print_summary(df_history: pd.DataFrame):
+    """Imprime um resumo das métricas do backtest."""
+    print("\n--- Resumo do Backtest Visual ---")
+    total_reward = df_history["reward"].sum()
+    print(f"Recompensa Total do Episódio: {total_reward:.2f}")
+
+    # Trades são onde 'trade_action' não é nulo
+    trades_df = df_history.dropna(subset=["trade_action"])
+    num_trade_actions = len(trades_df)
+    print(f"Total de Ações de Trade (Entradas/Saídas): {num_trade_actions}")
+
+    # Trades fechados são aqueles que têm um valor de PnL não nulo
+    if "pnl" not in df_history.columns:
+        print("Nenhum trade foi fechado durante o período.")
+        return
+
+    closed_trades_df = df_history.dropna(subset=["pnl"])
+    num_closed_trades = len(closed_trades_df)
+
+    if num_closed_trades > 0:
+        wins = closed_trades_df[closed_trades_df["pnl"] > 0]
+        num_wins = len(wins)
+        win_rate = (num_wins / num_closed_trades) * 100
+        total_pnl = closed_trades_df["pnl"].sum()
+        total_loss = abs(closed_trades_df[closed_trades_df["pnl"] < 0]["pnl"].sum())
+        profit_factor = wins["pnl"].sum() / total_loss if total_loss > 0 else float("inf")
+
+        print(f"P&L Total (Trades Fechados): {total_pnl:.2f}")
+        print(f"Total de Trades Fechados: {num_closed_trades}")
+        print(f"Taxa de Acerto: {win_rate:.2f}%")
+        print(f"Profit Factor: {profit_factor:.2f}")
+    else:
+        print("Nenhum trade foi fechado durante o período.")
+
+
+def plot_backtest(df_history: pd.DataFrame, ticker: str, interval: str):
+    """
+    Plota o gráfico de preços com os sinais de compra e venda.
+    """
+    plt.style.use("seaborn-v0_8-darkgrid")
+    fig, ax = plt.subplots(figsize=(18, 9))
+
+    # Plota o preço de fechamento
+    ax.plot(df_history["date"], df_history["close"], label="Close Price", color="gray", alpha=0.8, zorder=1)
+
+    # Marca os trades
+    buy_signals = df_history[df_history["trade_action"] == "BUY"]
+    sell_signals = df_history[df_history["trade_action"] == "SELL"]
+    buy_to_cover_signals = df_history[df_history["trade_action"] == "BUY_TO_COVER"]
+    sell_short_signals = df_history[df_history["trade_action"] == "SELL_SHORT"]
+
+    ax.scatter(buy_signals["date"], buy_signals["close"], label="Buy", marker="^", color="green", s=100, zorder=2)
+    ax.scatter(sell_signals["date"], sell_signals["close"], label="Sell", marker="v", color="red", s=100, zorder=2)
+    ax.scatter(
+        sell_short_signals["date"],
+        sell_short_signals["close"],
+        label="Sell Short",
+        marker="v",
+        color="purple",
+        s=100,
+        zorder=2,
+    )
+    ax.scatter(
+        buy_to_cover_signals["date"],
+        buy_to_cover_signals["close"],
+        label="Buy to Cover",
+        marker="^",
+        color="orange",
+        s=100,
+        zorder=2,
+    )
+
+    ax.set_title(f"Backtest Visual do Agente RL - {ticker} ({interval})")
+    ax.set_xlabel("Data")
+    ax.set_ylabel("Preço")
+    ax.legend()
+
+    # Salva o gráfico
+    chart_dir = os.path.join("reports", "charts")
+    os.makedirs(chart_dir, exist_ok=True)
+    chart_path = os.path.join(chart_dir, f"candle_pattern7_rl_backtest_{ticker}_{interval}.png")
+    plt.savefig(chart_path)
+    print(f"Gráfico do backtest salvo em: {chart_path}")
+    plt.close()
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Backtest 7-candle pattern strategy")
+    parser = argparse.ArgumentParser(description="Backtest visual para o agente Candle7 RL")
     parser.add_argument("--ticker", default="BTCUSDT")
     parser.add_argument("--interval", default="15m")
-    parser.add_argument("--days", type=int, default=120)
-    parser.add_argument("--lot_size", type=float, default=0.001)
-    parser.add_argument("--fee_rate", type=float, default=0.001)
-    parser.add_argument("--min_hold_bars", type=int, default=0)
-    parser.add_argument("--cooldown_bars", type=int, default=0)
-    parser.add_argument("--no_short", action="store_true", help="Disable short trades")
+    parser.add_argument("--days", type=int, default=90, help="Período para o backtest visual")
+    parser.add_argument("--model", help="Caminho para o arquivo .npz do agente treinado", required=True)
     args = parser.parse_args()
 
-    cfg = Candle7Config(
-        ticker=args.ticker,
+    # 1. Carrega a política do agente
+    policy = load_agent_policy(args.model)
+
+    # 2. Cria o ambiente para o período de backtest
+    env = Candle7Env(
+        symbol=args.ticker,
         interval=args.interval,
         days=args.days,
-        lot_size=args.lot_size,
-        fee_rate=args.fee_rate,
-        min_hold_bars=args.min_hold_bars,
-        cooldown_bars=args.cooldown_bars,
-        allow_short=(not args.no_short),
+        episode_len=None,  # Roda o período todo
+        random_start=False,  # Começa do início
     )
 
-    df = _load_df(cfg)
-    res = backtest_last7(
-        df,
-        lot_size=cfg.lot_size,
-        fee_rate=cfg.fee_rate,
-        min_hold_bars=cfg.min_hold_bars,
-        cooldown_bars=cfg.cooldown_bars,
-        allow_short=cfg.allow_short,
-    )
+    # 3. Executa o backtest
+    print("Executando backtest visual...")
+    backtest_df = run_visual_backtest(policy, env)
+
+    # 4. Plota os resultados
+    print("Gerando gráfico...")
+    plot_backtest(backtest_df, args.ticker, args.interval)
+
+    # 5. Imprime o resumo
+    print_summary(backtest_df)
+
+    print("Backtest visual concluído.")

@@ -77,7 +77,12 @@ def _apply_grads(params, grads, lr: float, clip: float = 1.0):
     scale = 1.0
     if clip and gnorm > clip:
         scale = clip / (gnorm + 1e-8)
-    gW1 *= scale; gb1 *= scale; gW2 *= scale; gb2 *= scale; gWv *= scale; gbv *= scale
+    gW1 *= scale
+    gb1 *= scale
+    gW2 *= scale
+    gb2 *= scale
+    gWv *= scale
+    gbv *= scale
 
     W1 -= lr * gW1
     b1 -= lr * gb1
@@ -136,7 +141,11 @@ def train(config: Optional[Candle7RlConfig] = None, model_path: Optional[str] = 
             else:
                 _, _, _, _, Wv, bv = _mlp_init(in_size, hidden, out_size)
             if W2.shape[1] != out_size:
-                _, _, W2, b2, Wv, bv = _mlp_init(in_size, hidden, out_size)
+                W1, b1, W2, b2, Wv, bv = _mlp_init(in_size, hidden, out_size)
+            # Se o tamanho da entrada mudou, reinicialize tudo
+            if W1.shape[0] != in_size:
+                print("WARN: Input size mismatch. Re-initializing model from scratch.")
+                W1, b1, W2, b2, Wv, bv = _mlp_init(in_size, hidden, out_size)
         except Exception:
             W1, b1, W2, b2, Wv, bv = _mlp_init(in_size, hidden, out_size)
     else:
@@ -151,7 +160,7 @@ def train(config: Optional[Candle7RlConfig] = None, model_path: Optional[str] = 
 
     history = []
     # metrics logging
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     metrics_dir = os.path.join("reports", "agents", "candle_pattern7_rl")
     os.makedirs(metrics_dir, exist_ok=True)
     metrics_path = os.path.join(metrics_dir, f"metrics_{cfg.ticker}_{cfg.interval}_{ts}.jsonl")
@@ -226,7 +235,9 @@ def train(config: Optional[Candle7RlConfig] = None, model_path: Optional[str] = 
         gWv = np.zeros_like(Wv)
         gbv = np.zeros_like(bv)
         entropy = 0.0
-        for idx, (obs_t, act_t, adv_t, ret_t, cache_t) in enumerate(zip(episode_obs, episode_act, advantages, returns, episode_cache)):
+        for idx, (obs_t, act_t, adv_t, ret_t, cache_t) in enumerate(
+            zip(episode_obs, episode_act, advantages, returns, episode_cache)
+        ):
             value_err = -(ret_t - cache_t["v"])  # d/dv of 0.5*(ret-v)^2
             dW1, db1, dW2, db2, dWv, dbv = _mlp_backward(params, cache_t, int(act_t), float(adv_t), float(value_err))
             gW1 += dW1
@@ -306,6 +317,7 @@ def train(config: Optional[Candle7RlConfig] = None, model_path: Optional[str] = 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Train RL agent on Candle7Env")
     parser.add_argument("--ticker", default="BTCUSDT")
     parser.add_argument("--interval", default="15m")
@@ -319,7 +331,9 @@ if __name__ == "__main__":
     parser.add_argument("--epsilon_start", type=float, default=0.3)
     parser.add_argument("--epsilon_end", type=float, default=0.05)
     parser.add_argument("--entropy_beta", type=float, default=0.0)
-    parser.add_argument("--bc_weight", type=float, default=0.1, help="Peso da perda auxiliar de imitação (decai ao longo dos episódios)")
+    parser.add_argument(
+        "--bc_weight", type=float, default=0.1, help="Peso da perda auxiliar de imitação (decai ao longo dos episódios)"
+    )
     # dynamics/costs
     parser.add_argument("--min_hold_bars", type=int, default=0)
     parser.add_argument("--reopen_cooldown_bars", type=int, default=0)
@@ -327,19 +341,29 @@ if __name__ == "__main__":
     parser.add_argument("--action_cost_close", type=float, default=0.0)
     parser.add_argument("--m2m_weight", type=float, default=0.05)
     # idle penalty
-    parser.add_argument("--idle_penalty", type=float, default=0.0, help="Penalidade (USD) por manter Hold flat após carência")
+    parser.add_argument(
+        "--idle_penalty", type=float, default=0.0, help="Penalidade (USD) por manter Hold flat após carência"
+    )
     parser.add_argument("--idle_grace", type=int, default=0, help="Barras de carência sem penalidade")
     parser.add_argument("--idle_ramp", type=float, default=0.0, help="Rampa linear adicional por barra após a carência")
     # execution+anti-churn
-    parser.add_argument("--exec_next_open", action="store_true", help="Executa ordens na Abertura da próxima barra (padrão)")
+    parser.add_argument(
+        "--exec_next_open", action="store_true", help="Executa ordens na Abertura da próxima barra (padrão)"
+    )
     parser.add_argument("--no_exec_next_open", dest="exec_next_open", action="store_false")
     parser.set_defaults(exec_next_open=True)
-    parser.add_argument("--switch_penalty", type=float, default=0.0, help="Penalidade por reabrir/virar lado em janela curta")
+    parser.add_argument(
+        "--switch_penalty", type=float, default=0.0, help="Penalidade por reabrir/virar lado em janela curta"
+    )
     parser.add_argument("--switch_window_bars", type=int, default=5, help="Janela (barras) para switch_penalty")
     # reward normalization by ATR
     parser.add_argument("--reward_atr_norm", action="store_true", help="Normaliza recompensa por ATR da barra")
     parser.add_argument("--atr_period", type=int, default=14)
-    parser.add_argument("--gate_on_heuristic", action="store_true", help="Permite abrir posição apenas quando a heurística 7-candles concordar")
+    parser.add_argument(
+        "--gate_on_heuristic",
+        action="store_true",
+        help="Permite abrir posição apenas quando a heurística 7-candles concordar",
+    )
     # resume/warm-start
     parser.add_argument("--model", type=str, default=None, help="Caminho para .npz salvo para continuar o treinamento")
     args = parser.parse_args()
