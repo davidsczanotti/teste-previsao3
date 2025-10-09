@@ -10,11 +10,10 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy TA-Lib source
-COPY ta-lib-0.4.0-src.tar.gz .
-
 # Build TA-Lib from source
-RUN tar -xzf ta-lib-0.4.0-src.tar.gz && \
+RUN apt-get update && apt-get install -y wget && \
+    wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
     ./configure --prefix=/usr/local && \
     make && \
