@@ -15,6 +15,7 @@ docker compose up --build -d
 # 3. Execute seus scripts quantas vezes precisar (é super rápido!)
 docker compose exec app python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15
 docker compose exec app python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300
+docker compose exec app python -m src.strategies.al_brooks_5m.walk_forward --opt-window 30 --val-window 15 --step-size 15
 docker compose exec app python -m src.strategies.al_brooks_15m.backtest
 
 # 4. Para parar tudo

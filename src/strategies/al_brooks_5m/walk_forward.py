@@ -29,7 +29,7 @@ class WalkForwardValidator:
     Classe para implementar validação walk-forward
     """
 
-    def __init__(self, symbol: str = "BTCUSDT", timeframe: str = "15m", days: int = 365, lot_size: float = 0.1):
+    def __init__(self, symbol: str = "BTCUSDT", timeframe: str = "5m", days: int = 365, lot_size: float = 0.1):
         """
         Inicializa o validador walk-forward
 
@@ -45,6 +45,18 @@ class WalkForwardValidator:
         self.lot_size = lot_size
         self.results = []
         self.summary_stats = {}
+
+    def _get_candles_per_day(self) -> int:
+        """Calcula o número de candles por dia com base no timeframe."""
+        if "m" in self.timeframe:
+            minutes = int(self.timeframe.replace("m", ""))
+            return (24 * 60) // minutes
+        if "h" in self.timeframe:
+            hours = int(self.timeframe.replace("h", ""))
+            return 24 // hours
+        if "d" in self.timeframe:
+            return 1
+        return 24  # Default para 1h se não reconhecido
 
     def create_periods(
         self, data: pd.DataFrame, optimization_window: int = 180, validation_window: int = 90, step_size: int = 30
@@ -65,8 +77,7 @@ class WalkForwardValidator:
         total_candles = len(data)
 
         # Converte dias para número de candles (aproximado)
-        # Considerando 24 candles por dia para timeframe de 15m (24*4=96)
-        candles_per_day = 96 if self.timeframe == "15m" else 24
+        candles_per_day = self._get_candles_per_day()
         opt_candles = optimization_window * candles_per_day
         val_candles = validation_window * candles_per_day
         step_candles = step_size * candles_per_day
@@ -577,7 +588,7 @@ def main():
     args = parser.parse_args()
 
     # Executa validação
-    validator = WalkForwardValidator()
+    validator = WalkForwardValidator(timeframe="5m")
     results = validator.run_walk_forward(
         optimization_window=args.opt_window, validation_window=args.val_window, step_size=args.step_size
     )
