@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    # Constrói a imagem a partir do Dockerfile no diretório atual
+    build: .
+    # Nomeia o contêiner para ser consistente com seu script atual
+    container_name: teste-previsao3-container
+    # Define o diretório de trabalho padrão dentro do contêiner
+    working_dir: /app
+    # Monta o código-fonte local dentro do contêiner.
+    # Alterações no seu código local serão refletidas instantaneamente
+    # dentro do contêiner, sem precisar reconstruir a imagem!
+    volumes:
+      - .:/app
+    # Mantém o contêiner rodando em background para que você possa executar comandos
+    command: tail -f /dev/null

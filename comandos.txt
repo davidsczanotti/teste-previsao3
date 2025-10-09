@@ -1,0 +1,67 @@
+
+wsl->git push -u origin main
+server->git pull origin main
+
+
+docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3 && docker system prune -f
+
+
+
+Olá! Com certeza. O seu objetivo é ter um comando que, a cada execução, garanta que tudo seja reconstruído do zero e que o lixo (cache, imagens antigas) seja limpo para não ocupar espaço desnecessário no HD.
+
+O seu comando atual já está no caminho certo. Para deixá-lo ainda mais completo e robusto, podemos adicionar a flag --no-cache ao build e um passo de limpeza no final.
+
+Comando Atualizado e Otimizado
+Aqui está o comando que você pode usar, que incorpora a reconstrução sem cache e a limpeza do sistema:
+
+bash
+docker build --no-cache -t teste-previsao3 . && \
+(docker rm -f teste-previsao3-container || true) && \
+docker run -d --name teste-previsao3-container teste-previsao3 && \
+docker system prune -f
+Vamos analisar o que cada parte faz:
+
+docker build --no-cache -t teste-previsao3 .
+
+--no-cache: Esta é a flag mais importante para o seu objetivo. Ela força o Docker a reconstruir todas as camadas da imagem do zero, ignorando qualquer cache existente. Isso garante que você sempre tenha a versão mais "fresca" possível, mas torna o build mais lento.
+&& (docker rm -f teste-previsao3-container || true)
+
+Este passo garante que, se um contêiner com o nome teste-previsao3-container já existir, ele será forçado a parar (-f) e será removido antes de criar um novo. O || true é uma boa prática que evita que o script pare se o contêiner não existir.
+&& docker run -d --name teste-previsao3-container teste-previsao3
+
+Inicia o novo contêiner em background (-d) com a imagem que acabamos de construir.
+&& docker system prune -f
+
+Este é o passo de limpeza de disco. O comando docker system prune remove todos os recursos do Docker que não estão em uso:
+Contêineres parados.
+Redes não utilizadas.
+Imagens "penduradas" (dangling images): São as camadas de imagens antigas que não são mais referenciadas por nenhuma imagem nova. Elas são a principal causa de ocupação de espaço após builds sucessivos.
+Cache de build.
+A flag -f (ou --force) faz a limpeza sem pedir confirmação.
+Como usar
+Você pode salvar este comando no seu arquivo comandos.txt para facilitar o acesso.
+
+comandos.txt
+-1
++1
+server->git pull origin main
+
+
+docker build -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3
+docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3 && docker system prune -f
+
+Alternativa: Usando docker-compose
+Como mencionei anteriormente, o docker-compose simplifica muito esse fluxo. O equivalente ao seu comando seria:
+
+Construir sem cache e iniciar:
+
+bash
+docker-compose up --build --force-recreate -d
+--build: Força a reconstrução da imagem.
+--force-recreate: Garante que o contêiner seja recriado mesmo que nada tenha mudado.
+Para forçar a reconstrução sem cache, o comando é um pouco diferente: docker-compose build --no-cache && docker-compose up --force-recreate -d.
+Limpar o sistema:
+
+bash
+docker system prune -f
+O docker-compose é excelente para o ambiente de desenvolvimento, especialmente por causa do volume que sincroniza seu código automaticamente. Para o seu caso de uso, que parece ser um "re-deploy" completo a cada atualização, o seu script de uma linha é muito eficaz.
