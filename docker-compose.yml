@@ -1,15 +1,21 @@
 services:
   app:
-    # Constrói a imagem a partir do Dockerfile no diretório atual
-    build: .
-    # Nomeia o contêiner para ser consistente com seu script atual
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: teste-previsao3-container
-    # Define o diretório de trabalho padrão dentro do contêiner
     working_dir: /app
-    # Monta o código-fonte local dentro do contêiner.
-    # Alterações no seu código local serão refletidas instantaneamente
-    # dentro do contêiner, sem precisar reconstruir a imagem!
     volumes:
-      - .:/app
-    # Mantém o contêiner rodando em background para que você possa executar comandos
+      # Monta o código-fonte, exceto as pastas de dados/relatórios
+      - .:/app:rw
+      # Usa volumes nomeados para persistir dados e relatórios
+      - app-data:/app/data
+      - app-reports:/app/reports
+      - app-live-charts:/app/live_charts
     command: tail -f /dev/null
+
+# Define os volumes nomeados que persistirão no host
+volumes:
+  app-data:
+  app-reports:
+  app-live-charts:

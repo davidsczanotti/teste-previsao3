@@ -2,17 +2,22 @@
 wsl->git push -u origin main
 server->git pull origin main
 
+# 0. docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3 && docker system prune -f 
+
 # --- FLUXO DE DESENVOLVIMENTO (RECOMENDADO) ---
 
-# 1. Inicie o ambiente (só precisa rodar uma vez, ou quando o Dockerfile/dependências mudarem)
+# 1. (Limpeza única, se necessário) Se encontrar um erro de "conflito de nome", remova o contêiner antigo:
+# docker rm -f teste-previsao3-container
+
+# 2. Inicie o ambiente (só precisa rodar uma vez, ou quando o Dockerfile/dependências mudarem)
 docker compose up --build -d
 
-# 2. Execute seus scripts quantas vezes precisar (é super rápido!)
-docker compose exec app poetry run python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15
-docker compose exec app poetry run python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300
-docker compose exec app poetry run python -m src.strategies.al_brooks_15m.backtest
+# 3. Execute seus scripts quantas vezes precisar (é super rápido!)
+docker compose exec app python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15
+docker compose exec app python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300
+docker compose exec app python -m src.strategies.al_brooks_15m.backtest
 
-# 3. Para parar tudo
+# 4. Para parar tudo
 docker compose down
 
 # --- FLUXO DE BUILD LIMPO (PARA PRODUÇÃO OU LIMPEZA TOTAL) ---
