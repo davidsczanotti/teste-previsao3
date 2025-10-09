@@ -24,7 +24,7 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
 COPY pyproject.toml poetry.lock ./
 RUN pip install poetry && \
     poetry config virtualenvs.create false && \
-    poetry install --no-root --no-dev
+    poetry install --no-root
 
 # =====================================================================
 # Estágio 2: Final - A imagem de produção, leve e limpa
