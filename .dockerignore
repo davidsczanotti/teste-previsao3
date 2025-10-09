@@ -1,0 +1,73 @@
+# Ignore version control
+.git
+.gitignore
+
+# Python specific
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.ini
+*.env
+
+# Project directories not needed in container
+data/
+historico/
+live_charts/
+reports/
+scripts/
+trascricao-estrategias/
+expli.txt
+resultado.txt
+
+# TA-Lib build artifacts
+ta-lib/
+*.la
+*.lo
+*.o
+*.stamp
+*.ta
+*.so
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.swn
+
+# Documentation and config
+*.md
+*.txt
+*.sub
+*.m4
+*.sh
+*.in
+*.am
+*.ac
+*.spec
+*.dpkg
+*.cache
+
+# Package files
+*.whl
+*.egg-info/
+dist/
+build/
+*.egg
+*.tar
+*.tar.gz
+*.zip
+*.tar.bz2
+*.tar.xz
+*.tar.Z
+*.tar.zst
+*.tar.lz
+*.tar.lzma
+*.tar.lzo
+*.tar.z
+*.tar.zstd
+*.tar.lzip
+*.tar.lzop
+*.tar.lz4
