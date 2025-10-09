@@ -22,6 +22,15 @@ class AlBrooksConfig:
     ema_slow_period: int
     risk_reward_ratio: float
     max_avg_deviation_pct: float
+    adx_period: int = 14
+    adx_threshold: float = 22.0
+    atr_period: int = 14
+    atr_stop_multiplier: float = 1.5
+    atr_trail_multiplier: float = 0.5
+    htf_lookback: int = 20
+    use_htf_bias: bool = True
+    min_trades_per_window: int = 15
+    min_atr: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict) -> AlBrooksConfig:

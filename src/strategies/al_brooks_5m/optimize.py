@@ -1,13 +1,14 @@
 import argparse
 from datetime import datetime, timedelta, UTC
-import json
 
+import numpy as np
 import optuna
 import pandas as pd
 
 from ...binance_client import get_historical_klines
 from .backtest import backtest_al_brooks_inside_bar, plot_backtest
 from .config import AlBrooksConfig, save_active_config
+from ...utils.metrics import calculate_metrics
 
 
 def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
@@ -19,15 +20,23 @@ def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
     return df.sort_values("Date").reset_index(drop=True)
 
 
+MIN_TRADE_THRESHOLD = 20
+
+
 def make_objective(df_train: pd.DataFrame, lot_size: float):
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
         ema_fast = trial.suggest_int("ema_fast_period", 5, 20)
-        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 10, 50)
-        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 20, 120)
+        ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 3, ema_fast + 25)
+        ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 5, ema_medium + 60)
 
-        risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.5, 3.5, step=0.1)
+        risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.2, 3.0, step=0.1)
         max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 1.5, step=0.05)
+        adx_threshold = trial.suggest_float("adx_threshold", 18.0, 35.0, step=1.0)
+        atr_stop_multiplier = trial.suggest_float("atr_stop_multiplier", 1.0, 3.0, step=0.1)
+        atr_trail_multiplier = trial.suggest_float("atr_trail_multiplier", 0.0, 3.0, step=0.1)
+        htf_lookback = trial.suggest_int("htf_lookback", 10, 40)
+        min_atr = trial.suggest_float("min_atr", 0.0, 50.0, step=0.5)
 
         # Roda o backtest com os parâmetros sugeridos
         try:
@@ -39,33 +48,35 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
                 risk_reward_ratio=risk_reward_ratio,
                 max_avg_deviation_pct=max_avg_deviation_pct,
                 lot_size=lot_size,
+                adx_threshold=adx_threshold,
+                atr_stop_multiplier=atr_stop_multiplier,
+                atr_trail_multiplier=atr_trail_multiplier,
+                htf_lookback=htf_lookback,
+                min_atr=min_atr,
             )
         except Exception as e:
             trial.set_user_attr("error", str(e))
             return -1e9  # Penaliza configurações que causam erro
 
-        # --- Métrica de Otimização Robusta ---
-        # O objetivo é maximizar uma pontuação que equilibra lucro, robustez e número de trades.
-        # Score = (Profit Factor * P&L) / sqrt(num_trades)
-        # Isso penaliza estratégias com poucos trades, que podem ter um Profit Factor alto por sorte.
-        closed_trades = [t for t in trades if "pnl" in t]
-        num_trades = len(closed_trades)
+        # Métrica de otimização: Profit Factor
+        # Queremos maximizar o Profit Factor, mas também garantir que seja lucrativo
+        metrics = calculate_metrics(trades)
+        trade_count = metrics["total_trades"]
+        total_pnl = metrics["total_pnl"]
+        profit_factor = metrics["profit_factor"]
 
-        # Penaliza fortemente estratégias não lucrativas ou com pouquíssimos trades
-        if pnl <= 0 or num_trades < 10:
-            return pnl - num_trades  # Retorna valor negativo para penalizar
+        if trade_count == 0:
+            return -1.0
 
-        total_profit = sum(t["pnl"] for t in closed_trades if t["pnl"] > 0)
-        total_loss = abs(sum(t["pnl"] for t in closed_trades if t["pnl"] < 0))
+        if not np.isfinite(profit_factor):
+            profit_factor = 10.0
 
-        if total_loss == 0:
-            profit_factor = 100.0  # Valor artificialmente alto para 100% de acerto
-        else:
-            profit_factor = total_profit / total_loss
+        trade_factor = min(1.0, trade_count / MIN_TRADE_THRESHOLD)
 
-        # A métrica de pontuação
-        score = (profit_factor * pnl) / (num_trades**0.5)
+        if total_pnl <= 0:
+            return total_pnl * trade_factor
 
+        score = (profit_factor * trade_factor) + (total_pnl / 200.0)
         return score
 
     return objective

@@ -7,11 +7,9 @@ from datetime import datetime, timedelta, UTC
 import mplfinance as mpf
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
-from matplotlib import pyplot as plt
-
 from ...binance_client import get_historical_klines
-from .config import load_active_config
+from .config import AlBrooksConfig, load_active_config
+from .indicators import add_indicators
 
 
 def backtest_al_brooks_inside_bar(
@@ -20,143 +18,193 @@ def backtest_al_brooks_inside_bar(
     ema_medium_period: int = 20,
     ema_slow_period: int = 50,
     risk_reward_ratio: float = 2.0,
-    max_avg_deviation_pct: float = 0.5,  # Novo parâmetro: % máxima de afastamento da EMA 50
+    max_avg_deviation_pct: float = 0.5,
     lot_size: float = 0.1,
-):
+    adx_period: int = 14,
+    adx_threshold: float = 22.0,
+    atr_period: int = 14,
+    atr_stop_multiplier: float = 1.5,
+    atr_trail_multiplier: float = 0.5,
+    htf_lookback: int = 20,
+    use_htf_bias: bool = True,
+    min_atr: float = 0.0,
+    pullback_lookback: int = 10,
+) -> tuple[list[dict], float, pd.DataFrame]:
     """
-    Executa um backtest para a estratégia de Inside Bar de Al Brooks.
-    A lógica principal é a de "reversão" (compra no pullback em tendência de alta).
+    Executa um backtest para a estratégia de Inside Bar de Al Brooks utilizando filtros de tendência e volatilidade.
+
+    A lógica considera:
+      - Confirmar contexto com EMAs em múltiplos prazos
+      - Filtrar períodos de consolidação através do ADX
+      - Controlar afastamento da EMA lenta
+      - Dimensionar stop/target por ATR com possibilidade de trailing
+      - Filtrar direção pelo viés do EMA lento em janela maior (slope)
     """
     if df.empty:
         return [], 0.0, df
 
-    # 1. Calcular Indicadores
-    df["ema_fast"] = ta.ema(df["close"], length=ema_fast_period)
-    df["ema_medium"] = ta.ema(df["close"], length=ema_medium_period)
-    df["ema_slow"] = ta.ema(df["close"], length=ema_slow_period)
+    params = {
+        "ema_fast_period": ema_fast_period,
+        "ema_medium_period": ema_medium_period,
+        "ema_slow_period": ema_slow_period,
+        "adx_period": adx_period,
+        "atr_period": atr_period,
+        "htf_lookback": htf_lookback,
+    }
+    df = add_indicators(df, params)
 
-    # 2. Identificar Inside Bars
-    # Um candle cuja máxima é menor que a do anterior e a mínima é maior que a do anterior.
-    df["is_inside_bar"] = (df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))
+    trades: list[dict] = []
+    position: str | None = None
 
-    # 2.1. Calcular Afastamento Médio (em % da EMA Lenta)
-    # abs((close - ema_slow) / ema_slow) * 100
-    df["avg_deviation_pct"] = abs((df["close"] - df["ema_slow"]) / df["ema_slow"]) * 100
-
-    trades = []
-    position = None  # Pode ser 'long', 'short' ou None
-
-    # 3. Iterar sobre os dados para simular as operações
     for i in range(1, len(df)):
-        # --- Lógica de Saída ---
+        row = df.iloc[i]
+        prev = df.iloc[i - 1]
+
+        if position:
+            trade = trades[-1]
+
+            if atr_trail_multiplier > 0 and not np.isnan(row["atr"]):
+                if position == "long":
+                    trailing_stop = row["close"] - (row["atr"] * atr_trail_multiplier)
+                    trade["stop_loss"] = max(trade["stop_loss"], trailing_stop)
+                else:
+                    trailing_stop = row["close"] + (row["atr"] * atr_trail_multiplier)
+                    trade["stop_loss"] = min(trade["stop_loss"], trailing_stop)
+
+            exit_price = None
+            exit_reason = None
+            if position == "long":
+                if row["low"] <= trade["stop_loss"]:
+                    exit_price = trade["stop_loss"]
+                    exit_reason = "stop"
+                elif row["high"] >= trade["take_profit"]:
+                    exit_price = trade["take_profit"]
+                    exit_reason = "target"
+            else:
+                if row["high"] >= trade["stop_loss"]:
+                    exit_price = trade["stop_loss"]
+                    exit_reason = "stop"
+                elif row["low"] <= trade["take_profit"]:
+                    exit_price = trade["take_profit"]
+                    exit_reason = "target"
+
+            if exit_price is not None:
+                trade["exit_price"] = exit_price
+                trade["exit_date"] = row["Date"]
+                if position == "long":
+                    trade["pnl"] = (exit_price - trade["entry_price"]) * lot_size
+                else:
+                    trade["pnl"] = (trade["entry_price"] - exit_price) * lot_size
+                trade["exit_reason"] = exit_reason
+                position = None
+                continue
+
+        if position is not None:
+            continue
+
+        if prev["avg_deviation_pct"] > max_avg_deviation_pct:
+            continue
+
+        if np.isnan(prev["atr"]) or prev["atr"] <= min_atr:
+            continue
+
+        if np.isnan(prev["adx"]) or prev["adx"] < adx_threshold:
+            continue
+
+        allow_long = True
+        allow_short = True
+        if use_htf_bias:
+            bias = prev.get("trend_bias")
+            if not np.isnan(bias):
+                allow_long = bias >= 0
+                allow_short = bias <= 0
+
+        if not prev["is_inside_bar"]:
+            continue
+
+        uptrend = (
+            prev["close"] > prev["ema_medium"]
+            and prev["ema_fast"] > prev["ema_medium"]
+            and prev["ema_medium"] > prev["ema_slow"]
+        )
+        downtrend = (
+            prev["close"] < prev["ema_medium"]
+            and prev["ema_fast"] < prev["ema_medium"]
+            and prev["ema_medium"] < prev["ema_slow"]
+        )
+        pullback = prev["close"] < prev["ema_fast"]
+        rally = prev["close"] > prev["ema_fast"]
+
+        atr_value = prev["atr"]
+        if np.isnan(atr_value) or atr_value <= 0:
+            continue
+
+        if allow_long and uptrend and pullback:
+            entry_price = prev["high"]
+            if row["high"] >= entry_price:
+                lookback_slice = df.iloc[max(0, i - pullback_lookback) : i]
+                pullback_low = lookback_slice["low"].min()
+                stop_candidates = [entry_price - (atr_value * atr_stop_multiplier), pullback_low]
+                stop_loss = min(stop_candidates)
+                risk = entry_price - stop_loss
+                if risk <= 0:
+                    continue
+                take_profit = entry_price + (risk * risk_reward_ratio)
+                trades.append(
+                    {
+                        "entry_date": row["Date"],
+                        "entry_price": entry_price,
+                        "stop_loss": stop_loss,
+                        "take_profit": take_profit,
+                        "type": "long",
+                        "atr": atr_value,
+                        "initial_risk": risk,
+                    }
+                )
+                position = "long"
+                continue
+
+        if allow_short and downtrend and rally:
+            entry_price = prev["low"]
+            if row["low"] <= entry_price:
+                lookback_slice = df.iloc[max(0, i - pullback_lookback) : i]
+                rally_high = lookback_slice["high"].max()
+                stop_candidates = [entry_price + (atr_value * atr_stop_multiplier), rally_high]
+                stop_loss = max(stop_candidates)
+                risk = stop_loss - entry_price
+                if risk <= 0:
+                    continue
+                take_profit = entry_price - (risk * risk_reward_ratio)
+                trades.append(
+                    {
+                        "entry_date": row["Date"],
+                        "entry_price": entry_price,
+                        "stop_loss": stop_loss,
+                        "take_profit": take_profit,
+                        "type": "short",
+                        "atr": atr_value,
+                        "initial_risk": risk,
+                    }
+                )
+                position = "short"
+                continue
+
+    if trades and position:
+        trade = trades[-1]
+        final_price = df["close"].iloc[-1]
+        trade["exit_price"] = final_price
+        trade["exit_date"] = df["Date"].iloc[-1]
         if position == "long":
-            # Verifica se atingiu o Take Profit ou Stop Loss
-            if df["high"].iloc[i] >= trades[-1]["take_profit"]:
-                trades[-1]["exit_price"] = trades[-1]["take_profit"]
-                trades[-1]["exit_date"] = df["Date"].iloc[i]
-                trades[-1]["pnl"] = (trades[-1]["exit_price"] - trades[-1]["entry_price"]) * lot_size
-                position = None
-            elif df["low"].iloc[i] <= trades[-1]["stop_loss"]:
-                trades[-1]["exit_price"] = trades[-1]["stop_loss"]
-                trades[-1]["exit_date"] = df["Date"].iloc[i]
-                trades[-1]["pnl"] = (trades[-1]["exit_price"] - trades[-1]["entry_price"]) * lot_size
-                position = None
-        elif position == "short":
-            # Verifica se atingiu o Take Profit ou Stop Loss para a venda
-            if df["low"].iloc[i] <= trades[-1]["take_profit"]:
-                trades[-1]["exit_price"] = trades[-1]["take_profit"]
-                trades[-1]["exit_date"] = df["Date"].iloc[i]
-                trades[-1]["pnl"] = (trades[-1]["entry_price"] - trades[-1]["exit_price"]) * lot_size
-                position = None
-            elif df["high"].iloc[i] >= trades[-1]["stop_loss"]:
-                trades[-1]["exit_price"] = trades[-1]["stop_loss"]
-                trades[-1]["exit_date"] = df["Date"].iloc[i]
-                trades[-1]["pnl"] = (trades[-1]["entry_price"] - trades[-1]["exit_price"]) * lot_size
-                position = None
+            trade["pnl"] = (final_price - trade["entry_price"]) * lot_size
+        else:
+            trade["pnl"] = (trade["entry_price"] - final_price) * lot_size
+        trade["exit_reason"] = "eod"
+        position = None
 
-        # --- Lógica de Entrada ---
-        if position is None:
-            # --- Condição de Compra (Buy Signal) ---
-            is_uptrend = (
-                df["close"].iloc[i - 1] > df["ema_medium"].iloc[i - 1]
-                and df["ema_fast"].iloc[i - 1] > df["ema_medium"].iloc[i - 1]
-                and df["ema_medium"].iloc[i - 1] > df["ema_slow"].iloc[i - 1]
-            )
-            is_pullback = df["close"].iloc[i - 1] < df["ema_fast"].iloc[i - 1]
-
-            # Adicionar filtro de afastamento médio
-            is_close_to_ema = df["avg_deviation_pct"].iloc[i - 1] <= max_avg_deviation_pct
-
-            if df["is_inside_bar"].iloc[i - 1] and is_uptrend and is_pullback and is_close_to_ema:
-                # O sinal é no candle anterior (i-1), a entrada é no candle atual (i)
-                entry_price = df["high"].iloc[i - 1]  # Gatilho no rompimento da máxima
-
-                # Verifica se o candle atual acionou a entrada
-                if df["high"].iloc[i] > entry_price:
-                    # Para o stop, procuramos a mínima do pullback recente (últimos 10 candles, por exemplo)
-                    pullback_window = df.iloc[max(0, i - 10) : i]
-                    stop_loss = pullback_window["low"].min()
-
-                    risk = entry_price - stop_loss
-                    if risk <= 0:
-                        continue
-
-                    take_profit = entry_price + (risk * risk_reward_ratio)
-
-                    trades.append(
-                        {
-                            "entry_date": df["Date"].iloc[i],
-                            "entry_price": entry_price,
-                            "stop_loss": stop_loss,
-                            "take_profit": take_profit,
-                            "type": "long",
-                        }
-                    )
-                    position = "long"
-
-            # --- Condição de Venda (Sell Signal) ---
-            is_downtrend = (
-                df["close"].iloc[i - 1] < df["ema_medium"].iloc[i - 1]
-                and df["ema_fast"].iloc[i - 1] < df["ema_medium"].iloc[i - 1]
-                and df["ema_medium"].iloc[i - 1] < df["ema_slow"].iloc[i - 1]
-            )
-            is_rally = df["close"].iloc[i - 1] > df["ema_fast"].iloc[i - 1]
-
-            if df["is_inside_bar"].iloc[i - 1] and is_downtrend and is_rally and is_close_to_ema:
-                # O sinal é no candle anterior (i-1), a entrada é no candle atual (i)
-                entry_price = df["low"].iloc[i - 1]  # Gatilho no rompimento da mínima
-
-                # Verifica se o candle atual acionou a entrada
-                if df["low"].iloc[i] < entry_price:
-                    # Para o stop, procuramos a máxima do rally recente (últimos 10 candles)
-                    rally_window = df.iloc[max(0, i - 10) : i]
-                    stop_loss = rally_window["high"].max()
-
-                    risk = stop_loss - entry_price
-                    if risk <= 0:
-                        continue
-
-                    take_profit = entry_price - (risk * risk_reward_ratio)
-
-                    trades.append(
-                        {
-                            "entry_date": df["Date"].iloc[i],
-                            "entry_price": entry_price,
-                            "stop_loss": stop_loss,
-                            "take_profit": take_profit,
-                            "type": "short",
-                        }
-                    )
-                    position = "short"
-
-    # Calcular P&L total (considerando long e short)
     for trade in trades:
-        if "pnl" not in trade:  # Se a operação não foi fechada
-            trade["pnl"] = 0
+        trade.setdefault("pnl", 0.0)
 
-    # Calcular P&L total
-    total_pnl = sum(t.get("pnl", 0) for t in trades)
-
+    total_pnl = sum(trade["pnl"] for trade in trades)
     return trades, total_pnl, df
 
 
@@ -217,7 +265,7 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
 def main():
     parser = argparse.ArgumentParser(description="Backtest para a estratégia de Inside Bar de Al Brooks.")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo (ex: BTCUSDT)")
-    parser.add_argument("--interval", default="1d", help="Intervalo das velas (ex: 15m, 1h, 1d)")
+    parser.add_argument("--interval", default="1d", help="Intervalo das velas (ex: 15m, 1h)")
     parser.add_argument("--days", type=int, default=365, help="Dias de dados históricos para o backtest")
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote para cada operação")
     args = parser.parse_args()
@@ -295,12 +343,14 @@ def main():
     print(f"Média de Perda: $ {avg_loss:.2f}")
 
     # Calcula e exibe a duração média dos trades
-    if num_trades > 0:
+    # BUGFIX: Apenas trades que realmente fecharam (têm 'exit_date') devem ser considerados.
+    fully_closed_trades = [t for t in closed_trades if "exit_date" in t]
+    if fully_closed_trades:
         total_duration = sum(
-            (trade["exit_date"] - trade["entry_date"] for trade in closed_trades),
+            (trade["exit_date"] - trade["entry_date"] for trade in fully_closed_trades),
             timedelta(0),
         )
-        avg_duration = total_duration / num_trades
+        avg_duration = total_duration / len(fully_closed_trades)
         print(f"Duração Média do Trade: {str(avg_duration).split('.')[0]}")
 
     # Opcional: Salvar trades em um arquivo para análise mais profunda

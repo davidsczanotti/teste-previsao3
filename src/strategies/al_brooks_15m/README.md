@@ -30,6 +30,7 @@ A estratégia foi baseada na transcrição de um vídeo que detalha um setup de 
 3.  **Validação Fora da Amostra (Out-of-Sample)**: Implementamos um teste rigoroso onde a estratégia é otimizada em um longo período de dados de treino e validada em um período mais recente que o otimizador nunca viu. Isso é crucial para verificar se a estratégia não está sobreajustada (*overfitting*).
 4.  **Validação Walk-Forward**: O script `walk_forward.py` implementa um teste ainda mais robusto, simulando a re-otimização periódica da estratégia, que é como um trader real se adaptaria às mudanças de mercado.
 5.  **Monitoramento ao Vivo**: O script `live.py` foi criado para monitorar o mercado em tempo real, aplicando os parâmetros otimizados e imprimindo os sinais no console **(sem executar ordens reais)**.
+6.  **Filtros de Robustez Adicionais**: A versão atual incorpora filtro de tendência via ADX, controle de volatilidade por ATR (stops dinâmicos e trailing) e um viés de tendência em timeframe superior, além de exigir um volume mínimo de trades por janela na validação walk-forward.
 
 ## 3. Principais Resultados Alcançados
 
@@ -89,8 +90,8 @@ O gráfico com os trades será salvo em `reports/charts/`.
 Este script executa uma validação walk-forward completa, testando a estratégia em múltiplos períodos de otimização e validação. É uma forma robusta de testar a consistência da estratégia ao longo do tempo.
 
 ```bash
-# Exemplo com 30 dias de otimização, 15 dias de validação, passo de 15 dias
-poetry run python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15
+# Exemplo com 30 dias de otimização, 15 dias de validação, passo de 15 dias e exigindo 15 trades mínimos
+poetry run python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15 --min-trades 15
 ```
 
 O script gera um relatório detalhado em `reports/walk_forward/` com estatísticas agregadas e gráficos de performance por período.

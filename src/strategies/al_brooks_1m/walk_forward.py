@@ -32,7 +32,7 @@ class WalkForwardValidator:
     def __init__(
         self,
         symbol: str = "BTCUSDT",
-        timeframe: str = "15m",
+        timeframe: str = "1m",
         days: int = 365,
         lot_size: float = 0.1,
         min_trades_per_window: int = 15,
@@ -74,7 +74,7 @@ class WalkForwardValidator:
 
         # Converte dias para número de candles (aproximado)
         # Considerando 24 candles por dia para timeframe de 15m (24*4=96)
-        candles_per_day = 96 if self.timeframe == "15m" else 24
+        candles_per_day = 96 if self.timeframe == "1m" else 24
         opt_candles = optimization_window * candles_per_day
         val_candles = validation_window * candles_per_day
         step_candles = step_size * candles_per_day

@@ -29,7 +29,14 @@ class WalkForwardValidator:
     Classe para implementar validação walk-forward
     """
 
-    def __init__(self, symbol: str = "BTCUSDT", timeframe: str = "5m", days: int = 365, lot_size: float = 0.1):
+    def __init__(
+        self,
+        symbol: str = "BTCUSDT",
+        timeframe: str = "5m",
+        days: int = 365,
+        lot_size: float = 0.1,
+        min_trades_per_window: int = 15,
+    ):
         """
         Inicializa o validador walk-forward
 
@@ -43,20 +50,9 @@ class WalkForwardValidator:
         self.timeframe = timeframe
         self.days = days
         self.lot_size = lot_size
+        self.min_trades_per_window = min_trades_per_window
         self.results = []
         self.summary_stats = {}
-
-    def _get_candles_per_day(self) -> int:
-        """Calcula o número de candles por dia com base no timeframe."""
-        if "m" in self.timeframe:
-            minutes = int(self.timeframe.replace("m", ""))
-            return (24 * 60) // minutes
-        if "h" in self.timeframe:
-            hours = int(self.timeframe.replace("h", ""))
-            return 24 // hours
-        if "d" in self.timeframe:
-            return 1
-        return 24  # Default para 1h se não reconhecido
 
     def create_periods(
         self, data: pd.DataFrame, optimization_window: int = 180, validation_window: int = 90, step_size: int = 30
@@ -77,7 +73,8 @@ class WalkForwardValidator:
         total_candles = len(data)
 
         # Converte dias para número de candles (aproximado)
-        candles_per_day = self._get_candles_per_day()
+        # Considerando 24 candles por dia para timeframe de 15m (24*4=96)
+        candles_per_day = 96 if self.timeframe == "5m" else 24
         opt_candles = optimization_window * candles_per_day
         val_candles = validation_window * candles_per_day
         step_candles = step_size * candles_per_day
@@ -167,18 +164,30 @@ class WalkForwardValidator:
 
         # Executa backtest com parâmetros otimizados
         try:
+            params_for_backtest = {
+                "ema_fast_period": best_params["ema_fast_period"],
+                "ema_medium_period": best_params["ema_medium_period"],
+                "ema_slow_period": best_params["ema_slow_period"],
+                "risk_reward_ratio": best_params["risk_reward_ratio"],
+                "max_avg_deviation_pct": best_params["max_avg_deviation_pct"],
+                "adx_threshold": best_params.get("adx_threshold", 22.0),
+                "atr_stop_multiplier": best_params.get("atr_stop_multiplier", 1.5),
+                "atr_trail_multiplier": best_params.get("atr_trail_multiplier", 0.5),
+                "htf_lookback": best_params.get("htf_lookback", 20),
+                "min_atr": best_params.get("min_atr", 0.0),
+            }
+
             trades, total_pnl, _ = backtest_al_brooks_inside_bar(
                 val_data.copy(),
-                ema_fast_period=best_params["ema_fast_period"],
-                ema_medium_period=best_params["ema_medium_period"],
-                ema_slow_period=best_params["ema_slow_period"],
-                risk_reward_ratio=best_params["risk_reward_ratio"],
-                max_avg_deviation_pct=best_params["max_avg_deviation_pct"],
                 lot_size=self.lot_size,
+                **params_for_backtest,
             )
 
             # Calcula métricas
             metrics = calculate_metrics(trades)
+            closed_pnls = [t["pnl"] for t in trades if "pnl" in t]
+            total_profit = sum(p for p in closed_pnls if p > 0)
+            total_loss = abs(sum(p for p in closed_pnls if p < 0))
 
             result = {
                 "period": period,
@@ -193,6 +202,8 @@ class WalkForwardValidator:
                 "validation_trades": len(trades),
                 "validation_win_rate": metrics.get("win_rate", 0),
                 "validation_profit_factor": metrics.get("profit_factor", 0),
+                "validation_profit": total_profit,
+                "validation_loss": total_loss,
             }
 
             logger.info(
@@ -259,6 +270,8 @@ class WalkForwardValidator:
                     "median_profit_factor": 0.0,
                     "periods_with_profit": 0,
                     "periods_with_loss": 0,
+                    "aggregate_profit_factor": 0.0,
+                    "min_trades_required": self.min_trades_per_window,
                 },
                 "report": {
                     "timestamp": datetime.now().isoformat(),
@@ -281,6 +294,8 @@ class WalkForwardValidator:
                         "median_profit_factor": 0.0,
                         "periods_with_profit": 0,
                         "periods_with_loss": 0,
+                        "aggregate_profit_factor": 0.0,
+                        "min_trades_required": self.min_trades_per_window,
                     },
                     "detailed_results": [],
                 },
@@ -312,6 +327,8 @@ class WalkForwardValidator:
                 "median_profit_factor": 0.0,
                 "periods_with_profit": 0,
                 "periods_with_loss": 0,
+                "aggregate_profit_factor": 0.0,
+                "min_trades_required": self.min_trades_per_window,
             }
 
         # Gera relatório
@@ -327,7 +344,11 @@ class WalkForwardValidator:
         """
         # Considera um período bem sucedido se a otimização funcionou e houve trades na validação
         successful_periods = [
-            r for r in self.results if r.get("optimization_success") and r.get("validation_trades", 0) > 0
+            r
+            for r in self.results
+            if r.get("optimization_success")
+            and r.get("validation_success")
+            and r.get("validation_trades", 0) >= self.min_trades_per_window
         ]
 
         if not successful_periods:
@@ -338,6 +359,11 @@ class WalkForwardValidator:
         pnls = [r["validation_pnl"] for r in successful_periods]
         win_rates = [r["validation_win_rate"] for r in successful_periods]
         profit_factors = [r["validation_profit_factor"] for r in successful_periods]
+
+        total_profit = sum(r.get("validation_profit", 0.0) for r in successful_periods)
+        total_loss = sum(r.get("validation_loss", 0.0) for r in successful_periods)
+
+        aggregate_profit_factor = float("inf") if total_loss == 0 else total_profit / total_loss if total_loss else 0.0
 
         self.summary_stats = {
             "total_periods": len(self.results),
@@ -355,6 +381,8 @@ class WalkForwardValidator:
             "median_profit_factor": np.median(profit_factors),
             "periods_with_profit": sum(1 for p in pnls if p > 0),
             "periods_with_loss": sum(1 for p in pnls if p < 0),
+            "aggregate_profit_factor": aggregate_profit_factor,
+            "min_trades_required": self.min_trades_per_window,
         }
 
         logger.info(f"Estatísticas agregadas:")
@@ -380,6 +408,7 @@ class WalkForwardValidator:
             "timeframe": self.timeframe,
             "summary_stats": self.summary_stats,
             "detailed_results": [],
+            "min_trades_per_window": self.min_trades_per_window,
         }
 
         # Adiciona resultados detalhados
@@ -395,6 +424,8 @@ class WalkForwardValidator:
                 "validation_trades": result.get("validation_trades", 0),
                 "validation_win_rate": result.get("validation_win_rate", 0),
                 "validation_profit_factor": result.get("validation_profit_factor", 0),
+                "validation_profit": result.get("validation_profit", 0),
+                "validation_loss": result.get("validation_loss", 0),
                 "best_params": result.get("best_params", {}),
             }
 
@@ -425,7 +456,11 @@ class WalkForwardValidator:
         """
         Gera gráfico de performance ao longo dos períodos
         """
-        successful_results = [r for r in self.results if r.get("validation_success")]
+        successful_results = [
+            r
+            for r in self.results
+            if r.get("validation_success") and r.get("validation_trades", 0) >= self.min_trades_per_window
+        ]
 
         if not successful_results:
             logger.warning("Nenhum resultado bem sucedido para gerar gráfico")
@@ -584,11 +619,17 @@ def main():
     parser.add_argument("--opt-window", type=int, default=180, help="Tamanho da janela de otimização (dias)")
     parser.add_argument("--val-window", type=int, default=90, help="Tamanho da janela de validação (dias)")
     parser.add_argument("--step-size", type=int, default=30, help="Passo entre períodos (dias)")
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=15,
+        help="Número mínimo de trades na janela de validação para considerar o período válido",
+    )
 
     args = parser.parse_args()
 
     # Executa validação
-    validator = WalkForwardValidator(timeframe="5m")
+    validator = WalkForwardValidator(min_trades_per_window=args.min_trades)
     results = validator.run_walk_forward(
         optimization_window=args.opt_window, validation_window=args.val_window, step_size=args.step_size
     )
@@ -600,6 +641,7 @@ def main():
     print(f"Estratégia: AL Brooks")
     print(f"Símbolo: {validator.symbol}")
     print(f"Timeframe: {validator.timeframe}")
+    print(f"Trades mínimos por janela: {validator.min_trades_per_window}")
     print(f"Períodos totais: {results['summary_stats']['total_periods']}")
     print(f"Períodos bem sucedidos: {results['summary_stats']['successful_periods']}")
     print(f"Taxa de sucesso: {results['summary_stats']['success_rate']:.2%}")
@@ -607,6 +649,11 @@ def main():
     print(f"P&L Médio: ${results['summary_stats']['avg_pnl']:.2f}")
     print(f"Win Rate Médio: {results['summary_stats']['avg_win_rate']:.2%}")
     print(f"Profit Factor Médio: {results['summary_stats']['avg_profit_factor']:.2f}")
+    pf_agg = results["summary_stats"].get("aggregate_profit_factor", float("nan"))
+    if np.isfinite(pf_agg):
+        print(f"Profit Factor Agregado: {pf_agg:.2f}")
+    else:
+        print("Profit Factor Agregado: inf")
     print("=" * 60)
 
 
