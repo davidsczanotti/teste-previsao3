@@ -2,9 +2,22 @@
 wsl->git push -u origin main
 server->git pull origin main
 
+# --- FLUXO DE DESENVOLVIMENTO (RECOMENDADO) ---
 
+# 1. Inicie o ambiente (só precisa rodar uma vez, ou quando o Dockerfile/dependências mudarem)
+docker compose up --build -d
+
+# 2. Execute seus scripts quantas vezes precisar (é super rápido!)
+docker compose exec app poetry run python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15
+docker compose exec app poetry run python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300
+docker compose exec app poetry run python -m src.strategies.al_brooks_15m.backtest
+
+# 3. Para parar tudo
+docker compose down
+
+# --- FLUXO DE BUILD LIMPO (PARA PRODUÇÃO OU LIMPEZA TOTAL) ---
+# Este comando reconstrói tudo do zero e limpa o cache. É mais lento.
 docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3 && docker system prune -f
-
 
 
 Olá! Com certeza. O seu objetivo é ter um comando que, a cada execução, garanta que tudo seja reconstruído do zero e que o lixo (cache, imagens antigas) seja limpo para não ocupar espaço desnecessário no HD.
@@ -53,13 +66,13 @@ docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-co
 Alternativa: Usando docker-compose
 Como mencionei anteriormente, o docker-compose simplifica muito esse fluxo. O equivalente ao seu comando seria:
 
-Construir sem cache e iniciar:
+Construir e iniciar:
 
 bash
-docker-compose up --build --force-recreate -d
+docker compose up --build -d
 --build: Força a reconstrução da imagem.
 --force-recreate: Garante que o contêiner seja recriado mesmo que nada tenha mudado.
-Para forçar a reconstrução sem cache, o comando é um pouco diferente: docker-compose build --no-cache && docker-compose up --force-recreate -d.
+Para forçar a reconstrução sem cache, o comando é um pouco diferente: docker compose build --no-cache && docker compose up --force-recreate -d.
 Limpar o sistema:
 
 bash
