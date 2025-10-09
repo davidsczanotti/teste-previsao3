@@ -53,6 +53,7 @@ class WalkForwardValidator:
         self.min_trades_per_window = min_trades_per_window
         self.results = []
         self.summary_stats = {}
+        self._aggregation_base = []
 
     def create_periods(
         self, data: pd.DataFrame, optimization_window: int = 180, validation_window: int = 90, step_size: int = 30
@@ -204,6 +205,7 @@ class WalkForwardValidator:
                 "validation_profit_factor": metrics.get("profit_factor", 0),
                 "validation_profit": total_profit,
                 "validation_loss": total_loss,
+                "meets_min_trades": len(trades) >= self.min_trades_per_window,
             }
 
             logger.info(
@@ -257,6 +259,7 @@ class WalkForwardValidator:
                 "summary_stats": {
                     "total_periods": 0,
                     "successful_periods": 0,
+                    "periods_with_trades": 0,
                     "success_rate": 0.0,
                     "total_pnl": 0.0,
                     "avg_pnl": 0.0,
@@ -272,6 +275,7 @@ class WalkForwardValidator:
                     "periods_with_loss": 0,
                     "aggregate_profit_factor": 0.0,
                     "min_trades_required": self.min_trades_per_window,
+                    "aggregation_scope": "none",
                 },
                 "report": {
                     "timestamp": datetime.now().isoformat(),
@@ -296,6 +300,8 @@ class WalkForwardValidator:
                         "periods_with_loss": 0,
                         "aggregate_profit_factor": 0.0,
                         "min_trades_required": self.min_trades_per_window,
+                        "periods_with_trades": 0,
+                        "aggregation_scope": "none",
                     },
                     "detailed_results": [],
                 },
@@ -314,6 +320,7 @@ class WalkForwardValidator:
             self.summary_stats = {
                 "total_periods": len(self.results),
                 "successful_periods": 0,
+                "periods_with_trades": 0,
                 "success_rate": 0.0,
                 "total_pnl": 0.0,
                 "avg_pnl": 0.0,
@@ -329,6 +336,7 @@ class WalkForwardValidator:
                 "periods_with_loss": 0,
                 "aggregate_profit_factor": 0.0,
                 "min_trades_required": self.min_trades_per_window,
+                "aggregation_scope": "none",
             }
 
         # Gera relatório
@@ -351,23 +359,66 @@ class WalkForwardValidator:
             and r.get("validation_trades", 0) >= self.min_trades_per_window
         ]
 
-        if not successful_periods:
+        periods_with_trades = [
+            r
+            for r in self.results
+            if r.get("optimization_success") and r.get("validation_success") and r.get("validation_trades", 0) > 0
+        ]
+
+        if not periods_with_trades:
             logger.warning("Nenhum período com trades na validação")
+            self.summary_stats = {
+                "total_periods": len(self.results),
+                "successful_periods": 0,
+                "periods_with_trades": 0,
+                "success_rate": 0.0,
+                "total_pnl": 0.0,
+                "avg_pnl": 0.0,
+                "median_pnl": 0.0,
+                "std_pnl": 0.0,
+                "max_pnl": 0.0,
+                "min_pnl": 0.0,
+                "avg_win_rate": 0.0,
+                "median_win_rate": 0.0,
+                "avg_profit_factor": 0.0,
+                "median_profit_factor": 0.0,
+                "periods_with_profit": 0,
+                "periods_with_loss": 0,
+                "aggregate_profit_factor": 0.0,
+                "min_trades_required": self.min_trades_per_window,
+                "aggregation_scope": "none",
+            }
+            self._aggregation_base = []
             return
 
-        # Métricas de performance
-        pnls = [r["validation_pnl"] for r in successful_periods]
-        win_rates = [r["validation_win_rate"] for r in successful_periods]
-        profit_factors = [r["validation_profit_factor"] for r in successful_periods]
+        if not successful_periods:
+            logger.warning(
+                "Nenhum período atingiu o mínimo de %s trades. Agregando resultados com %s períodos que tiveram trades.",
+                self.min_trades_per_window,
+                len(periods_with_trades),
+            )
+            aggregation_base = periods_with_trades
+            aggregation_scope = "all_with_trades"
+        else:
+            aggregation_base = successful_periods
+            aggregation_scope = "qualified"
 
-        total_profit = sum(r.get("validation_profit", 0.0) for r in successful_periods)
-        total_loss = sum(r.get("validation_loss", 0.0) for r in successful_periods)
+        self._aggregation_base = aggregation_base
+
+        # Métricas de performance
+        pnls = [r["validation_pnl"] for r in aggregation_base]
+        win_rates = [r["validation_win_rate"] for r in aggregation_base]
+        profit_factors = [r["validation_profit_factor"] for r in aggregation_base]
+
+        total_profit = sum(r.get("validation_profit", 0.0) for r in aggregation_base)
+        total_loss = sum(r.get("validation_loss", 0.0) for r in aggregation_base)
 
         aggregate_profit_factor = float("inf") if total_loss == 0 else total_profit / total_loss if total_loss else 0.0
 
         self.summary_stats = {
             "total_periods": len(self.results),
             "successful_periods": len(successful_periods),
+            "periods_with_trades": len(periods_with_trades),
             "success_rate": len(successful_periods) / len(self.results) if self.results else 0,
             "total_pnl": sum(pnls),
             "avg_pnl": np.mean(pnls),
@@ -383,6 +434,7 @@ class WalkForwardValidator:
             "periods_with_loss": sum(1 for p in pnls if p < 0),
             "aggregate_profit_factor": aggregate_profit_factor,
             "min_trades_required": self.min_trades_per_window,
+            "aggregation_scope": aggregation_scope,
         }
 
         logger.info(f"Estatísticas agregadas:")
@@ -426,6 +478,7 @@ class WalkForwardValidator:
                 "validation_profit_factor": result.get("validation_profit_factor", 0),
                 "validation_profit": result.get("validation_profit", 0),
                 "validation_loss": result.get("validation_loss", 0),
+                "meets_min_trades": result.get("meets_min_trades", False),
                 "best_params": result.get("best_params", {}),
             }
 
@@ -456,20 +509,21 @@ class WalkForwardValidator:
         """
         Gera gráfico de performance ao longo dos períodos
         """
-        successful_results = [
-            r
-            for r in self.results
-            if r.get("validation_success") and r.get("validation_trades", 0) >= self.min_trades_per_window
-        ]
+        if self._aggregation_base:
+            relevant_results = self._aggregation_base
+        else:
+            relevant_results = [
+                r for r in self.results if r.get("validation_success") and r.get("validation_trades", 0) > 0
+            ]
 
-        if not successful_results:
-            logger.warning("Nenhum resultado bem sucedido para gerar gráfico")
+        if not relevant_results:
+            logger.warning("Nenhum resultado disponível para gerar gráfico")
             return
 
         # Extrai dados
-        periods = [r["period"]["period_number"] for r in successful_results]
-        pnls = [r["validation_pnl"] for r in successful_results]
-        win_rates = [r["validation_win_rate"] for r in successful_results]
+        periods = [r["period"]["period_number"] for r in relevant_results]
+        pnls = [r["validation_pnl"] for r in relevant_results]
+        win_rates = [r["validation_win_rate"] for r in relevant_results]
 
         # Cria figura
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
@@ -644,6 +698,7 @@ def main():
     print(f"Trades mínimos por janela: {validator.min_trades_per_window}")
     print(f"Períodos totais: {results['summary_stats']['total_periods']}")
     print(f"Períodos bem sucedidos: {results['summary_stats']['successful_periods']}")
+    print(f"Períodos com trades: {results['summary_stats'].get('periods_with_trades', 0)}")
     print(f"Taxa de sucesso: {results['summary_stats']['success_rate']:.2%}")
     print(f"P&L Total: ${results['summary_stats']['total_pnl']:.2f}")
     print(f"P&L Médio: ${results['summary_stats']['avg_pnl']:.2f}")
@@ -654,6 +709,11 @@ def main():
         print(f"Profit Factor Agregado: {pf_agg:.2f}")
     else:
         print("Profit Factor Agregado: inf")
+    scope = results["summary_stats"].get("aggregation_scope")
+    if scope == "all_with_trades":
+        print("Obs: nenhuma janela atingiu o mínimo de trades; métricas acima usam todos os períodos com trades.")
+    elif scope == "none":
+        print("Obs: nenhuma janela gerou trades na validação.")
     print("=" * 60)
 
 
