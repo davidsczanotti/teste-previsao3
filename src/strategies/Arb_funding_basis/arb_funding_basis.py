@@ -39,6 +39,29 @@ def get_funding_rate_history(symbol: str, start_ms: int, end_ms: int) -> pd.Data
     return df[["Date", "fundingRate"]]
 
 
+def load_data(symbol: str, start_date_str: str, end_date_str: Optional[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Busca e prepara os dados para o backtest ou treinamento."""
+    end_ts = pd.Timestamp(end_date_str) if end_date_str else pd.Timestamp.now(tz="UTC")
+    end_ms = int(end_ts.timestamp() * 1000)
+    start_ms = int(pd.Timestamp(start_date_str).timestamp() * 1000)
+
+    print("Buscando dados de funding, preço spot e USDC...")
+    funding_df = get_funding_rate_history(symbol, start_ms, end_ms)
+    spot_df = get_historical_klines(symbol, "1h", start_date_str, end_date_str)
+    usdc_df = get_historical_klines("USDCUSDT", "1h", start_date_str, end_date_str)
+
+    spot_df.set_index("Date", inplace=True)
+    usdc_df.set_index("Date", inplace=True)
+    funding_df.set_index("Date", inplace=True)
+
+    df = spot_df[["close"]].join(usdc_df[["close"]], lsuffix="_spot", rsuffix="_usdc").join(funding_df)
+    df.rename(columns={"close_spot": "spot_price", "close_usdc": "usdc_price"}, inplace=True)
+    df["is_funding_time"] = df["fundingRate"].notna()
+
+    # Retorna o dataframe principal e um dataframe vazio para compatibilidade
+    return df.ffill().dropna(subset=["spot_price", "usdc_price", "fundingRate"]), pd.DataFrame()
+
+
 class ArbFundingBasisStrategy:
     def __init__(
         self,
@@ -60,26 +83,6 @@ class ArbFundingBasisStrategy:
         self.spot_fee_rate = spot_fee_rate
         self.futures_fee_rate = futures_fee_rate
 
-    def _prepare_data(self, start: str, end: Optional[str]) -> pd.DataFrame:
-        """Busca e prepara os dados para o backtest."""
-        end_ts = pd.Timestamp(end) if end else pd.Timestamp.now(tz="UTC")
-        end_ms = int(end_ts.timestamp() * 1000)
-        start_ms = int(pd.Timestamp(start).timestamp() * 1000)
-
-        print("Buscando dados de funding, preço spot e USDC...")
-        funding_df = get_funding_rate_history(self.symbol, start_ms, end_ms)
-        spot_df = get_historical_klines(self.symbol, "1h", start, end)
-        usdc_df = get_historical_klines("USDCUSDT", "1h", start, end)
-
-        spot_df.set_index("Date", inplace=True)
-        usdc_df.set_index("Date", inplace=True)
-        funding_df.set_index("Date", inplace=True)
-
-        df = spot_df[["close"]].join(usdc_df[["close"]], lsuffix="_spot", rsuffix="_usdc").join(funding_df)
-        df.rename(columns={"close_spot": "spot_price", "close_usdc": "usdc_price"}, inplace=True)
-        df["is_funding_time"] = df["fundingRate"].notna()
-        return df.ffill().dropna(subset=["spot_price", "usdc_price", "fundingRate"])
-
     def backtest(
         self, start: str, end: Optional[str] = None, initial_capital: float = 1000.0, use_bnb_discount: bool = True
     ):
@@ -93,7 +96,7 @@ class ArbFundingBasisStrategy:
             self.spot_fee_rate *= 0.75  # Desconto de 25% na taxa spot
             self.futures_fee_rate *= 0.90  # Desconto de 10% na taxa de futuros (para USDT-M)
 
-        df = self._prepare_data(start, end)
+        df, _ = load_data(self.symbol, start, end)
         if df.empty:
             print("Dados insuficientes para o backtest.")
             return [], pd.DataFrame()
