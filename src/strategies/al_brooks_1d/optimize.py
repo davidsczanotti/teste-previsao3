@@ -20,18 +20,17 @@ def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
     return df.sort_values("Date").reset_index(drop=True)
 
 
-MIN_TRADE_THRESHOLD = 20
+def make_objective(df_train: pd.DataFrame, lot_size: float, min_trade_threshold: int = 10):
+    threshold = max(1, min_trade_threshold)
 
-
-def make_objective(df_train: pd.DataFrame, lot_size: float):
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
         ema_fast = trial.suggest_int("ema_fast_period", 5, 20)
         ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 3, ema_fast + 25)
         ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 5, ema_medium + 60)
 
-        risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.2, 3.0, step=0.1)
-        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 1.5, step=0.05)
+        risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.2, 4.0, step=0.1)
+        max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.1, 2.0, step=0.05)
         adx_threshold = trial.suggest_float("adx_threshold", 18.0, 35.0, step=1.0)
         atr_stop_multiplier = trial.suggest_float("atr_stop_multiplier", 1.0, 3.0, step=0.1)
         atr_trail_multiplier = trial.suggest_float("atr_trail_multiplier", 0.0, 3.0, step=0.1)
@@ -71,7 +70,7 @@ def make_objective(df_train: pd.DataFrame, lot_size: float):
         if not np.isfinite(profit_factor):
             profit_factor = 10.0
 
-        trade_factor = min(1.0, trade_count / MIN_TRADE_THRESHOLD)
+        trade_factor = min(1.0, trade_count / threshold)
 
         if total_pnl <= 0:
             return total_pnl * trade_factor
@@ -115,6 +114,12 @@ def main():
     parser.add_argument("--lot_size", type=float, default=0.1, help="Tamanho do lote")
     parser.add_argument("--trials", type=int, default=200, help="Número de trials do Optuna")
     parser.add_argument("--seed", type=int, default=42, help="Semente para reprodutibilidade")
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=10,
+        help="Número mínimo de trades desejado para evitar penalização severa durante a otimização",
+    )
     args = parser.parse_args()
 
     print(f"Carregando dados: {args.ticker} @ {args.interval} por {args.days} dias...")
@@ -128,11 +133,21 @@ def main():
 
     print(f"Total de candles: {n} | Treino: {len(df_train)} | Validação: {len(df_valid)}")
 
+    # Define um nome único para o estudo e um arquivo de banco de dados para persistência
+    study_name = f"albrooks-{args.ticker}-{args.interval}"
+    storage_name = "sqlite:///data/optuna_studies.db"
+
     sampler = optuna.samplers.TPESampler(seed=args.seed)
     # Queremos maximizar o Profit Factor
-    study = optuna.create_study(direction="maximize", sampler=sampler)
+    # O estudo agora é persistido. Se já existir, ele carrega o progresso.
+    study = optuna.create_study(
+        study_name=study_name, storage=storage_name, direction="maximize", sampler=sampler, load_if_exists=True
+    )
     study.optimize(
-        make_objective(df_train, args.lot_size), n_trials=args.trials, show_progress_bar=True, gc_after_trial=True
+        make_objective(df_train, args.lot_size, args.min_trades),
+        n_trials=args.trials,
+        show_progress_bar=True,
+        gc_after_trial=True,
     )
 
     print("\n--- Otimização Concluída ---")

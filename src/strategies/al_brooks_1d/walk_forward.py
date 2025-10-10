@@ -73,9 +73,20 @@ class WalkForwardValidator:
         periods = []
         total_candles = len(data)
 
-        # Converte dias para número de candles (aproximado)
-        # Considerando 24 candles por dia para timeframe de 15m (24*4=96)
-        candles_per_day = 96 if self.timeframe == "1d" else 24
+        # Converte dias para número de candles usando o timeframe solicitado
+        unit = self.timeframe[-1]
+        try:
+            value = int(self.timeframe[:-1])
+        except ValueError:
+            value = 1
+        if unit == "m" and value > 0:
+            candles_per_day = max(1, int(round((24 * 60) / value)))
+        elif unit == "h" and value > 0:
+            candles_per_day = max(1, int(round(24 / value)))
+        elif unit == "d":
+            candles_per_day = 1
+        else:
+            candles_per_day = max(1, value)
         opt_candles = optimization_window * candles_per_day
         val_candles = validation_window * candles_per_day
         step_candles = step_size * candles_per_day
@@ -144,7 +155,7 @@ class WalkForwardValidator:
 
             study = optuna.create_study(direction="maximize")
             study.optimize(
-                make_objective(opt_data, self.lot_size),
+                make_objective(opt_data, self.lot_size, self.min_trades_per_window),
                 n_trials=50,  # Número de tentativas por período. Ajuste conforme necessário.
                 show_progress_bar=False,
                 gc_after_trial=True,

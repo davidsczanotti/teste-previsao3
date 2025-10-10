@@ -128,9 +128,16 @@ def main():
 
     print(f"Total de candles: {n} | Treino: {len(df_train)} | Validação: {len(df_valid)}")
 
+    # Define um nome único para o estudo e um arquivo de banco de dados para persistência
+    study_name = f"albrooks-{args.ticker}-{args.interval}"
+    storage_name = "sqlite:///data/optuna_studies.db"
+
     sampler = optuna.samplers.TPESampler(seed=args.seed)
     # Queremos maximizar o Profit Factor
-    study = optuna.create_study(direction="maximize", sampler=sampler)
+    # O estudo agora é persistido. Se já existir, ele carrega o progresso.
+    study = optuna.create_study(
+        study_name=study_name, storage=storage_name, direction="maximize", sampler=sampler, load_if_exists=True
+    )
     study.optimize(
         make_objective(df_train, args.lot_size), n_trials=args.trials, show_progress_bar=True, gc_after_trial=True
     )

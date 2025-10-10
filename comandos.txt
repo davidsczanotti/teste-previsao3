@@ -18,6 +18,17 @@ docker compose exec app python -m src.strategies.al_brooks_5m.walk_forward --opt
 docker compose exec app python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300
 docker compose exec app python -m src.strategies.al_brooks_15m.backtest
 
+*** rodar em segundo plano 
+docker compose exec -d app nohup python -m src.strategies.al_brooks_15m.walk_forward --opt-window 30 --val-window 15 --step-size 15 > walk_forward_15m.log 2>&1
+docker compose exec -d app nohup python -m src.strategies.al_brooks_15m.optimize --days 1825 --trials 300 > optimize_15m.log 2>&1
+docker compose exec -d app nohup python -m src.strategies.al_brooks_1m.optimize --days 1825 --trials 1000 > optimize_15m.log 2>&1
+
+
+***USDCUSDT***
+python src/strategies/al_brooks_1d/optimize.py 
+docker compose exec app python -m src.strategies.al_brooks_1d.optimize --days 1825 --trials 300 --ticker USDCUSDT
+docker compose exec app python -m src.strategies.al_brooks_15m.backtest --ticker USDCUSDT
+
 # 4. Para parar tudo
 docker compose down
 
@@ -84,3 +95,58 @@ Limpar o sistema:
 bash
 docker system prune -f
 O docker-compose é excelente para o ambiente de desenvolvimento, especialmente por causa do volume que sincroniza seu código automaticamente. Para o seu caso de uso, que parece ser um "re-deploy" completo a cada atualização, o seu script de uma linha é muito eficaz.
+
+
+
+**************************************
+A Fase do Mario vs. o Episódio de Trading
+Sim, o processo é exatamente o mesmo, mas os elementos são diferentes.
+
+Conceito no Jogo do Mario	Conceito no seu Agente de Trading
+A Fase (o "mundo 1-1")	Um período de dados históricos (ex: 3000 candles de BTCUSDT).
+Uma "vida" do Mario	Um Episódio de treinamento. O agente começa com $1000 e tenta operar até o fim do período.
+Ações (Andar, Pular)	Ações (BUY, SELL, HOLD).
+Recompensa (Pegar moeda)	Recompensa Positiva (fechar um trade com lucro, o que aumenta o Equity).
+Punição (Levar dano)	Recompensa Negativa (fechar um trade com prejuízo, o que diminui o Equity).
+Morrer (cair no buraco)	Fim do Episódio (chegar ao final dos dados ou zerar o saldo).
+Começar a fase de novo	O ambiente é resetado (env.reset()). O saldo volta a $1000, mas o cérebro do agente (a Q-Table) mantém o aprendizado.
+
+
+Excelente! Adoro essa analogia, ela torna conceitos complexos muito mais intuitivos. Vamos expandir a tabela para incluir as flags que você mencionou, explicando o papel de cada uma na "fase" que o nosso Mario-Trader está jogando.
+
+Configurando a "Fase" do Mario-Trader
+Cada uma dessas flags é como uma regra ou uma característica do nível que estamos construindo para o nosso agente aprender.
+
+Flag (Parâmetro)	Conceito no Jogo do Mario	Explicação na Analogia
+--symbol "BTCUSDT"	O Mundo do Jogo	Define em qual "mundo" o Mario vai jogar. BTCUSDT é o "Mundo 1 (Reino do Cogumelo)", enquanto ETHUSDT seria o "Mundo 2 (Deserto)". Cada mundo tem seus próprios padrões de inimigos e terreno.
+--interval "5m"	A Velocidade do Jogo	Define a velocidade com que a fase se move. 5m é a velocidade normal. 1m seria o modo "fast-forward", e 1h seria o modo "slow-motion". A velocidade muda a dinâmica de como os obstáculos aparecem.
+--start / --end	O Trecho da Fase	Define qual parte da fase o Mario vai jogar. Em vez de jogar o "Mundo 1-1" inteiro, ele pode treinar apenas no trecho entre o primeiro cano e o castelinho, repetidamente.
+--window-size 24	O Campo de Visão do Mario	Define o quão longe o Mario consegue "enxergar" para trás. Com 24, ele se lembra dos últimos 24 "passos" (candles) que deu. Isso o ajuda a ver se ele acabou de subir uma colina ou sair de um buraco, dando mais contexto para decidir se o próximo movimento deve ser um pulo.
+--position-size 0.002	A Força do Pulo do Mario	Define o tamanho do "investimento" de cada ação. Um pulo pequeno (0.001) é seguro e gasta pouca energia. Um pulo grande (0.1) pode alcançar moedas mais altas (lucro maior), mas consome muita energia (capital) e é mais arriscado.
+--balance 1000.0	A Barra de Vida/Energia Inicial	É a quantidade de "vida" com que o Mario começa cada "vida". Ele começa com 1000 pontos. Perder um trade é como levar dano de um Goomba, e a barra diminui. Ganhar um trade aumenta o potencial dele. Se a vida chegar a zero, ele morre.
+--fee 0.001	O Custo de Energia por Ação	É uma pequena quantidade de energia que o Mario gasta toda vez que ele pula (BUY) ou agacha (SELL), não importa o resultado. É o custo de estar no jogo. Se a taxa for alta, ele se cansa só de se mover.
+Juntando Tudo
+Quando você executa o comando: ... train --episodes 50 --window-size 24 --balance 1000
+
+Você está dizendo: "Mario, você terá 50 vidas para aprender a jogar. A fase é o Mundo do Bitcoin, em velocidade normal (5m). Em cada vida, você começa com 1000 pontos de energia. Seu campo de visão é de 24 passos para trás. Boa sorte!"
+
+A cada vida, ele tenta, morre (ou chega ao fim), e começa de novo, um pouco mais sábio.
+
+Parâmetros do Treinamento (Como o Jogo Roda)
+Flag (Parâmetro)	Conceito no Jogo do Mario	Explicação na Analogia
+--episodes 50	O Número de Vidas	Define quantas vidas o Mario tem para tentar aprender a fase. 50 vidas para dominar o "Mundo do Bitcoin".
+--max-steps	O Cronômetro da Fase	Um limite de tempo para cada vida. Se o Mario der muitos passos (ex: 5000) e não chegar ao fim, a vida acaba e ele começa de novo. Ajuda a evitar que ele fique preso para sempre em uma parte da fase.
+--render-episodes 2	Gravar as Primeiras Tentativas	É como gravar um vídeo das 2 primeiras vidas do Mario, passo a passo. Útil para ver os erros mais básicos que ele comete quando ainda não sabe nada.
+--render-every 10	Gravar um Replay a Cada 10 Vidas	Depois das primeiras tentativas, o jogo grava um replay completo da vida nº 10, nº 20, nº 30, etc. Isso permite ver como a estratégia dele está evoluindo ao longo do tempo.
+--seed	O "Padrão" da Fase	Garante que a fase seja exatamente a mesma em todas as vidas. Os inimigos (movimentos de preço) aparecem nos mesmos lugares. Isso é crucial para saber se o Mario está realmente aprendendo ou se ele só teve sorte em uma vida.
+Hiperparâmetros do Agente (Como o Cérebro Funciona)
+Flag (Parâmetro)	Conceito no Jogo do Mario	Explicação na Analogia
+--learning-rate	A Velocidade de Aprendizado	Quão rápido o cérebro do Mario aprende com um erro. Uma taxa alta significa: "Caí nesse buraco, NUNCA MAIS vou por aqui!". Uma taxa baixa significa: "Caí aqui... foi azar? Vou tentar de novo mais umas vezes para ter certeza".
+--discount	A Visão de Longo Prazo	O quanto o Mario valoriza recompensas futuras (chegar no castelo) em vez de recompensas imediatas (pegar uma moeda). Um valor alto (ex: 0.99) faz ele pensar "Vou ignorar essa moeda para pegar um atalho que me leva a um cogumelo de vida extra". Um valor baixo o torna imediatista.
+--epsilon	A Curiosidade (Exploração)	A chance do Mario ignorar o que ele "sabe" e tentar algo novo. Com 1.0 (100%), ele é um bebê curioso, apertando botões aleatórios. Com 0.05 (5%), ele é um speedrunner experiente, seguindo o caminho que ele já sabe que é o melhor 95% das vezes.
+--epsilon-decay	O Amadurecimento	A velocidade com que o Mario deixa de ser curioso e passa a confiar no que aprendeu. A cada vida, sua curiosidade (epsilon) diminui um pouquinho, fazendo-o explorar menos e usar mais seu conhecimento.
+--epsilon-min	O Mínimo de Curiosidade	Mesmo o melhor jogador às vezes tenta um pulo diferente. Essa flag garante que o Mario nunca fique 100% robótico e sempre mantenha uma pequena chance (ex: 5%) de explorar um caminho novo, caso o "melhor caminho" mude.
+--buffer-size 10000	O Tamanho da Memória de Sonhos	O cérebro do Mario não aprende só com a última coisa que aconteceu. Ele tem uma memória onde guarda as últimas 10.000 experiências ("pulei aqui e peguei moeda", "andei ali e caí no buraco"). À noite, ele "sonha" com um punhado aleatório dessas memórias para reforçar o aprendizado.
+--batch-size 32	Quantos Sonhos por Noite	A cada passo, o Mario para e "sonha" com 32 de suas memórias passadas aleatoriamente. Aprender com um lote de experiências variadas (em vez de apenas a última) torna o aprendizado muito mais estável e eficaz.
+--hidden-size 32	O Número de "Neurônios"	Define o quão complexo é o cérebro do Mario. Poucos neurônios (ex: 8) e ele só aprende regras simples. Muitos neurônios (ex: 128) e ele pode aprender padrões muito complexos, mas corre o risco de "pensar demais" e se confundir.
+--target-update-freq 10	A "Memória de Referência"	Para não ficar confuso, o cérebro do Mario tem duas partes: uma que aprende a cada segundo (a policy_net) e outra que é uma "foto" de como ele pensava há 10 vidas (a target_net). Ele usa essa "foto" antiga como uma referência estável para julgar suas novas ações. Isso evita que ele mude de ideia drasticamente a todo momento.
