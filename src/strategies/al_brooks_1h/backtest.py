@@ -273,17 +273,16 @@ def main():
     # Tenta carregar a configuração ativa
     active_cfg = load_active_config(args.ticker, args.interval)
 
+    # Importa asdict apenas se for usar
+    from dataclasses import asdict
+
     if active_cfg:
         print(f"Usando configuração ativa para {args.ticker}@{args.interval}")
-        params = {
-            "ema_fast_period": active_cfg.ema_fast_period,
-            "ema_medium_period": active_cfg.ema_medium_period,
-            "ema_slow_period": active_cfg.ema_slow_period,
-            "risk_reward_ratio": active_cfg.risk_reward_ratio,
-            "max_avg_deviation_pct": active_cfg.max_avg_deviation_pct,
-            "lot_size": active_cfg.lot_size,
-        }
-        days_to_load = active_cfg.days
+        params = asdict(active_cfg)
+        # Removemos chaves que não são parâmetros diretos da estratégia
+        for key in ["ticker", "interval", "days", "min_trades_per_window"]:
+            params.pop(key, None)
+        days_to_load = active_cfg.days  # Garante que o backtest use o mesmo período da otimização
     else:
         print("Nenhuma configuração ativa encontrada. Usando parâmetros padrão.")
         params = {
@@ -294,6 +293,16 @@ def main():
             "max_avg_deviation_pct": 0.5,
             "lot_size": args.lot_size,
         }
+        # Adiciona parâmetros padrão para os novos filtros, caso não haja config ativa
+        params.update(
+            {
+                "adx_threshold": 22.0,
+                "atr_stop_multiplier": 1.5,
+                "atr_trail_multiplier": 0.5,
+                "htf_lookback": 20,
+                "min_atr": 0.0,
+            }
+        )
         days_to_load = args.days
 
     # Carregar dados

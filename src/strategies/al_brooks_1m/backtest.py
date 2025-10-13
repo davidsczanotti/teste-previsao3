@@ -278,7 +278,7 @@ def main():
         print(f"Usando configuração ativa para {args.ticker}@{args.interval}")
         # Usar model_dump() do Pydantic é mais limpo e seguro para obter todos os parâmetros.
         # Ele retorna um dicionário com todos os campos do modelo.
-        params = active_cfg.model_dump()
+        params = asdict(active_cfg)
         # Removemos chaves que não são parâmetros diretos da estratégia
         for key in ["ticker", "interval", "days", "min_trades_per_window"]:
             params.pop(key, None)

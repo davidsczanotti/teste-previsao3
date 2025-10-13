@@ -64,7 +64,9 @@ def compute_signal(df: pd.DataFrame, params: dict) -> str:
     return "hold"
 
 
-def calculate_levels(df: pd.DataFrame, params: dict, direction: str, entry_price: float) -> tuple[float, float] | tuple[None, None]:
+def calculate_levels(
+    df: pd.DataFrame, params: dict, direction: str, entry_price: float
+) -> tuple[float, float] | tuple[None, None]:
     """Calcula stop loss e take profit baseados em ATR e price action recente."""
     last_closed = df.iloc[-2]
     atr_value = last_closed["atr"]
@@ -111,7 +113,9 @@ def handle_exit(exit_type: str, price: float, params: dict) -> None:
         pnl = (entry_price - price) * lot_size
 
     position_state["capital"] += pnl
-    print(f"[{now_str}] PREÇO: {price:.2f} | SAÍDA: {exit_type} | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}")
+    print(
+        f"[{now_str}] PREÇO: {price:.2f} | SAÍDA: {exit_type} | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+    )
     position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
 
 
@@ -167,20 +171,30 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
 
     if signal == "buy":
         entry_price = df.iloc[-2]["high"]
-        stop, target = calculate_levels(df, params, "long", entry_price)
-        if stop is None or target is None:
-            print(f"[{now_str}] SINAL LONG descartado (níveis inválidos).")
-            return
-        position_state.update({"position": "long", "entry_price": entry_price, "stop_loss": stop, "take_profit": target})
-        print(f"[{now_str}] SINAL LONG | Entrada: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+        if current_price >= entry_price:
+            stop, target = calculate_levels(df, params, "long", entry_price)
+            if stop is None or target is None:
+                print(f"[{now_str}] SINAL LONG descartado (níveis inválidos).")
+                return
+            position_state.update(
+                {"position": "long", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
+            )
+            print(f"[{now_str}] ENTRADA LONG | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+        else:
+            print(f"[{now_str}] SINAL LONG detectado, aguardando rompimento de {entry_price:.2f}...")
     elif signal == "sell":
         entry_price = df.iloc[-2]["low"]
-        stop, target = calculate_levels(df, params, "short", entry_price)
-        if stop is None or target is None:
-            print(f"[{now_str}] SINAL SHORT descartado (níveis inválidos).")
-            return
-        position_state.update({"position": "short", "entry_price": entry_price, "stop_loss": stop, "take_profit": target})
-        print(f"[{now_str}] SINAL SHORT | Entrada: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+        if current_price <= entry_price:
+            stop, target = calculate_levels(df, params, "short", entry_price)
+            if stop is None or target is None:
+                print(f"[{now_str}] SINAL SHORT descartado (níveis inválidos).")
+                return
+            position_state.update(
+                {"position": "short", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
+            )
+            print(f"[{now_str}] ENTRADA SHORT | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+        else:
+            print(f"[{now_str}] SINAL SHORT detectado, aguardando rompimento de {entry_price:.2f}...")
     else:
         print(f"[{now_str}] SINAL: hold | PREÇO: {current_price:.2f} | CAPITAL: ${position_state['capital']:.2f}")
 

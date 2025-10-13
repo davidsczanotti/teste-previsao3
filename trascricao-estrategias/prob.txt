@@ -787,3 +787,173 @@
 00:12:36.240 exploitation and exploration and so yeah
 00:12:40.320 we're gonna stop here
 00:12:42.839 video and
+# tactiq.io free youtube transcript
+# 9. Deep Reinforcement Learning For Finance 101| Financial Day Trading| Lecture 9| Deep + Reinforce
+# https://www.youtube.com/watch/wRCvHFKPpdM
+
+00:00:02.280 all right guys this is our last video in
+00:00:05.400 this uh series of uh lectures and in
+00:00:09.360 this video we want to put everything
+00:00:11.160 together and uh
+00:00:13.559 we want to explain what the deep in
+00:00:16.500 reinforcement learning means right so
+00:00:19.199 this deep reinforcement learning is is a
+00:00:22.080 branch of AI like we already explained
+00:00:25.279 and so
+00:00:27.960 it's an it's it's power its strength is
+00:00:32.399 because it's a Synergy of two fuels
+00:00:35.160 right it's a Synergy of two subfields of
+00:00:37.860 of artificial intelligence which is deep
+00:00:40.559 learning and reinforcement learning and
+00:00:43.860 we know that in the future in order to
+00:00:46.140 achieve artificial general intelligence
+00:00:48.300 is going to include a lot of other fuels
+00:00:51.120 maybe it will uh we'll have to merge
+00:00:54.239 this with evolutionary Computing or
+00:00:57.180 swarm intelligence or uh symbolic uh
+00:01:01.739 programming and and all those kind of
+00:01:04.680 fuels so so the this uh integration of
+00:01:09.540 these two fuels gives it the power that
+00:01:12.240 it uh deep reinforcement learning has
+00:01:14.520 and so looking at the
+00:01:17.760 what does uh what is the deep in
+00:01:21.060 reinforcement learning right
+00:01:22.320 reinforcement learning is really the
+00:01:24.000 topic but it has deep learning which
+00:01:25.860 means we combine deep learning with
+00:01:28.860 reinforcement learning to get deep
+00:01:30.780 reinforcement learning right and so this
+00:01:34.439 is why we have so many good results and
+00:01:37.200 we are able to scale the the the the
+00:01:41.579 reinforcement learning so if there was
+00:01:43.979 no deep learning in reinforcement
+00:01:45.420 learning there will be a scalability
+00:01:47.400 problem so deep learning came in to
+00:01:50.939 provide scalability to deep
+00:01:53.220 reinforcement it means we can learn in
+00:01:55.680 huge systems right
+00:01:59.280 and then uh what is deep learning for
+00:02:02.040 example we were explaining in terms of
+00:02:04.860 uh
+00:02:06.240 we explained in terms of decision making
+00:02:08.880 so we are learning to make decisions for
+00:02:11.640 day trading so what is deep learning
+00:02:13.739 here so deep learning tries to do what
+00:02:16.379 it learns to predict actions given a
+00:02:19.980 state right so if you give the state
+00:02:23.040 the price of an asset or you give
+00:02:26.340 information about uh an asset it's going
+00:02:30.840 to predict
+00:02:32.040 the action that you're going to uh that
+00:02:35.580 you should take
+00:02:37.200 so deep learning
+00:02:39.599 in this framework does prediction
+00:02:42.239 and then we have reinforcement learning
+00:02:44.160 right what does reinforcement learning
+00:02:46.319 do so reinforcement learning so I
+00:02:48.840 predict actions so I've predicted
+00:02:51.120 actions
+00:02:52.440 I haven't made a decision right so
+00:02:56.160 reinforcement learning now
+00:02:58.379 tells us what decision
+00:03:00.959 to take right so it we learn to take
+00:03:04.800 actions that give us the best outcome
+00:03:08.580 right so this is what so when we combine
+00:03:11.099 this we have deep reinforcement learning
+00:03:14.040 so now what can we define deep
+00:03:17.340 reinforcement learning to be right so in
+00:03:20.220 deep reinforcement learning we learn to
+00:03:22.140 predict
+00:03:23.280 actions and take decisions right we
+00:03:26.159 learn to predict and take actions given
+00:03:29.220 a state right in order to maximize our
+00:03:32.159 outcome so the combination of these two
+00:03:34.920 sub fuels produces this
+00:03:38.220 prediction and decision making which is
+00:03:40.739 very powerful right this is very
+00:03:43.560 powerful
+00:03:45.420 and so
+00:03:47.040 uh we want to look at how we combine
+00:03:50.940 deep reinforcement learning right so we
+00:03:55.260 learn to predict and take the actions
+00:03:58.140 given a state so to combine this you
+00:04:00.959 know in reinforcement learning you
+00:04:02.940 always have an environment right so you
+00:04:05.640 have an environment
+00:04:07.620 you input an environment so
+00:04:10.200 in an environment the environment
+00:04:12.599 produces a state right
+00:04:15.060 so the state in which we are in so it
+00:04:18.478 produces a state
+00:04:20.040 so when we are at the state
+00:04:24.060 what do we do next
+00:04:26.580 uh like we saw in the previous videos
+00:04:28.699 when we see a state we make a decision
+00:04:31.400 in deep reinforcement learning when we
+00:04:34.560 see a state we send this state in order
+00:04:37.080 to make that decision we are going to
+00:04:39.240 send this state to a neural network
+00:04:41.460 right
+00:04:43.320 a neural network is a prediction machine
+00:04:47.100 right so we'll send this date into this
+00:04:50.580 neural network
+00:04:52.020 and the network is going to learn
+00:04:56.340 to predict so it's going to take as
+00:05:00.419 input our state and it's going to
+00:05:03.240 predict
+00:05:04.500 the action for us to take
+00:05:08.220 right so that's what the neural network
+00:05:10.199 will do
+00:05:11.340 and so the neural network
+00:05:14.100 predicts an action by providing it can
+00:05:16.860 provide us probabilities right of those
+00:05:19.320 the probability distribution of buying
+00:05:22.800 an asset or holding or selling right so
+00:05:27.000 when it produces this probability
+00:05:30.180 we are going to now use our policy
+00:05:35.100 which is our decision making agent
+00:05:39.900 which is now reinforcement learning so
+00:05:42.539 we use a policy to make a decision or
+00:05:46.680 take an action so putting this together
+00:05:49.940 this is what deep reinforcement learning
+00:05:53.220 is and this is how we can express it in
+00:05:56.280 its simplest high level form so this
+00:05:59.220 chat tries to explain what deep
+00:06:01.139 reinforcement learning is in its
+00:06:03.240 simplest level form so you take you have
+00:06:05.940 an environment
+00:06:07.639 environment produces a state
+00:06:10.440 the state is sent to a neural network
+00:06:14.340 to predict
+00:06:16.259 the action to take and the action is
+00:06:19.800 taken by the policy so this is a high
+00:06:23.039 level description of our decision making
+00:06:24.900 system and we're going to details later
+00:06:28.979 so this is the last video in this series
+00:06:31.440 and if you like it please uh
+00:06:35.160 give it a thumbs up and let me know if
+00:06:38.400 there's anything uh this was not perfect
+00:06:41.120 if you have any questions you can please
+00:06:44.039 just ask me and in the next series I'm
+00:06:47.220 going to be bringing you the Practical
+00:06:50.220 session right which will involve the
+00:06:53.400 first session will be
+00:06:55.319 how to get data right our environment is
+00:06:58.680 built on data we know computers only see
+00:07:01.139 data that's what they see so we will
+00:07:03.539 describe how to get trading data uh
+00:07:07.800 on the internet right how to download
+00:07:10.259 trading data and next uh after because
+00:07:15.300 this is a very important step so will
+00:07:17.940 make us a series for that to get data
+00:07:21.780 there are different data sources what is
+00:07:24.060 the best and what quality would you get
+00:07:26.220 and after uh getting the data
+00:07:29.819 what do you need to do next when we get
+00:07:33.360 the data we will use the data to build
+00:07:36.660 an environment where we can use existing
+00:07:40.919 policies to learn to trade so
+00:07:45.840 um stay tuned guys I'm bringing you the
+00:07:49.199 next practical session
+00:07:52.139 thank you for watching
+00:07:54.240 bye
