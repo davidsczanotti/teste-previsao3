@@ -2,6 +2,10 @@ import argparse
 import os
 from collections import deque
 
+# Força TensorFlow a usar apenas CPU para evitar erros de CUDA
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Reduz logs do TensorFlow (3 = ERROR only)
+
 import numpy as np
 import pandas as pd
 from .agent import DQNAgent
