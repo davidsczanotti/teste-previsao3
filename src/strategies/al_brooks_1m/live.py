@@ -218,7 +218,10 @@ def main() -> None:
         print("Execute a otimização antes de iniciar o modo live.")
         sys.exit(1)
 
-    params = active_cfg.to_dict()
+    # Usar asdict para consistência com os outros módulos
+    from dataclasses import asdict
+
+    params = asdict(active_cfg)
     print("--- Al Brooks Live Monitor ---")
     print(f"Configuração ativa para {args.ticker}@{args.interval}")
     print({k: v for k, v in params.items() if k not in {"ticker", "interval", "days"}})
