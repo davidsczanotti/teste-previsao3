@@ -1,78 +1,121 @@
+import random
+from collections import deque, namedtuple
 
 import numpy as np
-import random
-from collections import deque
-from tensorflow.keras.models import Sequential
+import tensorflow as tf
 from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 
+
 class DQNAgent:
-    def __init__(self, state_size: int, action_size: int, seed: int = 0):
+    """Agente que interage e aprende com o ambiente."""
+
+    def __init__(
+        self,
+        state_size,
+        action_size,
+        seed,
+        learning_rate=5e-4,
+        buffer_size=int(1e5),
+        batch_size=64,
+        gamma=0.99,
+        tau=1e-3,
+    ):
+        """Inicializa um objeto Agente.
+
+        Args:
+            state_size (int): Dimensão de cada estado
+            action_size (int): Dimensão de cada ação
+            seed (int): Semente aleatória
+        """
         self.state_size = state_size
         self.action_size = action_size
         self.seed = random.seed(seed)
-        self.memory = deque(maxlen=2000)
-        self.gamma = 0.99
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.batch_size = 64
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.gamma = gamma  # Fator de desconto
+        self.tau = tau  # Para soft update dos pesos da rede alvo
+
+        # Rede Q (Q-Network)
         self.qnetwork_local = self._build_model()
         self.qnetwork_target = self._build_model()
-        self.update_target_network()
-    
-    def _build_model(self) -> Sequential:
-        model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(24, activation='relu'))
-        model.add(Dense(self.action_size, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(learning_rate=0.001))
+        self.optimizer = Adam(learning_rate=self.learning_rate)
+
+        # Replay memory
+        self.memory = deque(maxlen=buffer_size)
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
+
+    def _build_model(self):
+        """Constrói uma rede neural para aproximar os valores Q."""
+        model = Sequential(
+            [
+                Dense(64, activation="relu", input_shape=(self.state_size,)),
+                Dense(64, activation="relu"),
+                Dense(self.action_size, activation="linear"),
+            ]
+        )
         return model
-    
-    def update_target_network(self):
-        self.qnetwork_target.set_weights(self.qnetwork_local.get_weights())
-    
-    def step(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, done: bool):
-        self.remember(state, action, reward, next_state, done)
-        if done:
-            self.update_target_network()
+
+    def step(self, state, action, reward, next_state, done):
+        # Salva a experiência na memória de replay
+        self.memory.append(self.experience(state, action, reward, next_state, done))
+
+        # Aprende se houver amostras suficientes na memória
         if len(self.memory) > self.batch_size:
-            experiences = self.sample_batch()
-            self.learn(experiences)
-    
-    def sample_batch(self):
-        experiences = random.sample(self.memory, self.batch_size)
-        states = np.vstack([e[0] for e in experiences if e is not None])
-        actions = np.array([e[1] for e in experiences if e is not None], dtype=np.intp)
-        rewards = np.vstack([e[2] for e in experiences if e is not None])
-        next_states = np.vstack([e[3] for e in experiences if e is not None])
-        dones = np.array([e[4] for e in experiences if e is not None], dtype=np.uint8).reshape(-1, 1)
-        return (states, actions, rewards, next_states, dones)
-    
-    def learn(self, experiences):
-        states, actions, rewards, next_states, dones = experiences
-        Q_targets_next = self.qnetwork_target.predict(next_states, verbose=0)
-        Q_targets = rewards + (self.gamma * np.max(Q_targets_next, axis=1, keepdims=True)) * (1 - dones)
-        Q_expected = self.qnetwork_local.predict(states, verbose=0)
-        indices = np.arange(len(actions), dtype=np.intp)
-        Q_expected[indices, actions] = Q_targets.squeeze()
-        self.qnetwork_local.fit(states, Q_expected, epochs=1, verbose=0)
-    
-    def act(self, state: np.ndarray, epsilon: float | None = None) -> int:
-        eps = self.epsilon if epsilon is None else epsilon
-        if epsilon is not None:
-            self.epsilon = epsilon
-        state = np.array(state).reshape(1, self.state_size)
-        if np.random.rand() <= eps:
-            return np.random.randint(self.action_size)
-        q_values = self.qnetwork_local.predict(state, verbose=0)[0]
-        return int(np.argmax(q_values))
-    
-    def remember(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, done: bool):
-        self.memory.append((state, action, reward, next_state, done))
-    
-    def replay(self, batch_size: int):
-        if len(self.memory) < batch_size:
-            return
-        experiences = self.sample_batch()
-        self.learn(experiences)
+            experiences = random.sample(self.memory, k=self.batch_size)
+            self._learn(experiences)
+
+    def act(self, state, eps=0.0):
+        """Retorna ações para um dado estado conforme a política atual.
+
+        Args:
+            state (array_like): estado atual
+            eps (float): epsilon, para a política epsilon-greedy
+        """
+        state = np.array(state).reshape(1, -1)
+        # Exploração Epsilon-Greedy
+        if random.random() > eps:
+            action_values = self.qnetwork_local(state)
+            return np.argmax(action_values[0]).item()
+        else:
+            return random.choice(np.arange(self.action_size))
+
+    def _learn(self, experiences):
+        """Atualiza os pesos da rede usando um lote de experiências."""
+        states = tf.convert_to_tensor([e.state for e in experiences if e is not None], dtype=tf.float32)
+        actions = tf.convert_to_tensor([e.action for e in experiences if e is not None], dtype=tf.int32)
+        rewards = tf.convert_to_tensor([e.reward for e in experiences if e is not None], dtype=tf.float32)
+        next_states = tf.convert_to_tensor([e.next_state for e in experiences if e is not None], dtype=tf.float32)
+        dones = tf.convert_to_tensor([e.done for e in experiences if e is not None], dtype=tf.float32)
+
+        # Calcula os Q-targets para os próximos estados a partir da rede alvo
+        q_targets_next = tf.reduce_max(self.qnetwork_target(next_states), axis=1)
+        # Calcula os Q-targets para os estados atuais
+        q_targets = rewards + (self.gamma * q_targets_next * (1 - dones))
+
+        with tf.GradientTape() as tape:
+            # Pega os Q-values esperados da rede local
+            q_expected = self.qnetwork_local(states)
+            q_expected = tf.gather(q_expected, actions, batch_dims=1)
+
+            loss = tf.keras.losses.MSE(q_targets, tf.squeeze(q_expected))
+
+        grads = tape.gradient(loss, self.qnetwork_local.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.qnetwork_local.trainable_variables))
+
+        # ------------------- atualiza a rede alvo ------------------- #
+        self._soft_update(self.qnetwork_local, self.qnetwork_target)
+
+    def _soft_update(self, local_model, target_model):
+        """Soft update dos parâmetros do modelo.
+        θ_target = τ*θ_local + (1 - τ)*θ_target
+        """
+        local_weights = local_model.get_weights()
+        target_weights = target_model.get_weights()
+
+        new_weights = []
+        for local_w, target_w in zip(local_weights, target_weights):
+            new_w = self.tau * local_w + (1.0 - self.tau) * target_w
+            new_weights.append(new_w)
+        target_model.set_weights(new_weights)

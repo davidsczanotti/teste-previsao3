@@ -7,16 +7,18 @@ class ArbFundingEnv:
     Ambiente de Aprendizagem por Reforço para a estratégia de arbitragem de Funding Rate.
     """
 
-    def __init__(self, df: pd.DataFrame, initial_capital=1000.0, fee_rate=0.00075):
+    def __init__(self, df: pd.DataFrame, initial_capital=1000.0, fee_rate=0.00075, leverage=2.0):
         """
         Args:
             df (pd.DataFrame): DataFrame com colunas 'fundingRate', 'spot_price'.
             initial_capital (float): Capital inicial.
             fee_rate (float): Taxa de transação (ex: 0.075% = 0.00075).
+            leverage (float): Alavancagem a ser usada na posição.
         """
         self.df = df
         self.initial_capital = initial_capital
         self.fee_rate = fee_rate
+        self.leverage = leverage
 
         # O espaço de estado tem 3 dimensões: funding atual, funding anterior, posição atual
         self.observation_space_dim = 3
@@ -66,15 +68,20 @@ class ArbFundingEnv:
         if action == 1 and self.position == 0:  # Abrir Posição
             self.position = 1
             self.entry_price = current_price
-            self.position_size_asset = self.capital / current_price
+            # O valor nocional é o capital atual alavancado
+            notional_value = self.capital * self.leverage
+            self.position_size_asset = notional_value / current_price
             # Custo de abrir posição spot + perpétua
-            fee = self.capital * self.fee_rate * 2
+            # As taxas são calculadas sobre o valor nocional da posição spot e da posição de futuros
+            # A taxa é por lado, então multiplicamos por 2 (spot + futuros)
+            fee = notional_value * self.fee_rate * 2
             self.capital -= fee
             reward -= fee
 
         elif action == 2 and self.position == 1:  # Fechar Posição
             # Custo de fechar posição spot + perpétua
-            fee = self.capital * self.fee_rate * 2
+            notional_value = self.position_size_asset * current_price
+            fee = notional_value * self.fee_rate * 2
             self.capital -= fee
             reward -= fee
             self.position = 0
