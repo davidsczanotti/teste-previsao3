@@ -17,21 +17,21 @@ position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_
 PULLBACK_LOOKBACK = 10
 
 
-def compute_signal(df: pd.DataFrame, params: dict) -> str:
+def compute_signal(df: pd.DataFrame, params: dict) -> tuple[str, str]:
     """Determina se há sinal de compra ou venda no último candle fechado."""
     if len(df) < 3:
-        return "hold"
+        return "hold", "Dados insuficientes"
 
     last = df.iloc[-2]  # último candle fechado
 
     if last["avg_deviation_pct"] > params["max_avg_deviation_pct"]:
-        return "hold"
+        return "hold", f"Preço esticado ({last['avg_deviation_pct']:.2f}%)"
 
     if np.isnan(last["atr"]) or last["atr"] <= params.get("min_atr", 0.0):
-        return "hold"
+        return "hold", f"ATR baixo ({last['atr']:.2f})"
 
     if np.isnan(last["adx"]) or last["adx"] < params["adx_threshold"]:
-        return "hold"
+        return "hold", f"ADX baixo ({last['adx']:.1f})"
 
     allow_long = True
     allow_short = True
@@ -53,15 +53,15 @@ def compute_signal(df: pd.DataFrame, params: dict) -> str:
     )
 
     if not last["is_inside_bar"]:
-        return "hold"
+        return "hold", "Não é Inside Bar"
 
     if allow_long and uptrend and last["close"] < last["ema_fast"]:
-        return "buy"
+        return "buy", "Sinal de compra"
 
     if allow_short and downtrend and last["close"] > last["ema_fast"]:
-        return "sell"
+        return "sell", "Sinal de venda"
 
-    return "hold"
+    return "hold", "Sem alinhamento de EMAs/pullback"
 
 
 def calculate_levels(
@@ -166,7 +166,7 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
     if position_state["position"]:
         return
 
-    signal = compute_signal(df, params)
+    signal, reason = compute_signal(df, params)
     now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     if signal == "buy":
@@ -196,7 +196,9 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
         else:
             print(f"[{now_str}] SINAL SHORT detectado, aguardando rompimento de {entry_price:.2f}...")
     else:
-        print(f"[{now_str}] SINAL: hold | PREÇO: {current_price:.2f} | CAPITAL: ${position_state['capital']:.2f}")
+        print(
+            f"[{now_str}] SINAL: hold ({reason}) | PREÇO: {current_price:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+        )
 
 
 def main() -> None:
