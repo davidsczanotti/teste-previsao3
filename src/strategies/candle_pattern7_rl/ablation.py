@@ -23,7 +23,12 @@ def load_policy(model_path: str):
         from .training.train_ppo_torch import ActorCriticMLP, ActorCriticTransformer, ActorCriticLSTM
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        ckpt = torch.load(model_path, map_location=device)
+        # PyTorch >=2.6 default weights_only=True; we need full pickle for our checkpoints
+        try:
+            ckpt = torch.load(model_path, map_location=device, weights_only=False)  # type: ignore[call-arg]
+        except TypeError:
+            # Older torch without weights_only kw
+            ckpt = torch.load(model_path, map_location=device)
         cfg_dict = ckpt.get("config", {})
         policy_type = cfg_dict.get("policy_type", "mlp")
 
@@ -142,7 +147,7 @@ def main():
     p.add_argument("--include_regimes", action="store_true")
     args = p.parse_args()
 
-    policy_fn, policy_type = load_policy(args.model)
+    policy_fn, policy_type, _ = load_policy(args.model)
 
     # Build env baseline
     env_kwargs = dict(

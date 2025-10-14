@@ -266,7 +266,10 @@ def ppo_train_torch(
     # Carregar modelo
     if model_path:
         try:
-            checkpoint = torch.load(model_path, map_location=device)
+            try:
+                checkpoint = torch.load(model_path, map_location=device, weights_only=False)  # type: ignore[call-arg]
+            except TypeError:
+                checkpoint = torch.load(model_path, map_location=device)
             agent.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             # Carrega o estado do normalizer
@@ -412,7 +415,7 @@ def ppo_train_torch(
         # Optional: run ablation and save JSON
         if run_ablation:
             try:
-                from . import ablation as abl
+                from .. import ablation as abl
                 policy_fn, policy_type, _ = abl.load_policy(save_path)
                 env_kwargs = dict(
                     symbol=cfg.ticker,
@@ -460,6 +463,12 @@ if __name__ == "__main__":
     parser.add_argument("--episode_len", type=int, default=2048)
     parser.add_argument("--long_only", action="store_true")
     parser.add_argument("--model", type=str, default=None, help="Caminho para o modelo .pt a ser carregado")
+    # PPO hyperparams
+    parser.add_argument("--ent_coef", type=float, default=0.01)
+    parser.add_argument("--vf_coef", type=float, default=0.5)
+    parser.add_argument("--clip_range", type=float, default=0.2)
+    parser.add_argument("--gae_lambda", type=float, default=0.95)
+    parser.add_argument("--grad_clip", type=float, default=0.5)
     # Multi-timeframe
     parser.add_argument("--include_mtf", action="store_true", help="Inclui features multi-timeframe (1h,4h)")
     parser.add_argument(
@@ -472,6 +481,23 @@ if __name__ == "__main__":
     parser.add_argument("--include_regimes", action="store_true", help="Inclui one-hot de regimes (tendência/volatilidade)")
     parser.add_argument("--regime_adx_threshold", type=float, default=25.0)
     parser.add_argument("--regime_vol_multiplier", type=float, default=1.2)
+    # Env shaping / execution knobs
+    parser.add_argument("--gate_on_heuristic", action="store_true", help="Permite abrir somente quando heurística concorda")
+    parser.add_argument("--idle_penalty", type=float, default=0.0)
+    parser.add_argument("--idle_grace", type=int, default=0)
+    parser.add_argument("--idle_ramp", type=float, default=0.0)
+    parser.add_argument("--m2m_weight", type=float, default=0.05)
+    parser.add_argument("--reward_atr_norm", action="store_true")
+    parser.add_argument("--atr_period", type=int, default=14)
+    parser.add_argument("--min_hold_bars", type=int, default=0)
+    parser.add_argument("--reopen_cooldown_bars", type=int, default=0)
+    parser.add_argument("--switch_penalty", type=float, default=0.0)
+    parser.add_argument("--switch_window_bars", type=int, default=5)
+    parser.add_argument("--action_cost_open", type=float, default=0.0)
+    parser.add_argument("--action_cost_close", type=float, default=0.0)
+    parser.add_argument("--invalid_action_penalty", type=float, default=0.0)
+    parser.add_argument("--fee_rate", type=float, default=0.001)
+    parser.add_argument("--slippage_bps", type=float, default=0.0)
     # Ablation
     parser.add_argument("--ablation", action="store_true", help="Roda ablação automática ao fim do treino")
     parser.add_argument(
@@ -497,17 +523,34 @@ if __name__ == "__main__":
         ppo_epochs=4,
         minibatch_size=64,
         gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        vf_coef=0.5,
-        grad_clip=0.5,
+        gae_lambda=args.gae_lambda,
+        clip_range=args.clip_range,
+        ent_coef=args.ent_coef,
+        vf_coef=args.vf_coef,
+        grad_clip=args.grad_clip,
         policy_type=args.policy, # Adicionado para o config
         include_mtf=bool(args.include_mtf),
         mtf_timeframes=tuple([s.strip() for s in args.mtf_timeframes.split(',') if s.strip()]),
         include_regime_features=bool(args.include_regimes),
         regime_adx_threshold=args.regime_adx_threshold,
         regime_vol_multiplier=args.regime_vol_multiplier,
+        # Env shaping
+        gate_on_heuristic=bool(args.gate_on_heuristic),
+        idle_penalty=args.idle_penalty,
+        idle_grace_bars=args.idle_grace,
+        idle_ramp=args.idle_ramp,
+        m2m_weight=args.m2m_weight,
+        reward_atr_norm=bool(args.reward_atr_norm),
+        atr_period=args.atr_period,
+        min_hold_bars=args.min_hold_bars,
+        reopen_cooldown_bars=args.reopen_cooldown_bars,
+        switch_penalty=args.switch_penalty,
+        switch_window_bars=args.switch_window_bars,
+        action_cost_open=args.action_cost_open,
+        action_cost_close=args.action_cost_close,
+        invalid_action_penalty=args.invalid_action_penalty,
+        fee_rate=args.fee_rate,
+        slippage_bps=args.slippage_bps,
     )
     
     groups = [s.strip() for s in args.ablation_groups.split(',') if s.strip()]
