@@ -24,6 +24,9 @@ position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_
 
 PULLBACK_LOOKBACK = 10
 
+# In-memory trade events for plotting entries/exits during this session
+TRADE_EVENTS: list[dict] = []
+
 
 def compute_signal(df: pd.DataFrame, params: dict) -> tuple[str, str]:
     """Determina se há sinal de compra ou venda no último candle fechado."""
@@ -109,7 +112,7 @@ def calculate_levels(
     return stop_loss, take_profit
 
 
-def handle_exit(exit_type: str, price: float, params: dict) -> None:
+def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
     """Fecha a posição atual e atualiza capital."""
     now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     entry_price = position_state["entry_price"]
@@ -124,6 +127,21 @@ def handle_exit(exit_type: str, price: float, params: dict) -> None:
     print(
         f"[{now_str}] PREÇO: {price:.2f} | SAÍDA: {exit_type} | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
     )
+    # Log exit marker for plotting
+    try:
+        t = pd.to_datetime(event_time)
+        # Ensure naive datetime to align with DF axis
+        if getattr(t, "tzinfo", None) is not None:
+            t = t.tz_localize(None)
+    except Exception:
+        t = datetime.now().replace(tzinfo=None)
+    TRADE_EVENTS.append({
+        "type": "exit",
+        "side": position_state.get("position") or "",
+        "time": t,
+        "price": float(price),
+        "label": exit_type,
+    })
     position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
 
 
@@ -147,9 +165,9 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
 
     if position == "long":
         if current_price <= position_state["stop_loss"]:
-            handle_exit("STOP LOSS", position_state["stop_loss"], params)
+            handle_exit("STOP LOSS", position_state["stop_loss"], params, df.iloc[-1]["Date"])
         elif current_price >= position_state["take_profit"]:
-            handle_exit("TAKE PROFIT", position_state["take_profit"], params)
+            handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
             unrealized = (current_price - position_state["entry_price"]) * params["lot_size"]
             print(
@@ -158,9 +176,9 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
             )
     else:
         if current_price >= position_state["stop_loss"]:
-            handle_exit("STOP LOSS", position_state["stop_loss"], params)
+            handle_exit("STOP LOSS", position_state["stop_loss"], params, df.iloc[-1]["Date"])
         elif current_price <= position_state["take_profit"]:
-            handle_exit("TAKE PROFIT", position_state["take_profit"], params)
+            handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
             unrealized = (position_state["entry_price"] - current_price) * params["lot_size"]
             print(
@@ -200,6 +218,21 @@ def _init_csv(csv_path: Path) -> None:
         "adx",
         "atr",
         "trend_bias",
+        # Auditoria adicional
+        "close_last_closed",
+        "uptrend",
+        "downtrend",
+        "pullback_long_ok",
+        "pullback_short_ok",
+        "allow_long",
+        "allow_short",
+        "adx_ok",
+        "atr_ok",
+        "deviation_ok",
+        # Limiares de parâmetros
+        "adx_threshold",
+        "min_atr",
+        "max_avg_deviation_pct",
     ]
     csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
 
@@ -211,7 +244,38 @@ def _append_csv(
     signal: str,
     reason: str,
     capital: float,
+    params: dict,
 ) -> None:
+    # Deriva campos adicionais conforme a lógica de compute_signal
+    c = last_closed.get("close")
+    ema_f = last_closed.get("ema_fast")
+    ema_m = last_closed.get("ema_medium")
+    ema_s = last_closed.get("ema_slow")
+
+    def _n(x):
+        return (x is not None) and (not np.isnan(x))
+
+    uptrend = _n(c) and _n(ema_f) and _n(ema_m) and _n(ema_s) and (c > ema_m) and (ema_f > ema_m) and (ema_m > ema_s)
+    downtrend = _n(c) and _n(ema_f) and _n(ema_m) and _n(ema_s) and (c < ema_m) and (ema_f < ema_m) and (ema_m < ema_s)
+    pullback_long_ok = _n(c) and _n(ema_f) and (c < ema_f)
+    pullback_short_ok = _n(c) and _n(ema_f) and (c > ema_f)
+
+    allow_long = True
+    allow_short = True
+    if params.get("use_htf_bias", True):
+        bias = last_closed.get("trend_bias")
+        if _n(bias):
+            allow_long = bias >= 0
+            allow_short = bias <= 0
+
+    # Filter checks vs parameters
+    avg_dev = last_closed.get("avg_deviation_pct")
+    adx_val = last_closed.get("adx")
+    atr_val = last_closed.get("atr")
+    deviation_ok = _n(avg_dev) and (avg_dev <= params["max_avg_deviation_pct"])
+    adx_ok = _n(adx_val) and (adx_val >= params["adx_threshold"])
+    atr_ok = _n(atr_val) and (atr_val > params.get("min_atr", 0.0))
+
     row = {
         "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         "candle_time": pd.to_datetime(last_closed.get("Date")).strftime("%Y-%m-%d %H:%M:%S")
@@ -233,6 +297,21 @@ def _append_csv(
         "adx": _fmt_float(last_closed.get("adx")),
         "atr": _fmt_float(last_closed.get("atr")),
         "trend_bias": _fmt_float(last_closed.get("trend_bias")),
+        # Campos adicionais derivados
+        "close_last_closed": _fmt_float(c),
+        "uptrend": str(bool(uptrend)),
+        "downtrend": str(bool(downtrend)),
+        "pullback_long_ok": str(bool(pullback_long_ok)),
+        "pullback_short_ok": str(bool(pullback_short_ok)),
+        "allow_long": str(bool(allow_long)),
+        "allow_short": str(bool(allow_short)),
+        "adx_ok": str(bool(adx_ok)),
+        "atr_ok": str(bool(atr_ok)),
+        "deviation_ok": str(bool(deviation_ok)),
+        # Limiares atuais da configuração
+        "adx_threshold": _fmt_float(params.get("adx_threshold")),
+        "min_atr": _fmt_float(params.get("min_atr")),
+        "max_avg_deviation_pct": _fmt_float(params.get("max_avg_deviation_pct")),
     }
     # Append with csv module to handle commas safely
     with csv_path.open("a", newline="", encoding="utf-8") as f:
@@ -293,6 +372,47 @@ def _render_png(
         if tp:
             ax.axhline(tp, color="#17becf", linestyle=":", linewidth=1.0, label="target")
 
+    # Plot trade event markers (entries/exits) within the visible window
+    t0 = plot_df["Date"].iloc[0]
+    t1 = plot_df["Date"].iloc[-1]
+    entries_long_x, entries_long_y = [], []
+    entries_short_x, entries_short_y = [], []
+    exits_long_x, exits_long_y = [], []
+    exits_short_x, exits_short_y = [], []
+    for ev in TRADE_EVENTS:
+        try:
+            ev_time = pd.to_datetime(ev.get("time")).to_pydatetime()
+        except Exception:
+            continue
+        # Ensure naive
+        if getattr(ev_time, "tzinfo", None) is not None:
+            ev_time = ev_time.replace(tzinfo=None)
+        if not (t0 <= ev_time <= t1):
+            continue
+        if ev.get("type") == "entry":
+            if ev.get("side") == "long":
+                entries_long_x.append(ev_time)
+                entries_long_y.append(ev.get("price"))
+            else:
+                entries_short_x.append(ev_time)
+                entries_short_y.append(ev.get("price"))
+        else:
+            if ev.get("side") == "long":
+                exits_long_x.append(ev_time)
+                exits_long_y.append(ev.get("price"))
+            else:
+                exits_short_x.append(ev_time)
+                exits_short_y.append(ev.get("price"))
+
+    if entries_long_x:
+        ax.scatter(entries_long_x, entries_long_y, marker="^", s=50, color="#2ca02c", edgecolor="black", linewidths=0.5, label="entry long")
+    if entries_short_x:
+        ax.scatter(entries_short_x, entries_short_y, marker="v", s=50, color="#d62728", edgecolor="black", linewidths=0.5, label="entry short")
+    if exits_long_x:
+        ax.scatter(exits_long_x, exits_long_y, marker="x", s=50, color="#2ca02c", linewidths=1.2, label="exit long")
+    if exits_short_x:
+        ax.scatter(exits_short_x, exits_short_y, marker="x", s=50, color="#d62728", linewidths=1.2, label="exit short")
+
     # Optionally show current price as well
     ax.axhline(current_price, color="#7f7f7f", linestyle="-.", linewidth=0.8, label="last price")
 
@@ -327,6 +447,15 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
                 {"position": "long", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
             )
             print(f"[{now_str}] ENTRADA LONG | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+            # Log entry marker at the time of the last closed candle
+            entry_time = df.iloc[-2]["Date"]
+            try:
+                t = pd.to_datetime(entry_time)
+                if getattr(t, "tzinfo", None) is not None:
+                    t = t.tz_localize(None)
+            except Exception:
+                t = datetime.now().replace(tzinfo=None)
+            TRADE_EVENTS.append({"type": "entry", "side": "long", "time": t, "price": float(entry_price), "label": "ENTRY"})
         else:
             print(f"[{now_str}] SINAL LONG detectado, aguardando rompimento de {entry_price:.2f}...")
     elif signal == "sell":
@@ -340,6 +469,14 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
                 {"position": "short", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
             )
             print(f"[{now_str}] ENTRADA SHORT | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
+            entry_time = df.iloc[-2]["Date"]
+            try:
+                t = pd.to_datetime(entry_time)
+                if getattr(t, "tzinfo", None) is not None:
+                    t = t.tz_localize(None)
+            except Exception:
+                t = datetime.now().replace(tzinfo=None)
+            TRADE_EVENTS.append({"type": "entry", "side": "short", "time": t, "price": float(entry_price), "label": "ENTRY"})
         else:
             print(f"[{now_str}] SINAL SHORT detectado, aguardando rompimento de {entry_price:.2f}...")
     else:
@@ -405,7 +542,7 @@ def main() -> None:
             # Audit snapshot: compute signal, append CSV, render PNG
             signal, reason = compute_signal(df, params)
             last_closed = df.iloc[-2]
-            _append_csv(csv_path, last_closed, current_price, signal, reason, position_state["capital"])
+            _append_csv(csv_path, last_closed, current_price, signal, reason, position_state["capital"], params)
             _render_png(df, current_price, params, png_path, signal, reason)
 
             time.sleep(args.poll_interval)
