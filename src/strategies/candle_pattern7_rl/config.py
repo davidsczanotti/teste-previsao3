@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -64,3 +64,12 @@ class Candle7RlConfig:
     clip_range: float = 0.2
     vf_coef: float = 0.5
     ent_coef: float = 0.01
+
+    # Multi-timeframe features
+    include_mtf: bool = False
+    mtf_timeframes: Tuple[str, ...] = ("1h", "4h")
+
+    # Regime features (trend/volatility one-hot)
+    include_regime_features: bool = False
+    regime_adx_threshold: float = 25.0
+    regime_vol_multiplier: float = 1.2

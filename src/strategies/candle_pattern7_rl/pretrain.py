@@ -8,7 +8,7 @@ import numpy as np
 
 from .config import Candle7RlConfig
 from .env import Candle7Env
-from .train_ppo import _apply, _backward_policy, _forward, _mlp_init
+from .train import _apply_grads as _apply, _mlp_backward, _mlp_forward as _forward, _mlp_init
 
 
 def build_expert_dataset(env: Candle7Env) -> dict[str, np.ndarray]:
@@ -66,25 +66,32 @@ def pretrain(cfg: Candle7RlConfig, epochs: int = 10, lr: float = 1e-3):
             batch_X = X[batch_indices]
             batch_y = y[batch_indices]
 
-            gW1, gb1, gW2, gb2, gWp, gbp, gWv, gbv = [np.zeros_like(p) for p in params]
+            # Inicializa acumuladores para gradientes
+            gW1 = np.zeros_like(params[0])
+            gb1 = np.zeros_like(params[1])
+            gW2 = np.zeros_like(params[2])
+            gb2 = np.zeros_like(params[3])
+            # Cabeça de valor não é usada no pré-treino supervisionado, mas mantemos por compatibilidade
+            gWv = np.zeros_like(params[4])
+            gbv = np.zeros_like(params[5])
 
             for obs, target_action in zip(batch_X, batch_y):
                 probs, _, cache = _forward(params, obs)
                 loss = -np.log(probs[target_action] + 1e-8)
                 total_loss += loss
 
-                # Gradiente é simplesmente o erro da classificação cruzada
-                dW1_bc, db1_bc, dW2_bc, db2_bc, dWp_bc, dbp_bc = _backward_policy(params, cache, target_action, -1.0)
+                # Usamos o backward do MLP padrão com advantage = -1.0 (gradiente de CE) e sem erro de valor
+                dW1_bc, db1_bc, dW2_bc, db2_bc, dWv_bc, dbv_bc = _mlp_backward(
+                    params, cache, int(target_action), float(-1.0), 0.0
+                )
                 gW1 += dW1_bc
                 gb1 += db1_bc
                 gW2 += dW2_bc
                 gb2 += db2_bc
-                gWp += dWp_bc
-                gbp += dbp_bc
-            # A função de pré-treino não atualiza a cabeça de valor (Wv, bv)
-            params = _apply(
-                params, (gW1, gb1, gW2, gb2, gWp, gbp, gWv, gbv), lr, clip=1.0
-            )
+                # Ignora updates de valor no pré-treino
+
+            # Aplica gradientes (mantém cabeças de valor inalteradas)
+            params = _apply(params, (gW1, gb1, gW2, gb2, gWv, gbv), lr, clip=1.0)
 
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss / len(X):.4f}")
 
@@ -98,10 +105,8 @@ def pretrain(cfg: Candle7RlConfig, epochs: int = 10, lr: float = 1e-3):
         b1=params[1],
         W2=params[2],
         b2=params[3],
-        Wp=params[4],
-        bp=params[5],
-        Wv=params[6],
-        bv=params[7],
+        Wv=params[4],
+        bv=params[5],
         config=np.array([str(asdict(cfg))], dtype=object),
     )
     print(f"Modelo pré-treinado salvo em: {out_path}")

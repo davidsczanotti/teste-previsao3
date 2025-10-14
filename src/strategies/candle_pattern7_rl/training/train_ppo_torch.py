@@ -92,6 +92,68 @@ class ActorCriticTransformer(nn.Module):
         value = self.critic(base_out)
         return action, log_prob, entropy, value
 
+class ActorCriticLSTM(nn.Module):
+    """Política Ator-Crítico baseada em LSTM para sequência de 7 candles.
+
+    Pipeline: Linear embedding por candle -> LSTM sobre a sequência ->
+    concatena com features não sequenciais -> MLP -> cabeças actor/critic.
+    """
+    def __init__(
+        self,
+        seq_input_shape: tuple[int, int],
+        non_seq_input_dim: int,
+        act_dim: int,
+        hidden_size: int = 128,
+        num_layers: int = 1,
+    ):
+        super().__init__()
+        seq_len, seq_feature_dim = seq_input_shape
+
+        self.seq_embedding = nn.Linear(seq_feature_dim, hidden_size)
+        self.lstm = nn.LSTM(
+            input_size=hidden_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+        )
+
+        self.combined_mlp = nn.Sequential(
+            self.layer_init(nn.Linear(hidden_size + non_seq_input_dim, hidden_size)),
+            nn.Tanh(),
+        )
+
+        self.actor = self.layer_init(nn.Linear(hidden_size, act_dim), std=0.01)
+        self.critic = self.layer_init(nn.Linear(hidden_size, 1), std=1.0)
+
+    def layer_init(self, layer: nn.Linear, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Linear:
+        torch.nn.init.orthogonal_(layer.weight, std)
+        torch.nn.init.constant_(layer.bias, bias_const)
+        return layer
+
+    def forward_lstm(self, seq_x: torch.Tensor, non_seq_x: torch.Tensor) -> torch.Tensor:
+        # seq_x: [B, T, F] -> embed -> [B, T, H]
+        seq_emb = self.seq_embedding(seq_x)
+        out, _ = self.lstm(seq_emb)  # out: [B, T, H]
+        last_out = out[:, -1, :]     # [B, H]
+        combined = torch.cat([last_out, non_seq_x], dim=1)
+        return self.combined_mlp(combined)
+
+    def get_value(self, x: dict[str, torch.Tensor]) -> torch.Tensor:
+        base_out = self.forward_lstm(x["sequential"], x["non_sequential"])
+        return self.critic(base_out)
+
+    def get_action_and_value(self, x: dict[str, torch.Tensor], action: Optional[torch.Tensor] = None):
+        base_out = self.forward_lstm(x["sequential"], x["non_sequential"])  # [B, H]
+        logits = self.actor(base_out)
+        probs = Categorical(logits=logits)
+        if action is None:
+            action = probs.sample()
+        log_prob = probs.log_prob(action)
+        entropy = probs.entropy()
+        value = self.critic(base_out)
+        return action, log_prob, entropy, value
+
+
 class ActorCriticMLP(nn.Module):
     """
     Política Ator-Crítico com uma arquitetura MLP (Multi-Layer Perceptron),
@@ -140,13 +202,20 @@ class ActorCriticMLP(nn.Module):
 
 # --- 2. Script Principal de Treinamento ---
 
-def ppo_train_torch(cfg: Candle7RlConfig, model_path: Optional[str] = None, save: bool = True):
+def ppo_train_torch(
+    cfg: Candle7RlConfig,
+    model_path: Optional[str] = None,
+    save: bool = True,
+    run_ablation: bool = False,
+    ablation_groups: Optional[list[str]] = None,
+):
     """Função de treinamento PPO usando PyTorch."""
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Usando dispositivo: {device}")
 
-    obs_format = "structured" if cfg.policy_type == "transformer" else "flat"
+    # Políticas que consomem sequência requerem observação estruturada
+    obs_format = "structured" if cfg.policy_type in ("transformer", "lstm") else "flat"
     env = Candle7Env(
         symbol=cfg.ticker, interval=cfg.interval, days=cfg.days,
         lot_size=cfg.lot_size, fee_rate=cfg.fee_rate, slippage_bps=cfg.slippage_bps,
@@ -157,25 +226,39 @@ def ppo_train_torch(cfg: Candle7RlConfig, model_path: Optional[str] = None, save
         switch_penalty=cfg.switch_penalty, switch_window_bars=cfg.switch_window_bars,
         episode_len=cfg.episode_len, random_start=cfg.random_start, idle_penalty=cfg.idle_penalty,
         idle_grace_bars=cfg.idle_grace_bars, idle_ramp=cfg.idle_ramp, reward_atr_norm=cfg.reward_atr_norm,
-        atr_period=cfg.atr_period, gate_on_heuristic=cfg.gate_on_heuristic, obs_format=obs_format
+        atr_period=cfg.atr_period, gate_on_heuristic=cfg.gate_on_heuristic, obs_format=obs_format,
+        include_mtf=cfg.include_mtf, mtf_timeframes=cfg.mtf_timeframes
     )
 
     obs_size = env.observation_size
     act_dim = env.action_size
 
     if cfg.policy_type == "transformer":
-        agent = ActorCriticTransformer(
-            seq_input_shape=obs_size["sequential"],
-            non_seq_input_dim=obs_size["non_sequential"],
-            act_dim=act_dim, hidden_size=cfg.hidden_size).to(device)
-    else: # mlp
+        agent = (
+            ActorCriticTransformer(
+                seq_input_shape=obs_size["sequential"],
+                non_seq_input_dim=obs_size["non_sequential"],
+                act_dim=act_dim,
+                hidden_size=cfg.hidden_size,
+            ).to(device)
+        )
+    elif cfg.policy_type == "lstm":
+        agent = (
+            ActorCriticLSTM(
+                seq_input_shape=obs_size["sequential"],
+                non_seq_input_dim=obs_size["non_sequential"],
+                act_dim=act_dim,
+                hidden_size=cfg.hidden_size,
+            ).to(device)
+        )
+    else:  # mlp
         agent = ActorCriticMLP(obs_size, act_dim, cfg.hidden_size).to(device)
     
     optimizer = torch.optim.Adam(agent.parameters(), lr=cfg.learning_rate, eps=1e-5)
     
     # A normalização é feita no numpy, então não precisa de device
-    if cfg.policy_type == 'transformer':
-        # A normalização será aplicada apenas na parte não sequencial
+    if cfg.policy_type in ("transformer", "lstm"):
+        # Normaliza apenas a parte não sequencial
         normalizer = RunningNorm(obs_size["non_sequential"])
     else:
         normalizer = RunningNorm(obs_size)
@@ -326,11 +409,48 @@ def ppo_train_torch(cfg: Candle7RlConfig, model_path: Optional[str] = None, save
         }, save_path)
         print(f"Modelo salvo em {save_path}")
 
+        # Optional: run ablation and save JSON
+        if run_ablation:
+            try:
+                from . import ablation as abl
+                policy_fn, policy_type, _ = abl.load_policy(save_path)
+                env_kwargs = dict(
+                    symbol=cfg.ticker,
+                    interval=cfg.interval,
+                    days=cfg.days,
+                    episode_len=cfg.episode_len,
+                    random_start=False,
+                    include_mtf=cfg.include_mtf,
+                    mtf_timeframes=cfg.mtf_timeframes,
+                    include_regime_features=cfg.include_regime_features,
+                    obs_format=("structured" if cfg.policy_type in ("transformer", "lstm") else "flat"),
+                )
+                baseline_env = Candle7Env(**env_kwargs)
+                baseline = abl.run_eval(baseline_env, policy_fn)
+                groups = ablation_groups or ["seq", "non_seq_core", "non_seq_mtf", "non_seq_regime", "pos"]
+                results = {"baseline": baseline}
+                for g in groups:
+                    env = Candle7Env(**env_kwargs, ablation_groups=[g])
+                    res = abl.run_eval(env, policy_fn)
+                    results[g] = res
+                out_json = os.path.join(out_dir, f"ablation_{os.path.basename(save_path)}.json")
+                with open(out_json, "w", encoding="utf-8") as f:
+                    json.dump(results, f, indent=2)
+                print(f"Ablation salvo em {out_json}")
+            except Exception as e:
+                print(f"WARN: Falha ao rodar ablação automática: {e}")
+
 
 if __name__ == "__main__":
     # Argumentos para manter compatibilidade com o script original
     parser = argparse.ArgumentParser(description="Train PPO agent (PyTorch) on Candle7Env")
-    parser.add_argument("--policy", type=str, default="mlp", choices=["mlp", "transformer"], help="Arquitetura da política a ser usada (mlp ou transformer).")
+    parser.add_argument(
+        "--policy",
+        type=str,
+        default="mlp",
+        choices=["mlp", "transformer", "lstm"],
+        help="Arquitetura da política (mlp | transformer | lstm).",
+    )
     parser.add_argument("--ticker", default="BTCUSDT")
     parser.add_argument("--interval", default="15m")
     parser.add_argument("--days", type=int, default=365) # Menor para testes iniciais
@@ -340,6 +460,26 @@ if __name__ == "__main__":
     parser.add_argument("--episode_len", type=int, default=2048)
     parser.add_argument("--long_only", action="store_true")
     parser.add_argument("--model", type=str, default=None, help="Caminho para o modelo .pt a ser carregado")
+    # Multi-timeframe
+    parser.add_argument("--include_mtf", action="store_true", help="Inclui features multi-timeframe (1h,4h)")
+    parser.add_argument(
+        "--mtf_timeframes",
+        type=str,
+        default="1h,4h",
+        help="Lista separada por vírgula de timeframes para MTF (ex: '1h,4h')",
+    )
+    # Regimes
+    parser.add_argument("--include_regimes", action="store_true", help="Inclui one-hot de regimes (tendência/volatilidade)")
+    parser.add_argument("--regime_adx_threshold", type=float, default=25.0)
+    parser.add_argument("--regime_vol_multiplier", type=float, default=1.2)
+    # Ablation
+    parser.add_argument("--ablation", action="store_true", help="Roda ablação automática ao fim do treino")
+    parser.add_argument(
+        "--ablation_groups",
+        type=str,
+        default="seq,non_seq_core,non_seq_mtf,non_seq_regime,pos",
+        help="Grupos de ablação separados por vírgula",
+    )
     # Adicione outros argumentos do Candle7RlConfig conforme necessário
     
     args = parser.parse_args()
@@ -363,6 +503,12 @@ if __name__ == "__main__":
         vf_coef=0.5,
         grad_clip=0.5,
         policy_type=args.policy, # Adicionado para o config
+        include_mtf=bool(args.include_mtf),
+        mtf_timeframes=tuple([s.strip() for s in args.mtf_timeframes.split(',') if s.strip()]),
+        include_regime_features=bool(args.include_regimes),
+        regime_adx_threshold=args.regime_adx_threshold,
+        regime_vol_multiplier=args.regime_vol_multiplier,
     )
     
-    ppo_train_torch(cfg, model_path=args.model)
+    groups = [s.strip() for s in args.ablation_groups.split(',') if s.strip()]
+    ppo_train_torch(cfg, model_path=args.model, run_ablation=bool(args.ablation), ablation_groups=groups)

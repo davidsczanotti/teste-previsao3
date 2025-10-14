@@ -217,6 +217,12 @@ class Candle7Env:
         episode_len: Optional[int] = 2048,
         random_start: bool = True,
         obs_format: str = "flat", # Novo parâmetro: 'flat' ou 'structured'
+        include_mtf: bool = False,
+        mtf_timeframes: tuple[str, ...] = ("1h", "4h"),
+        include_regime_features: bool = False,
+        regime_adx_threshold: float = 25.0,
+        regime_vol_multiplier: float = 1.2,
+        ablation_groups: Optional[List[str]] = None,
         df: Optional[pd.DataFrame] = None,
     ) -> None:
         self.symbol = symbol
@@ -249,6 +255,12 @@ class Candle7Env:
         self.episode_len = int(episode_len) if episode_len is not None else None
         self.random_start = bool(random_start)
         self.obs_format = obs_format
+        self.include_mtf = bool(include_mtf)
+        self.mtf_timeframes = tuple(mtf_timeframes)
+        self.include_regime_features = bool(include_regime_features)
+        self.regime_adx_threshold = float(regime_adx_threshold)
+        self.regime_vol_multiplier = float(regime_vol_multiplier)
+        self._ablation_groups = set(ablation_groups or [])
 
         # runtime
         self._df: Optional[pd.DataFrame] = df
@@ -269,6 +281,59 @@ class Candle7Env:
         self._bars_since_entry: int = 0
         self._bars_since_exit: int = 0
         self.initial_capital: float = 10000.0
+        # feature layout bookkeeping
+        self._seq_flat_len: int = 7 * 4
+        self._non_seq_base_dim: int = 0
+        self._mtf_dim_count: int = 0
+        self._regime_dim_count: int = 0
+
+    def _compute_mtf_features_for(self, df_tf: pd.DataFrame, tf_label: str) -> pd.DataFrame:
+        """Compute multi-timeframe features on a higher timeframe dataframe.
+
+        Returns a DataFrame with 'Date' and engineered MTF columns with names
+        prefixed by f"mtf_{tf_label}_".
+        """
+        if df_tf.empty:
+            return pd.DataFrame({"Date": []})
+
+        d = df_tf.sort_values("Date").copy()
+        # Indicators
+        rsi = d.ta.rsi(length=14)
+        adx = d.ta.adx(length=14)["ADX_14"]
+        # ATR via pandas-ta (falls back to simple TR if needed)
+        try:
+            atr = d.ta.atr(length=14)
+        except Exception:
+            high = d["high"].astype(float)
+            low = d["low"].astype(float)
+            close = d["close"].astype(float)
+            prev_close = close.shift(1)
+            tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+            atr = tr.ewm(alpha=1 / 14, adjust=False).mean()
+
+        sma20 = d.ta.sma(length=20)
+        sma50 = d.ta.sma(length=50)
+
+        close = d["close"].astype(float)
+        # Features
+        dist_sma20 = (close - sma20) / sma20.replace(0, pd.NA)
+        slope_sma20 = sma20 - sma20.shift(1)
+        # Normalized indicators
+        rsi_n = (rsi / 100.0).fillna(0.5)
+        adx_n = (adx / 100.0).fillna(0.5)
+        atr_rel_close = (atr / close.replace(0, pd.NA)).fillna(0.0)
+
+        out = pd.DataFrame(
+            {
+                "Date": d["Date"],
+                f"mtf_{tf_label}_dist_sma20": dist_sma20.astype(float),
+                f"mtf_{tf_label}_slope_sma20": slope_sma20.astype(float),
+                f"mtf_{tf_label}_rsi14": rsi_n.astype(float),
+                f"mtf_{tf_label}_adx14": adx_n.astype(float),
+                f"mtf_{tf_label}_atr14_rel_close": atr_rel_close.astype(float),
+            }
+        )
+        return out
 
     def _ensure_data(self) -> None:
         if self._df is None:
@@ -310,11 +375,81 @@ class Candle7Env:
             opens = self._df["open"].astype(float).to_numpy()
             self._opens = opens[self._start_idx :].astype(np.float32)
 
+            # Build base arrays (and optionally append MTF/Regime features to non-sequential part)
             if self.obs_format == 'flat':
                 seq = features_dict["sequential"].reshape(len(closes), -1)
                 non_seq = features_dict["non_sequential"]
+                self._non_seq_base_dim = non_seq.shape[1]
+                if self.include_mtf:
+                    # Align MTF features and append
+                    base_dates = self._df[["Date"]].iloc[self._start_idx :].reset_index(drop=True)
+                    mtf_cols = []
+                    for tf in self.mtf_timeframes:
+                        try:
+                            start_str = str(self._df["Date"].iloc[self._start_idx])
+                            end_str = str(self._df["Date"].iloc[-1])
+                            mtf_df = get_historical_klines(self.symbol, tf, start_str, end_str)
+                            if not mtf_df.empty:
+                                feats = self._compute_mtf_features_for(mtf_df, tf)
+                                aligned = pd.merge_asof(
+                                    base_dates.sort_values("Date"),
+                                    feats.sort_values("Date"),
+                                    on="Date",
+                                    direction="backward",
+                                )
+                                aligned = aligned.ffill().bfill()
+                                # collect all columns except Date
+                                mtf_cols.append(aligned.drop(columns=["Date"]))
+                        except Exception:
+                            continue
+                    if mtf_cols:
+                        mtf_mat = pd.concat(mtf_cols, axis=1).to_numpy(dtype=np.float32)
+                        non_seq = np.concatenate([non_seq, mtf_mat], axis=1)
+                        self._mtf_dim_count = mtf_mat.shape[1]
+                # Regime features
+                if self.include_regime_features:
+                    regime_mat = self._compute_regime_features()
+                    non_seq = np.concatenate([non_seq, regime_mat], axis=1)
+                    self._regime_dim_count = regime_mat.shape[1]
                 self._base_features = np.concatenate([seq, non_seq], axis=1).astype(np.float32)
             else:  # structured
+                non_seq = features_dict["non_sequential"]
+                self._non_seq_base_dim = non_seq.shape[1]
+                if self.include_mtf:
+                    base_dates = self._df[["Date"]].iloc[self._start_idx :].reset_index(drop=True)
+                    mtf_cols = []
+                    mtf_names: list[str] = []
+                    for tf in self.mtf_timeframes:
+                        try:
+                            start_str = str(self._df["Date"].iloc[self._start_idx])
+                            end_str = str(self._df["Date"].iloc[-1])
+                            mtf_df = get_historical_klines(self.symbol, tf, start_str, end_str)
+                            if not mtf_df.empty:
+                                feats = self._compute_mtf_features_for(mtf_df, tf)
+                                aligned = pd.merge_asof(
+                                    base_dates.sort_values("Date"),
+                                    feats.sort_values("Date"),
+                                    on="Date",
+                                    direction="backward",
+                                )
+                                aligned = aligned.ffill().bfill()
+                                mtf_names.extend([c for c in aligned.columns if c != "Date"])
+                                mtf_cols.append(aligned.drop(columns=["Date"]))
+                        except Exception:
+                            continue
+                    if mtf_cols:
+                        mtf_mat = pd.concat(mtf_cols, axis=1).to_numpy(dtype=np.float32)
+                        non_seq = np.concatenate([non_seq, mtf_mat], axis=1)
+                        self._mtf_dim_count = mtf_mat.shape[1]
+                # Regime features
+                if self.include_regime_features:
+                    regime_mat = self._compute_regime_features()
+                    non_seq = np.concatenate([non_seq, regime_mat], axis=1)
+                    self._regime_dim_count = regime_mat.shape[1]
+                features_dict = {
+                    "sequential": features_dict["sequential"],
+                    "non_sequential": non_seq.astype(np.float32),
+                }
                 self._base_features = features_dict
 
             high = self._df["high"].astype(float)
@@ -327,6 +462,41 @@ class Candle7Env:
 
             # Pre-calculate heuristic actions
             self._heuristic_actions = self._get_heuristic_actions(self._df)[self._start_idx :].astype(np.int32)
+
+    def _compute_regime_features(self) -> np.ndarray:
+        # Compute per-bar regime one-hot features aligned with base feature rows
+        assert self._df is not None
+        close = self._df["close"].astype(float).to_numpy()[self._start_idx :]
+        # Trend via long MA and ADX
+        ma_long_series = self._df.ta.sma(length=40)
+        adx_series = self._df.ta.adx(length=14)["ADX_14"]
+        ma_long_vals = ma_long_series.iloc[self._start_idx :].astype(float).to_numpy()
+        adx_vals = adx_series.iloc[self._start_idx :].astype(float).to_numpy()
+        is_uptrend = close > ma_long_vals
+        is_downtrend = close < ma_long_vals
+        is_trending = adx_vals > self.regime_adx_threshold
+        trend_up = (is_trending & is_uptrend).astype(np.float32)
+        trend_down = (is_trending & is_downtrend).astype(np.float32)
+        trend_flat = (~is_trending).astype(np.float32)
+        # Volatility via ATR vs median
+        if self._atr is None:
+            # compute ATR quickly
+            high = self._df["high"].astype(float)
+            low = self._df["low"].astype(float)
+            close_s = self._df["close"].astype(float)
+            prev_close = close_s.shift(1)
+            tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+            atr = tr.ewm(alpha=1 / max(1, self.atr_period), adjust=False).mean().bfill().fillna(0.0)
+            atr_vals = atr.values[self._start_idx :].astype(np.float32)
+        else:
+            atr_vals = self._atr
+        baseline = float(np.median(atr_vals)) if len(atr_vals) > 0 else 1.0
+        threshold = baseline * self.regime_vol_multiplier
+        vol_high = (atr_vals > threshold).astype(np.float32)
+        vol_low = (atr_vals <= threshold).astype(np.float32)
+        regime = np.stack([trend_up, trend_down, trend_flat, vol_high, vol_low], axis=1)
+        regime = np.nan_to_num(regime, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        return regime
 
     def _get_heuristic_actions(self, df: pd.DataFrame) -> np.ndarray:
         """Calculates heuristic actions for the entire dataframe."""
@@ -439,14 +609,49 @@ class Candle7Env:
             assert isinstance(self._base_features, dict)
             seq_obs = self._base_features["sequential"][self._i]
             non_seq_obs = self._base_features["non_sequential"][self._i]
-            return {
-                "sequential": seq_obs,
-                "non_sequential": np.concatenate([non_seq_obs, pos_features]),
-            }
+            # apply ablation masks (structured)
+            if "seq" in self._ablation_groups:
+                seq_obs = np.zeros_like(seq_obs)
+            non_seq_total = np.concatenate([non_seq_obs, pos_features])
+            # core
+            if "non_seq_core" in self._ablation_groups and self._non_seq_base_dim > 0:
+                non_seq_total[: self._non_seq_base_dim] = 0.0
+            # mtf
+            if "non_seq_mtf" in self._ablation_groups and self._mtf_dim_count > 0:
+                start = self._non_seq_base_dim
+                non_seq_total[start : start + self._mtf_dim_count] = 0.0
+            # regime
+            if "non_seq_regime" in self._ablation_groups and self._regime_dim_count > 0:
+                start = self._non_seq_base_dim + self._mtf_dim_count
+                non_seq_total[start : start + self._regime_dim_count] = 0.0
+            # pos flags
+            if "pos" in self._ablation_groups:
+                non_seq_total[-3:] = 0.0
+            return {"sequential": seq_obs, "non_sequential": non_seq_total}
         else:  # flat
             assert isinstance(self._base_features, np.ndarray)
-            base = self._base_features[self._i]
-            return np.concatenate([base, pos_features]).astype(np.float32)
+            base = self._base_features[self._i].copy()
+            # apply ablation masks (flat): layout = [seq_flat | non_seq_core | non_seq_mtf | non_seq_regime] + pos
+            # seq
+            if "seq" in self._ablation_groups:
+                base[: self._seq_flat_len] = 0.0
+            # core
+            core_start = self._seq_flat_len
+            if "non_seq_core" in self._ablation_groups and self._non_seq_base_dim > 0:
+                base[core_start : core_start + self._non_seq_base_dim] = 0.0
+            # mtf
+            if "non_seq_mtf" in self._ablation_groups and self._mtf_dim_count > 0:
+                start = core_start + self._non_seq_base_dim
+                base[start : start + self._mtf_dim_count] = 0.0
+            # regime
+            if "non_seq_regime" in self._ablation_groups and self._regime_dim_count > 0:
+                start = core_start + self._non_seq_base_dim + self._mtf_dim_count
+                base[start : start + self._regime_dim_count] = 0.0
+            out = np.concatenate([base, pos_features]).astype(np.float32)
+            # pos
+            if "pos" in self._ablation_groups:
+                out[-3:] = 0.0
+            return out
 
     def step(self, action: int) -> StepResult:
         assert self._base_features is not None and self._closes is not None

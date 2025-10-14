@@ -8,71 +8,15 @@ import numpy as np
 import pandas as pd
 
 from .env import Candle7Env
-
-# Funções forward dos modelos para carregar o cérebro do agente
-from .train import _mlp_forward as reinforce_forward
-from .train_ppo import RunningNorm as PpoRunningNorm
-from .train_ppo import _forward as ppo_forward
+from . import ablation as abl
 
 
 def load_agent_policy(model_path: str):
-    """
-    Carrega os pesos e a função de política de um agente salvo.
-    Detecta se o modelo é PPO ou REINFORCE pelo nome do arquivo.
-    """
+    """Carrega a política salvo (.npz REINFORCE NumPy ou .pt PPO PyTorch)."""
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Arquivo do modelo não encontrado: {model_path}")
-
-    data = np.load(model_path, allow_pickle=True)
-    is_ppo = "ppo_" in os.path.basename(model_path).lower()
-
-    if is_ppo:
-        print("INFO: Carregando agente PPO.")
-        if "Wp" in data:
-            # New format
-            params = [
-                data["W1"].astype(np.float32),
-                data["b1"].astype(np.float32),
-                data["W2"].astype(np.float32),
-                data["b2"].astype(np.float32),
-                data["Wp"].astype(np.float32),
-                data["bp"].astype(np.float32),
-                data["Wv"].astype(np.float32),
-                data["bv"].astype(np.float32),
-            ]
-        else:
-            # Old format
-            hidden = data["W1"].shape[1]
-            W1 = data["W1"].astype(np.float32)
-            b1 = data["b1"].astype(np.float32)
-            Wp_old = data["W2"].astype(np.float32)
-            bp_old = data["b2"].astype(np.float32)
-            Wv = data["Wv"].astype(np.float32)
-            bv = data["bv"].astype(np.float32)
-            W2 = np.zeros((hidden, hidden), dtype=np.float32)
-            b2 = np.zeros((hidden,), dtype=np.float32)
-            params = [W1, b1, W2, b2, Wp_old, bp_old, Wv, bv]
-        normalizer = PpoRunningNorm(size=params[0].shape[0])
-        if "norm_mean" in data:
-            normalizer.mean = data["norm_mean"]
-            normalizer.M2 = data["norm_M2"]
-            normalizer.count = data["norm_count"][0]
-
-        def policy_fn(obs):
-            obs_norm = normalizer.normalize(obs)
-            probs, _, _ = ppo_forward(params, obs_norm)
-            return probs
-
-        return policy_fn
-    else:
-        print("INFO: Carregando agente REINFORCE.")
-        params = [data["W1"], data["b1"], data["W2"], data["b2"], data["Wv"], data["bv"]]
-
-        def policy_fn(obs):
-            probs, _, _ = reinforce_forward(params, obs)
-            return probs
-
-        return policy_fn
+    policy_fn, policy_type, cfg = abl.load_policy(model_path)
+    return policy_fn, policy_type, cfg
 
 
 def run_visual_backtest(policy_fn, env: Candle7Env, max_steps: int | None = None):
@@ -210,24 +154,56 @@ if __name__ == "__main__":
     parser.add_argument("--ticker", default="BTCUSDT")
     parser.add_argument("--interval", default="15m")
     parser.add_argument("--days", type=int, default=90, help="Período para o backtest visual")
-    parser.add_argument("--model", help="Caminho para o arquivo .npz do agente treinado", required=True)
+    parser.add_argument("--model", help="Caminho para o arquivo do agente (.npz ou .pt)", required=True)
+    # Overrides seguros (apenas se compatíveis com o modelo salvo); caso contrário, ignorados
+    parser.add_argument("--include_mtf", choices=["auto", "true", "false"], default="auto",
+                        help="Força MTF (se compatível com o modelo); padrão: auto (usa cfg salvo)")
+    parser.add_argument("--mtf_timeframes", type=str, default=None,
+                        help="Lista separada por vírgula para MTF (ex: '1h,4h'); só aplica se compatível")
+    parser.add_argument("--include_regimes", choices=["auto", "true", "false"], default="auto",
+                        help="Força regimes (se compatível com o modelo); padrão: auto (usa cfg salvo)")
     args = parser.parse_args()
 
     # 1. Carrega a política do agente
-    policy = load_agent_policy(args.model)
+    policy_fn, policy_type, cfg = load_agent_policy(args.model)
 
     # 2. Cria o ambiente para o período de backtest
+    obs_format = "structured" if policy_type in ("transformer", "lstm") else "flat"
+    # Resolve overrides com segurança de formato
+    cfg_include_mtf = bool(cfg.get("include_mtf", False))
+    cfg_mtf_tfs = tuple(cfg.get("mtf_timeframes", ("1h", "4h")))
+    cfg_include_reg = bool(cfg.get("include_regime_features", False))
+
+    def resolve_bool(opt: str, cfg_val: bool, name: str) -> bool:
+        if opt == "auto":
+            return cfg_val
+        want = (opt == "true")
+        if want != cfg_val:
+            print(f"WARN: Ignorando --{name}={opt} por incompatibilidade com o modelo salvo (usando {cfg_val}).")
+            return cfg_val
+        return want
+
+    use_mtf = resolve_bool(args.include_mtf, cfg_include_mtf, "include_mtf")
+    use_reg = resolve_bool(args.include_regimes, cfg_include_reg, "include_regimes")
+
+    if args.mtf_timeframes and tuple([s.strip() for s in args.mtf_timeframes.split(',') if s.strip()]) != cfg_mtf_tfs:
+        print("WARN: Ignorando --mtf_timeframes (incompatível com o modelo salvo).")
+
     env = Candle7Env(
         symbol=args.ticker,
         interval=args.interval,
         days=args.days,
         episode_len=None,  # Roda o período todo
         random_start=False,  # Começa do início
+        obs_format=obs_format,
+        include_mtf=use_mtf,
+        mtf_timeframes=cfg_mtf_tfs,
+        include_regime_features=use_reg,
     )
 
     # 3. Executa o backtest
     print("Executando backtest visual...")
-    backtest_df = run_visual_backtest(policy, env)
+    backtest_df = run_visual_backtest(policy_fn, env)
 
     # 4. Plota os resultados
     print("Gerando gráfico...")

@@ -26,6 +26,7 @@ PULLBACK_LOOKBACK = 10
 
 # In-memory trade events for plotting entries/exits during this session
 TRADE_EVENTS: list[dict] = []
+TRADES_CSV_PATH: Path | None = None
 
 
 def compute_signal(df: pd.DataFrame, params: dict) -> tuple[str, str]:
@@ -142,6 +143,19 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
         "price": float(price),
         "label": exit_type,
     })
+    # Persist trade to CSV
+    _append_trade(
+        event_time=t,
+        event_type="exit",
+        subtype=exit_type,
+        side=position_state.get("position") or "",
+        price=float(price),
+        entry_price=float(entry_price),
+        stop_loss=float(position_state.get("stop_loss", 0.0)),
+        take_profit=float(position_state.get("take_profit", 0.0)),
+        capital=float(position_state.get("capital", 0.0)),
+        reason="",
+    )
     position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
 
 
@@ -156,17 +170,25 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
     trail_mult = params.get("atr_trail_multiplier", 0.0)
 
     if trail_mult > 0 and not np.isnan(atr_value):
-        if position == "long":
-            trailing = current_price - atr_value * trail_mult
-            position_state["stop_loss"] = max(position_state["stop_loss"], trailing)
-        else:
-            trailing = current_price + atr_value * trail_mult
-            position_state["stop_loss"] = min(position_state["stop_loss"], trailing)
+        # Alinhar com o backtest: trailing baseado no close do candle atual
+        close_now = last.get("close", np.nan)
+        if not np.isnan(close_now):
+            if position == "long":
+                trailing = close_now - atr_value * trail_mult
+                position_state["stop_loss"] = max(position_state["stop_loss"], trailing)
+            else:
+                trailing = close_now + atr_value * trail_mult
+                position_state["stop_loss"] = min(position_state["stop_loss"], trailing)
+
+    # Use current candle extremes to avoid missing touches between polls
+    cur_candle = df.iloc[-1]
+    cur_high = cur_candle.get("high", np.nan)
+    cur_low = cur_candle.get("low", np.nan)
 
     if position == "long":
-        if current_price <= position_state["stop_loss"]:
+        if not np.isnan(cur_low) and cur_low <= position_state["stop_loss"]:
             handle_exit("STOP LOSS", position_state["stop_loss"], params, df.iloc[-1]["Date"])
-        elif current_price >= position_state["take_profit"]:
+        elif not np.isnan(cur_high) and cur_high >= position_state["take_profit"]:
             handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
             unrealized = (current_price - position_state["entry_price"]) * params["lot_size"]
@@ -175,9 +197,9 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
                 f"ALVO: {position_state['take_profit']:.2f} | P&L flutuante: ${unrealized:.2f}"
             )
     else:
-        if current_price >= position_state["stop_loss"]:
+        if not np.isnan(cur_high) and cur_high >= position_state["stop_loss"]:
             handle_exit("STOP LOSS", position_state["stop_loss"], params, df.iloc[-1]["Date"])
-        elif current_price <= position_state["take_profit"]:
+        elif not np.isnan(cur_low) and cur_low <= position_state["take_profit"]:
             handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
             unrealized = (position_state["entry_price"] - current_price) * params["lot_size"]
@@ -195,6 +217,29 @@ def _ensure_live_paths(ticker: str, interval: str) -> tuple[Path, Path]:
     csv_path = live_dir / f"{stem}.csv"
     png_path = live_dir / f"{stem}.png"
     return csv_path, png_path
+
+
+def _ensure_trades_csv(ticker: str, interval: str) -> Path:
+    live_dir = Path("reports") / "live"
+    live_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"ALBROOKS_{ticker}_{interval}_trades.csv"
+    path = live_dir / stem
+    if not path.exists():
+        header = [
+            "timestamp_utc",
+            "event_time",
+            "type",
+            "subtype",
+            "side",
+            "price",
+            "entry_price",
+            "stop_loss",
+            "take_profit",
+            "capital",
+            "reason",
+        ]
+        path.write_text(",".join(header) + "\n", encoding="utf-8")
+    return path
 
 
 def _init_csv(csv_path: Path) -> None:
@@ -220,6 +265,10 @@ def _init_csv(csv_path: Path) -> None:
         "trend_bias",
         # Auditoria adicional
         "close_last_closed",
+        "high_last_closed",
+        "low_last_closed",
+        "high_current",
+        "low_current",
         "uptrend",
         "downtrend",
         "pullback_long_ok",
@@ -244,10 +293,14 @@ def _append_csv(
     signal: str,
     reason: str,
     capital: float,
+    cur_high: float,
+    cur_low: float,
     params: dict,
 ) -> None:
     # Deriva campos adicionais conforme a lógica de compute_signal
     c = last_closed.get("close")
+    h = last_closed.get("high")
+    l = last_closed.get("low")
     ema_f = last_closed.get("ema_fast")
     ema_m = last_closed.get("ema_medium")
     ema_s = last_closed.get("ema_slow")
@@ -299,6 +352,10 @@ def _append_csv(
         "trend_bias": _fmt_float(last_closed.get("trend_bias")),
         # Campos adicionais derivados
         "close_last_closed": _fmt_float(c),
+        "high_last_closed": _fmt_float(h),
+        "low_last_closed": _fmt_float(l),
+        "high_current": _fmt_float(cur_high),
+        "low_current": _fmt_float(cur_low),
         "uptrend": str(bool(uptrend)),
         "downtrend": str(bool(downtrend)),
         "pullback_long_ok": str(bool(pullback_long_ok)),
@@ -315,6 +372,46 @@ def _append_csv(
     }
     # Append with csv module to handle commas safely
     with csv_path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(row.keys()))
+        w.writerow(row)
+
+
+def _append_trade(
+    event_time,
+    event_type: str,
+    subtype: str,
+    side: str,
+    price: float,
+    entry_price: float,
+    stop_loss: float,
+    take_profit: float,
+    capital: float,
+    reason: str = "",
+) -> None:
+    global TRADES_CSV_PATH
+    if TRADES_CSV_PATH is None:
+        return
+    try:
+        t = pd.to_datetime(event_time)
+        if getattr(t, "tzinfo", None) is not None:
+            t = t.tz_localize(None)
+        event_time_str = t.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        event_time_str = ""
+    row = {
+        "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
+        "event_time": event_time_str,
+        "type": event_type,
+        "subtype": subtype,
+        "side": side,
+        "price": f"{float(price):.8f}",
+        "entry_price": f"{float(entry_price):.8f}",
+        "stop_loss": f"{float(stop_loss):.8f}",
+        "take_profit": f"{float(take_profit):.8f}",
+        "capital": f"{float(capital):.2f}",
+        "reason": reason,
+    }
+    with TRADES_CSV_PATH.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(row.keys()))
         w.writerow(row)
 
@@ -438,7 +535,8 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
 
     if signal == "buy":
         entry_price = df.iloc[-2]["high"]
-        if current_price >= entry_price:
+        # Confirm breakout using current candle high to avoid missing fast touches
+        if df.iloc[-1]["high"] >= entry_price:
             stop, target = calculate_levels(df, params, "long", entry_price)
             if stop is None or target is None:
                 print(f"[{now_str}] SINAL LONG descartado (níveis inválidos).")
@@ -456,11 +554,25 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
             except Exception:
                 t = datetime.now().replace(tzinfo=None)
             TRADE_EVENTS.append({"type": "entry", "side": "long", "time": t, "price": float(entry_price), "label": "ENTRY"})
+            # Persist entry to trades CSV
+            _append_trade(
+                event_time=t,
+                event_type="entry",
+                subtype="ENTRY",
+                side="long",
+                price=float(entry_price),
+                entry_price=float(entry_price),
+                stop_loss=float(stop),
+                take_profit=float(target),
+                capital=float(position_state.get("capital", 0.0)),
+                reason=reason,
+            )
         else:
             print(f"[{now_str}] SINAL LONG detectado, aguardando rompimento de {entry_price:.2f}...")
     elif signal == "sell":
         entry_price = df.iloc[-2]["low"]
-        if current_price <= entry_price:
+        # Confirm breakout using current candle low to avoid missing fast touches
+        if df.iloc[-1]["low"] <= entry_price:
             stop, target = calculate_levels(df, params, "short", entry_price)
             if stop is None or target is None:
                 print(f"[{now_str}] SINAL SHORT descartado (níveis inválidos).")
@@ -477,6 +589,18 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
             except Exception:
                 t = datetime.now().replace(tzinfo=None)
             TRADE_EVENTS.append({"type": "entry", "side": "short", "time": t, "price": float(entry_price), "label": "ENTRY"})
+            _append_trade(
+                event_time=t,
+                event_type="entry",
+                subtype="ENTRY",
+                side="short",
+                price=float(entry_price),
+                entry_price=float(entry_price),
+                stop_loss=float(stop),
+                take_profit=float(target),
+                capital=float(position_state.get("capital", 0.0)),
+                reason=reason,
+            )
         else:
             print(f"[{now_str}] SINAL SHORT detectado, aguardando rompimento de {entry_price:.2f}...")
     else:
@@ -515,6 +639,9 @@ def main() -> None:
     # Prepare live outputs (CSV overwritten on each run, PNG overwritten on each cycle)
     csv_path, png_path = _ensure_live_paths(args.ticker, interval)
     _init_csv(csv_path)
+    # Prepare trades CSV (append-only)
+    global TRADES_CSV_PATH
+    TRADES_CSV_PATH = _ensure_trades_csv(args.ticker, interval)
 
     interval_minutes = 1
 
@@ -542,7 +669,19 @@ def main() -> None:
             # Audit snapshot: compute signal, append CSV, render PNG
             signal, reason = compute_signal(df, params)
             last_closed = df.iloc[-2]
-            _append_csv(csv_path, last_closed, current_price, signal, reason, position_state["capital"], params)
+            cur_high = df.iloc[-1].get("high")
+            cur_low = df.iloc[-1].get("low")
+            _append_csv(
+                csv_path,
+                last_closed,
+                current_price,
+                signal,
+                reason,
+                position_state["capital"],
+                cur_high,
+                cur_low,
+                params,
+            )
             _render_png(df, current_price, params, png_path, signal, reason)
 
             time.sleep(args.poll_interval)

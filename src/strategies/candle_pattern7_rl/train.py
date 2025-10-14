@@ -120,6 +120,8 @@ def train(config: Optional[Candle7RlConfig] = None, model_path: Optional[str] = 
         reward_atr_norm=cfg.reward_atr_norm,
         atr_period=cfg.atr_period,
         gate_on_heuristic=cfg.gate_on_heuristic,
+        include_mtf=cfg.include_mtf,
+        mtf_timeframes=cfg.mtf_timeframes,
     )
 
     obs = env.reset(seed=cfg.seed)
@@ -364,6 +366,26 @@ if __name__ == "__main__":
         action="store_true",
         help="Permite abrir posição apenas quando a heurística 7-candles concordar",
     )
+    # Multi-timeframe
+    parser.add_argument("--include_mtf", action="store_true", help="Inclui features multi-timeframe (1h,4h)")
+    parser.add_argument(
+        "--mtf_timeframes",
+        type=str,
+        default="1h,4h",
+        help="Lista separada por vírgula de timeframes para MTF (ex: '1h,4h')",
+    )
+    # Regimes
+    parser.add_argument("--include_regimes", action="store_true", help="Inclui one-hot de regimes (tendência/volatilidade)")
+    parser.add_argument("--regime_adx_threshold", type=float, default=25.0)
+    parser.add_argument("--regime_vol_multiplier", type=float, default=1.2)
+    # Ablation
+    parser.add_argument("--ablation", action="store_true", help="Roda ablação automática ao fim do treino")
+    parser.add_argument(
+        "--ablation_groups",
+        type=str,
+        default="seq,non_seq_core,non_seq_mtf,non_seq_regime,pos",
+        help="Grupos de ablação separados por vírgula",
+    )
     # resume/warm-start
     parser.add_argument("--model", type=str, default=None, help="Caminho para .npz salvo para continuar o treinamento")
     args = parser.parse_args()
@@ -395,6 +417,43 @@ if __name__ == "__main__":
         reward_atr_norm=args.reward_atr_norm,
         atr_period=args.atr_period,
         gate_on_heuristic=args.gate_on_heuristic,
+        include_mtf=bool(args.include_mtf),
+        mtf_timeframes=tuple([s.strip() for s in args.mtf_timeframes.split(',') if s.strip()]),
+        include_regime_features=bool(args.include_regimes),
+        regime_adx_threshold=args.regime_adx_threshold,
+        regime_vol_multiplier=args.regime_vol_multiplier,
     )
     # pass idle shaping to env via train()
-    train(cfg, model_path=args.model)
+    res = train(cfg, model_path=args.model)
+    if args.ablation and res and res.get("model_path"):
+        try:
+            from . import ablation as abl
+            model_path = res["model_path"]
+            policy_fn, policy_type, _ = abl.load_policy(model_path)
+            env_kwargs = dict(
+                symbol=args.ticker,
+                interval=args.interval,
+                days=args.days,
+                episode_len=args.episode_len,
+                random_start=False,
+                include_mtf=bool(args.include_mtf),
+                mtf_timeframes=tuple([s.strip() for s in args.mtf_timeframes.split(',') if s.strip()]),
+                include_regime_features=bool(args.include_regimes),
+                obs_format=("structured" if policy_type in ("transformer", "lstm") else "flat"),
+            )
+            baseline_env = Candle7Env(**env_kwargs)
+            baseline = abl.run_eval(baseline_env, policy_fn)
+            groups = [s.strip() for s in args.ablation_groups.split(',') if s.strip()]
+            results = {"baseline": baseline}
+            for g in groups:
+                env = Candle7Env(**env_kwargs, ablation_groups=[g])
+                res_g = abl.run_eval(env, policy_fn)
+                results[g] = res_g
+            out_dir = os.path.join("reports", "agents", "candle_pattern7_rl")
+            os.makedirs(out_dir, exist_ok=True)
+            out_json = os.path.join(out_dir, f"ablation_{os.path.basename(model_path)}.json")
+            with open(out_json, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
+            print(f"Ablation salvo em {out_json}")
+        except Exception as e:
+            print(f"WARN: Falha ao rodar ablação automática: {e}")
