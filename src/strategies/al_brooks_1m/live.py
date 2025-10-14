@@ -282,6 +282,9 @@ def _init_csv(csv_path: Path) -> None:
         "adx_threshold",
         "min_atr",
         "max_avg_deviation_pct",
+        # Sinal/rompimento (auditoria rápida)
+        "setup_ok",
+        "entry_confirmed",
     ]
     csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
 
@@ -329,6 +332,37 @@ def _append_csv(
     adx_ok = _n(adx_val) and (adx_val >= params["adx_threshold"])
     atr_ok = _n(atr_val) and (atr_val > params.get("min_atr", 0.0))
 
+    # Setup directional checks
+    is_inside_bool = bool(last_closed.get("is_inside_bar", False))
+    setup_long = (
+        signal == "buy"
+        and deviation_ok
+        and adx_ok
+        and atr_ok
+        and is_inside_bool
+        and allow_long
+        and uptrend
+        and pullback_long_ok
+    )
+    setup_short = (
+        signal == "sell"
+        and deviation_ok
+        and adx_ok
+        and atr_ok
+        and is_inside_bool
+        and allow_short
+        and downtrend
+        and pullback_short_ok
+    )
+    setup_ok = setup_long or setup_short
+
+    # Breakout confirmation with current candle extremes
+    entry_breakout = False
+    if signal == "buy" and _n(h) and (cur_high is not None) and (not np.isnan(cur_high)):
+        entry_breakout = cur_high >= h
+    elif signal == "sell" and _n(l) and (cur_low is not None) and (not np.isnan(cur_low)):
+        entry_breakout = cur_low <= l
+
     row = {
         "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         "candle_time": pd.to_datetime(last_closed.get("Date")).strftime("%Y-%m-%d %H:%M:%S")
@@ -369,6 +403,9 @@ def _append_csv(
         "adx_threshold": _fmt_float(params.get("adx_threshold")),
         "min_atr": _fmt_float(params.get("min_atr")),
         "max_avg_deviation_pct": _fmt_float(params.get("max_avg_deviation_pct")),
+        # Quick audit flags
+        "setup_ok": str(bool(setup_ok)),
+        "entry_confirmed": str(bool(entry_breakout)),
     }
     # Append with csv module to handle commas safely
     with csv_path.open("a", newline="", encoding="utf-8") as f:
