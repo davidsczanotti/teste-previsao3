@@ -4,9 +4,17 @@ import argparse
 import sys
 import time
 from datetime import datetime, timedelta, UTC
+from pathlib import Path
+import csv
 
 import numpy as np
 import pandas as pd
+
+# Safe, headless backend for PNG generation
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from ...binance_client import get_current_price, get_historical_klines
 from .config import load_active_config
@@ -161,6 +169,145 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
             )
 
 
+def _ensure_live_paths(ticker: str, interval: str) -> tuple[Path, Path]:
+    """Ensures reports/live exists and returns (csv_path, png_path). Overwrites CSV header at start."""
+    live_dir = Path("reports") / "live"
+    live_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"ALBROOKS_{ticker}_{interval}"
+    csv_path = live_dir / f"{stem}.csv"
+    png_path = live_dir / f"{stem}.png"
+    return csv_path, png_path
+
+
+def _init_csv(csv_path: Path) -> None:
+    """(Re)creates the CSV file with header for auditing."""
+    header = [
+        "timestamp_utc",
+        "candle_time",
+        "price",
+        "signal",
+        "reason",
+        "position",
+        "entry_price",
+        "stop_loss",
+        "take_profit",
+        "capital",
+        "ema_fast",
+        "ema_medium",
+        "ema_slow",
+        "is_inside_bar",
+        "avg_deviation_pct",
+        "adx",
+        "atr",
+        "trend_bias",
+    ]
+    csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
+
+
+def _append_csv(
+    csv_path: Path,
+    last_closed: pd.Series,
+    current_price: float,
+    signal: str,
+    reason: str,
+    capital: float,
+) -> None:
+    row = {
+        "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
+        "candle_time": pd.to_datetime(last_closed.get("Date")).strftime("%Y-%m-%d %H:%M:%S")
+        if pd.notna(last_closed.get("Date"))
+        else "",
+        "price": f"{current_price:.8f}",
+        "signal": signal,
+        "reason": reason,
+        "position": position_state.get("position") or "",
+        "entry_price": f"{position_state.get('entry_price', 0.0):.8f}",
+        "stop_loss": f"{position_state.get('stop_loss', 0.0):.8f}",
+        "take_profit": f"{position_state.get('take_profit', 0.0):.8f}",
+        "capital": f"{capital:.2f}",
+        "ema_fast": _fmt_float(last_closed.get("ema_fast")),
+        "ema_medium": _fmt_float(last_closed.get("ema_medium")),
+        "ema_slow": _fmt_float(last_closed.get("ema_slow")),
+        "is_inside_bar": str(bool(last_closed.get("is_inside_bar", False))),
+        "avg_deviation_pct": _fmt_float(last_closed.get("avg_deviation_pct")),
+        "adx": _fmt_float(last_closed.get("adx")),
+        "atr": _fmt_float(last_closed.get("atr")),
+        "trend_bias": _fmt_float(last_closed.get("trend_bias")),
+    }
+    # Append with csv module to handle commas safely
+    with csv_path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(row.keys()))
+        w.writerow(row)
+
+
+def _fmt_float(x) -> str:
+    try:
+        if x is None or np.isnan(x):
+            return ""
+        return f"{float(x):.8f}"
+    except Exception:
+        return ""
+
+
+def _render_png(
+    df: pd.DataFrame,
+    current_price: float,
+    params: dict,
+    png_path: Path,
+    signal: str,
+    reason: str,
+    max_bars: int = 400,
+) -> None:
+    """Renders a compact chart with Close and EMAs, marking inside bars and SL/TP if any."""
+    if df.empty:
+        return
+    # Use only closed bars to stay consistent with compute_signal
+    n = len(df)
+    if n < 2:
+        return
+    end_idx = n - 1  # exclude last forming candle
+    start_idx = max(0, end_idx - max_bars)
+    plot_df = df.iloc[start_idx:end_idx].copy()
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = plot_df["Date"]
+    ax.plot(x, plot_df["close"], color="#1f77b4", linewidth=1.2, label="close")
+    ax.plot(x, plot_df.get("ema_fast"), color="#ff7f0e", linewidth=1.0, label=f"EMA{params['ema_fast_period']}")
+    ax.plot(x, plot_df.get("ema_medium"), color="#2ca02c", linewidth=1.0, label=f"EMA{params['ema_medium_period']}")
+    ax.plot(x, plot_df.get("ema_slow"), color="#d62728", linewidth=1.0, label=f"EMA{params['ema_slow_period']}")
+
+    # Mark inside bars on their close
+    ib = plot_df[plot_df.get("is_inside_bar", False) == True]
+    if not ib.empty:
+        ax.scatter(ib["Date"], ib["close"], s=10, color="#9467bd", label="inside bar")
+
+    # Draw levels if in position
+    if position_state.get("position"):
+        ep = position_state.get("entry_price", 0.0)
+        sl = position_state.get("stop_loss", 0.0)
+        tp = position_state.get("take_profit", 0.0)
+        if ep:
+            ax.axhline(ep, color="#8c564b", linestyle="--", linewidth=1.0, label="entry")
+        if sl:
+            ax.axhline(sl, color="#e377c2", linestyle=":", linewidth=1.0, label="stop")
+        if tp:
+            ax.axhline(tp, color="#17becf", linestyle=":", linewidth=1.0, label="target")
+
+    # Optionally show current price as well
+    ax.axhline(current_price, color="#7f7f7f", linestyle="-.", linewidth=0.8, label="last price")
+
+    ax.set_title(
+        f"ALBROOKS {params['ticker']}@{params['interval']} | {plot_df['Date'].iloc[-1].strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"signal={signal} | {reason}"
+    )
+    ax.legend(loc="upper left", fontsize=8)
+    ax.grid(True, linestyle=":", linewidth=0.5)
+    fig.autofmt_xdate()
+    plt.tight_layout()
+    plt.savefig(png_path, dpi=120)
+    plt.close(fig)
+
+
 def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) -> None:
     """Verifica se há novo sinal de entrada e abre posição caso aplicável."""
     if position_state["position"]:
@@ -204,17 +351,19 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
 def main() -> None:
     parser = argparse.ArgumentParser(description="Executa a estratégia Al Brooks em modo 'live' (paper trading).")
     parser.add_argument("--ticker", default="BTCUSDT", help="Símbolo do ativo")
-    parser.add_argument("--interval", default="1m", help="Intervalo das velas")
     parser.add_argument("--poll-interval", type=int, default=10, help="Intervalo de verificação em segundos")
     parser.add_argument("--capital", type=float, default=100.0, help="Capital inicial para o paper trading")
     args = parser.parse_args()
 
+    # Intervalo fixo para este modo live
+    interval = "1m"
+
     position_state["capital"] = args.capital
     position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
 
-    active_cfg = load_active_config(args.ticker, args.interval)
+    active_cfg = load_active_config(args.ticker, interval)
     if not active_cfg:
-        print(f"ERRO: Nenhuma configuração ativa encontrada para {args.ticker}@{args.interval}.")
+        print(f"ERRO: Nenhuma configuração ativa encontrada para {args.ticker}@{interval}.")
         print("Execute a otimização antes de iniciar o modo live.")
         sys.exit(1)
 
@@ -223,16 +372,14 @@ def main() -> None:
 
     params = asdict(active_cfg)
     print("--- Al Brooks Live Monitor ---")
-    print(f"Configuração ativa para {args.ticker}@{args.interval}")
+    print(f"Configuração ativa para {args.ticker}@{interval}")
     print({k: v for k, v in params.items() if k not in {"ticker", "interval", "days"}})
 
+    # Prepare live outputs (CSV overwritten on each run, PNG overwritten on each cycle)
+    csv_path, png_path = _ensure_live_paths(args.ticker, interval)
+    _init_csv(csv_path)
+
     interval_minutes = 1
-    if args.interval.endswith("m"):
-        interval_minutes = int(args.interval[:-1])
-    elif args.interval.endswith("h"):
-        interval_minutes = int(args.interval[:-1]) * 60
-    elif args.interval.endswith("d"):
-        interval_minutes = int(args.interval[:-1]) * 24 * 60
 
     candles_per_day = max(1, (24 * 60) // interval_minutes)
 
@@ -243,7 +390,7 @@ def main() -> None:
             start_dt = datetime.now(UTC) - timedelta(days=days_needed)
             start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-            df = get_historical_klines(args.ticker, args.interval, start_str)
+            df = get_historical_klines(args.ticker, interval, start_str)
             if df.empty or len(df) < params["ema_slow_period"]:
                 print("Aguardando dados suficientes...")
                 time.sleep(args.poll_interval)
@@ -254,6 +401,12 @@ def main() -> None:
 
             manage_existing_position(df, current_price, params)
             check_for_new_entry(df, current_price, params)
+
+            # Audit snapshot: compute signal, append CSV, render PNG
+            signal, reason = compute_signal(df, params)
+            last_closed = df.iloc[-2]
+            _append_csv(csv_path, last_closed, current_price, signal, reason, position_state["capital"])
+            _render_png(df, current_price, params, png_path, signal, reason)
 
             time.sleep(args.poll_interval)
     except KeyboardInterrupt:

@@ -55,3 +55,12 @@ class Candle7RlConfig:
     entropy_beta_end: float = 0.0
     bc_weight: float = 0.0
     gate_on_heuristic: bool = False
+
+    # PPO specific params for torch version
+    policy_type: str = "mlp"
+    ppo_epochs: int = 4
+    minibatch_size: int = 64
+    gae_lambda: float = 0.95
+    clip_range: float = 0.2
+    vf_coef: float = 0.5
+    ent_coef: float = 0.01

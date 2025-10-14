@@ -11,6 +11,28 @@ from ...binance_client import get_historical_klines
 from .candlestick_patterns import add_candlestick_patterns
 
 
+class RunningNorm:
+    """Aplica a normalização (média/desvio padrão) em tempo real usando o algoritmo de Welford."""
+    def __init__(self, size: int) -> None:
+        self.mean = np.zeros(size, dtype=np.float32)
+        self.M2 = np.zeros(size, dtype=np.float32)
+        self.count = 1e-4
+
+    def update(self, x: np.ndarray) -> None:
+        # Algoritmo de Welford para cálculo de variância em uma única passagem
+        self.count += 1.0
+        delta = x - self.mean
+        self.mean += delta / self.count
+        delta2 = x - self.mean
+        self.M2 += delta * delta2
+
+    def normalize(self, x: np.ndarray) -> np.ndarray:
+        """Normaliza x usando a média e o desvio padrão acumulados."""
+        var = self.M2 / self.count
+        std = np.sqrt(np.maximum(var, 1e-8))
+        return (x - self.mean) / std
+
+
 @dataclass
 class StepResult:
     obs: np.ndarray
@@ -34,14 +56,14 @@ def _sliding_window_features(
     ma_short_window: int = 7,
     ma_long_window: int = 40,
     pattern_cols: Optional[List[str]] = None,
-) -> tuple[np.ndarray, np.ndarray, int, Dict[str, np.ndarray]]:
+) -> tuple[dict[str, np.ndarray], np.ndarray, int, dict[str, np.ndarray]]:
     """Build observation features and auxiliary series."""
     pattern_cols = pattern_cols or []
 
     longest = max(window, ma_long_window)
     if len(df) < longest + 2:
-        empty = np.zeros((0, 1), dtype=np.float32)
-        return empty, np.zeros((0,), dtype=np.float32), 0, {}
+        empty_dict = {"sequential": np.zeros((0, window, 4)), "non_sequential": np.zeros((0, 13))}
+        return empty_dict, np.zeros((0,), dtype=np.float32), 0, {}
 
     open_s = df["open"].astype(float).to_numpy()
     high_s = df["high"].astype(float).to_numpy()
@@ -54,14 +76,10 @@ def _sliding_window_features(
     ma_short_prev = ma_short.shift(1)
     ma_long_prev = ma_long.shift(1)
 
-    # Adicionar ADX
     adx_df = df.ta.adx(length=14)
     adx_series = adx_df[f"ADX_14"]
-
-    # Adicionar RSI
     rsi_series = df.ta.rsi(length=14)
 
-    # Adicionar volume relative
     vol_rel_series = np.ones(len(df), dtype=float)
     if "volume" in df.columns:
         vol_ma = df["volume"].rolling(window=20, min_periods=20).mean()
@@ -70,7 +88,9 @@ def _sliding_window_features(
 
     start = longest
 
-    feats: list[np.ndarray] = []
+    sequential_feats: list[np.ndarray] = []
+    non_sequential_feats: list[np.ndarray] = []
+
     for idx in range(start, len(df)):
         o_w = open_s[idx - window : idx]
         h_w = high_s[idx - window : idx]
@@ -82,6 +102,9 @@ def _sliding_window_features(
         rng = (h_w - l_w) / o_safe
         upper = (h_w - np.maximum(o_w, c_w)) / o_safe
         lower = (np.minimum(o_w, c_w) - l_w) / o_safe
+
+        candle_feats = np.stack([body, rng, upper, lower], axis=1).astype(np.float32)
+        sequential_feats.append(candle_feats)
 
         greens = np.sum(c_w > o_w)
         reds = window - greens
@@ -102,18 +125,9 @@ def _sliding_window_features(
         ma_short_slope = ma_s - ma_s_prev
         ma_long_slope = ma_l - ma_l_prev
 
-        # Adicionar ADX normalizado (0 a 1)
         adx_val = adx_series.iloc[idx] / 100.0 if not np.isnan(adx_series.iloc[idx]) else 0.5
-
-        # Adicionar RSI normalizado (0 a 1)
         rsi_val = rsi_series.iloc[idx] / 100.0 if not np.isnan(rsi_series.iloc[idx]) else 0.5
-
-        # Adicionar volume relative
         vol_rel = float(vol_rel_series[idx]) if not np.isnan(vol_rel_series[idx]) else 1.0
-
-        pattern_feats = np.zeros(len(pattern_cols) * window, dtype=np.float32)
-        if pattern_cols:
-            pattern_feats = df[pattern_cols].iloc[idx - window : idx].values.flatten()
 
         agg = np.array(
             [
@@ -133,11 +147,12 @@ def _sliding_window_features(
             ],
             dtype=np.float32,
         )
+        non_sequential_feats.append(agg)
 
-        candle_feats = np.stack([body, rng, upper, lower], axis=1).astype(np.float32).reshape(-1)
-        feats.append(np.concatenate([candle_feats, agg, pattern_feats], axis=0))
-
-    features = np.stack(feats, axis=0)
+    features = {
+        "sequential": np.stack(sequential_feats, axis=0),
+        "non_sequential": np.stack(non_sequential_feats, axis=0),
+    }
     closes = close_np[start:]
 
     extras = {
@@ -201,6 +216,7 @@ class Candle7Env:
         gate_on_heuristic: bool = False,
         episode_len: Optional[int] = 2048,
         random_start: bool = True,
+        obs_format: str = "flat", # Novo parâmetro: 'flat' ou 'structured'
         df: Optional[pd.DataFrame] = None,
     ) -> None:
         self.symbol = symbol
@@ -232,10 +248,11 @@ class Candle7Env:
 
         self.episode_len = int(episode_len) if episode_len is not None else None
         self.random_start = bool(random_start)
+        self.obs_format = obs_format
 
         # runtime
         self._df: Optional[pd.DataFrame] = df
-        self._base_features: Optional[np.ndarray] = None
+        self._base_features: Optional[np.ndarray | Dict[str, np.ndarray]] = None
         self._closes: Optional[np.ndarray] = None
         self._heuristic_actions: Optional[np.ndarray] = None
         self._opens: Optional[np.ndarray] = None
@@ -273,18 +290,17 @@ class Candle7Env:
 
         # Compute features once per dataset (cache across episodes)
         if self._base_features is None or self._closes is None:
-            feats, closes, start_idx, extras = _sliding_window_features(
+            features_dict, closes, start_idx, extras = _sliding_window_features(
                 self._df,
                 window=7,
                 ma_short_window=7,
                 ma_long_window=40,
                 pattern_cols=[p for p in PATTERNS_TO_USE if p in self._df.columns],
             )
-            if len(feats) < 3:
-                raise RuntimeError("Not enough data to build 7-candle features")
+            if len(closes) < 3:
+                raise RuntimeError("Not enough data to build features")
 
             self._start_idx = int(start_idx)
-            self._base_features = feats.astype(np.float32)
             self._closes = closes.astype(np.float32)
             self._ma_short = extras["ma_short"]
             self._ma_long = extras["ma_long"]
@@ -293,6 +309,13 @@ class Candle7Env:
 
             opens = self._df["open"].astype(float).to_numpy()
             self._opens = opens[self._start_idx :].astype(np.float32)
+
+            if self.obs_format == 'flat':
+                seq = features_dict["sequential"].reshape(len(closes), -1)
+                non_seq = features_dict["non_sequential"]
+                self._base_features = np.concatenate([seq, non_seq], axis=1).astype(np.float32)
+            else:  # structured
+                self._base_features = features_dict
 
             high = self._df["high"].astype(float)
             low = self._df["low"].astype(float)
@@ -363,9 +386,23 @@ class Candle7Env:
         return actions
 
     @property
-    def observation_size(self) -> int:
+    def observation_size(self) -> int | dict[str, tuple[int, int] | int]:
         self._ensure_data()
-        return self._base_features.shape[1] + 3 if self._base_features is not None else 0
+        if self._base_features is None:
+            return 0
+
+        if self.obs_format == "structured":
+            assert isinstance(self._base_features, dict), "Structured obs requires dict features"
+            seq_shape = self._base_features["sequential"].shape
+            non_seq_dim = self._base_features["non_sequential"].shape[1]
+            return {
+                "sequential": (seq_shape[1], seq_shape[2]), # (window, features_per_candle)
+                "non_sequential": non_seq_dim + 3,  # +3 for pos_long, pos_short, bars_in_pos
+            }
+        else:  # flat
+            assert isinstance(self._base_features, np.ndarray), "Flat obs requires np.ndarray features"
+            return self._base_features.shape[1] + 3
+
 
     @property
     def action_size(self) -> int:
@@ -390,18 +427,26 @@ class Candle7Env:
         self._bars_since_exit = 0
         return self._obs()
 
-    def _obs(self) -> np.ndarray:
+    def _obs(self) -> np.ndarray | dict[str, np.ndarray]:
         assert self._base_features is not None
-        base = self._base_features[self._i]
         pos_long = 1.0 if self._pos == 1 else 0.0
         pos_short = 1.0 if self._pos == -1 else 0.0
-        # Normaliza a contagem de barras na posição para o intervalo [0, 1]
-        # Usa max_position_bars se definido, senão um valor grande como 200.
         max_bars = float(self.max_position_bars or 200.0)
         bars_in_pos_norm = min(self._bars_since_entry / max_bars, 1.0) if self._pos != 0 else 0.0
-        return np.concatenate([base, np.array([pos_long, pos_short, bars_in_pos_norm], dtype=np.float32)]).astype(
-            np.float32
-        )
+        pos_features = np.array([pos_long, pos_short, bars_in_pos_norm], dtype=np.float32)
+
+        if self.obs_format == "structured":
+            assert isinstance(self._base_features, dict)
+            seq_obs = self._base_features["sequential"][self._i]
+            non_seq_obs = self._base_features["non_sequential"][self._i]
+            return {
+                "sequential": seq_obs,
+                "non_sequential": np.concatenate([non_seq_obs, pos_features]),
+            }
+        else:  # flat
+            assert isinstance(self._base_features, np.ndarray)
+            base = self._base_features[self._i]
+            return np.concatenate([base, pos_features]).astype(np.float32)
 
     def step(self, action: int) -> StepResult:
         assert self._base_features is not None and self._closes is not None
