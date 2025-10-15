@@ -29,8 +29,29 @@ def run_visual_backtest(policy_fn, env: Candle7Env, max_steps: int | None = None
     history = []
 
     while not done:
-        action_probs = policy_fn(obs)
-        action = int(np.argmax(action_probs))  # Execução greedy
+        logits = np.asarray(policy_fn(obs), dtype=float)
+        # Máscara de ações inválidas baseada em posição atual
+        mask = np.zeros_like(logits, dtype=bool)
+        if env.long_only:
+            if env._pos == 0:
+                valid = [0, 1]  # Hold, Open Long
+            elif env._pos == 1:
+                valid = [0, 2]  # Hold, Close Long
+            else:
+                valid = [0]
+        else:
+            if env._pos == 0:
+                valid = [0, 1, 3]
+            elif env._pos == 1:
+                valid = [0, 2]
+            elif env._pos == -1:
+                valid = [0, 4]
+            else:
+                valid = [0]
+        mask[valid] = True
+        logits_masked = logits.copy()
+        logits_masked[~mask] = -1e9
+        action = int(np.argmax(logits_masked))  # Execução greedy com máscara
 
         step_result = env.step(action)
 

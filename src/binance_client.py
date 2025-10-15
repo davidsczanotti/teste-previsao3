@@ -12,13 +12,36 @@ from .cache.klines_cache import cached_klines, to_timestamp_ms
 # A opção verify=False pode gerar avisos. Vamos desabilitá-los.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-client = Client("", "", requests_params={"timeout": 20, "verify": False})
+"""
+Tune timeouts to reduce read timeouts and allow per-call retries from wrappers.
+Using a (connect, read) tuple keeps the connection snappy while allowing
+slightly longer reads when Binance is slower.
+"""
+client = Client("", "", requests_params={"timeout": (5, 30), "verify": False})
 
 
-def get_current_price(symbol: str) -> float:
-    """Busca o preço de mercado mais recente para um símbolo."""
-    ticker = client.get_symbol_ticker(symbol=symbol)
-    return float(ticker["price"])
+def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> float:
+    """Busca o preço de mercado mais recente para um símbolo com retries exponenciais.
+
+    Args:
+        symbol: par (ex: BTCUSDT)
+        retries: número de tentativas
+        backoff: base do tempo de espera entre tentativas (segundos)
+    """
+    last_exc: Exception | None = None
+    for i in range(max(1, retries)):
+        try:
+            ticker = client.get_symbol_ticker(symbol=symbol)
+            return float(ticker["price"])
+        except Exception as e:  # network hiccup, API timeout etc.
+            last_exc = e
+            if i == retries - 1:
+                break
+            time.sleep(backoff * (2 ** i))
+    # Propaga a última exceção para o chamador poder decidir o fallback
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Failed to fetch current price without specific error")
 
 
 def _download_klines(symbol: str, interval: str, start_ms: int, end_ms: int):

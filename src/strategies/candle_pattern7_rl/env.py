@@ -523,15 +523,18 @@ class Candle7Env:
 
         # --- Filtro de Regime de Mercado (ADX) ---
         # Só operar se o ADX indicar tendência (ADX > 25)
-        is_trending = adx > 25
+        # Usa o threshold configurável do ambiente
+        is_trending = adx > self.regime_adx_threshold
 
         # --- Lógica de Sinais ---
-        # Sinal de entrada Long: padrão de baixa em tendência de baixa
-        buy_signal = is_bearish_pattern & is_downtrend & is_trending
-        # Sinal de entrada Short: padrão de alta em tendência de alta
-        sell_signal = (
-            is_bullish_pattern & is_uptrend & is_trending if not self.long_only else pd.Series(False, index=df.index)
+        # Heurística consistente com tendência (sempre define gatilho de saída do long)
+        buy_signal = is_bullish_pattern & is_uptrend & is_trending
+        # gatilho para abrir short (desligado em long_only)
+        sell_signal_open_short = (
+            is_bearish_pattern & is_downtrend & is_trending if not self.long_only else pd.Series(False, index=df.index)
         )
+        # gatilho para FECHAR long (sempre válido)
+        exit_long_signal = is_bearish_pattern & is_downtrend & is_trending
 
         # Cria uma máquina de estados para a heurística
         actions = np.zeros(len(df), dtype=int)
@@ -541,11 +544,11 @@ class Candle7Env:
                 if buy_signal.iloc[i]:
                     actions[i] = 1  # Open Long
                     position = 1
-                elif sell_signal.iloc[i]:
+                elif sell_signal_open_short.iloc[i]:
                     actions[i] = 3  # Open Short
                     position = -1
             elif position == 1:
-                if sell_signal.iloc[i]:
+                if exit_long_signal.iloc[i]:
                     actions[i] = 2  # Close Long
                     position = 0
             elif position == -1:
@@ -671,9 +674,9 @@ class Candle7Env:
         # Heuristic guidance (for BC/gating): compute signal from last 7 candles + MAs
         heur_action: Optional[int] = None
         if self._heuristic_actions is not None and self._i < len(self._heuristic_actions):
-            base_signal = self._heuristic_actions[self._i]
-            # Simple mapping for now: 1 (buy) -> 1 (open long), 2 (sell) -> 3 (open short)
-            heur_action = base_signal if base_signal == 1 else (3 if base_signal == 2 else 0)
+            base_signal = int(self._heuristic_actions[self._i])
+            # Mapeamento direto: 0/1/2/3/4 conforme máquina de estados
+            heur_action = base_signal
             info["heuristic_action"] = int(heur_action)
 
         def slip_buy(px: float) -> float:

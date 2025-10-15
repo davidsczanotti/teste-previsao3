@@ -285,6 +285,10 @@ def _init_csv(csv_path: Path) -> None:
         # Sinal/rompimento (auditoria rápida)
         "setup_ok",
         "entry_confirmed",
+        # Novos campos p/ auditoria offline
+        "prev_high_for_entry",
+        "prev_low_for_entry",
+        "would_enter_backtest",
     ]
     csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
 
@@ -406,6 +410,11 @@ def _append_csv(
         # Quick audit flags
         "setup_ok": str(bool(setup_ok)),
         "entry_confirmed": str(bool(entry_breakout)),
+        # Novos campos: preço de rompimento do candle anterior e flag offline
+        "prev_high_for_entry": _fmt_float(h) if signal == "buy" else "",
+        "prev_low_for_entry": _fmt_float(l) if signal == "sell" else "",
+        # Não sabemos o 'would_enter_backtest' em tempo real; será calculado por script offline
+        "would_enter_backtest": "",
     }
     # Append with csv module to handle commas safely
     with csv_path.open("a", newline="", encoding="utf-8") as f:
@@ -698,7 +707,16 @@ def main() -> None:
                 continue
 
             df = add_indicators(df, params)
-            current_price = get_current_price(args.ticker)
+            # Busca preço atual com fallback para o close do candle corrente
+            try:
+                current_price = get_current_price(args.ticker)
+            except Exception as e:
+                print(f"[warn] Falha ao buscar preço atual ({e}); usando close do candle.")
+                try:
+                    current_price = float(df.iloc[-1]["close"])
+                except Exception:
+                    # Como último recurso, usa o close do último fechado
+                    current_price = float(df.iloc[-2]["close"]) if len(df) >= 2 else float("nan")
 
             manage_existing_position(df, current_price, params)
             check_for_new_entry(df, current_price, params)

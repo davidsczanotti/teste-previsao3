@@ -296,6 +296,11 @@ def ppo_train_torch(
     rew_buf = torch.zeros(cfg.episode_len, dtype=torch.float32).to(device)
     done_buf = torch.zeros(cfg.episode_len, dtype=torch.float32).to(device)
     val_buf = torch.zeros(cfg.episode_len, dtype=torch.float32).to(device)
+    # Labels da heurística e contadores de depuração
+    heur_buf = torch.full((cfg.episode_len,), -1, dtype=torch.int64).to(device)
+    pos_buf = torch.zeros(cfg.episode_len, dtype=torch.int64).to(device)
+    trades_count = 0
+    invalid_count = 0
 
     # Loop de treinamento
     obs = env.reset(seed=cfg.seed)
@@ -319,16 +324,63 @@ def ppo_train_torch(
                 obs_tensor = torch.tensor(obs, dtype=torch.float32).to(device).unsqueeze(0)
                 obs_buf[step] = obs_tensor
 
+            # Amostragem com máscara de ações válidas
             with torch.no_grad():
-                action, log_prob, _, value = agent.get_action_and_value(obs_tensor)
+                if obs_format == 'structured':
+                    if cfg.policy_type == 'lstm':
+                        base_out = agent.forward_lstm(seq_tensor, non_seq_tensor)
+                    else:
+                        base_out = agent.forward_transformer(seq_tensor, non_seq_tensor)
+                    logits = agent.actor(base_out)
+                    value = agent.critic(base_out)
+                else:
+                    logits = agent.actor(obs_tensor)
+                    value = agent.critic(obs_tensor)
+
+                # Máscara baseada na posição atual do ambiente
+                def mask_for_pos(pos: int):
+                    m = torch.zeros(act_dim, dtype=torch.bool, device=device)
+                    if env.long_only:
+                        if pos == 0:
+                            m[0] = True; m[1] = True  # Hold, Open Long
+                        elif pos == 1:
+                            m[0] = True; m[2] = True  # Hold, Close Long
+                        else:
+                            m[0] = True
+                    else:
+                        if pos == 0:
+                            m[0] = True; m[1] = True; m[3] = True
+                        elif pos == 1:
+                            m[0] = True; m[2] = True
+                        elif pos == -1:
+                            m[0] = True; m[4] = True
+                        else:
+                            m[0] = True
+                    return m
+
+                m = mask_for_pos(int(getattr(env, '_pos', 0)))
+                masked_logits = logits.clone()
+                invalid = ~m
+                masked_logits[..., invalid] = -1e9
+                dist = Categorical(logits=masked_logits)
+                action = dist.sample()
+                log_prob = dist.log_prob(action)
             
             val_buf[step] = value.flatten()
             act_buf[step] = action.flatten()
             logp_buf[step] = log_prob.flatten()
+            pos_buf[step] = int(getattr(env, '_pos', 0))
 
             res = env.step(action.cpu().item())
             rew_buf[step] = torch.tensor(res.reward, dtype=torch.float32).to(device)
             done_buf[step] = torch.tensor(float(res.done), dtype=torch.float32).to(device)
+            # Heurística e contadores
+            heur = int(res.info.get("heuristic_action", -1)) if isinstance(res.info, dict) else -1
+            heur_buf[step] = heur
+            if isinstance(res.info, dict) and (("trade" in res.info) or ("trade_forced" in res.info)):
+                trades_count += 1
+            if isinstance(res.info, dict) and ("invalid" in res.info):
+                invalid_count += 1
             
             obs = res.obs
             if res.done:
@@ -370,10 +422,41 @@ def ppo_train_torch(
                         "sequential": seq_obs_buf[mb_inds],
                         "non_sequential": non_seq_obs_buf[mb_inds]
                     }
+                    if cfg.policy_type == 'lstm':
+                        base_out = agent.forward_lstm(mb_obs["sequential"], mb_obs["non_sequential"])
+                    else:
+                        base_out = agent.forward_transformer(mb_obs["sequential"], mb_obs["non_sequential"])
+                    logits = agent.actor(base_out)
+                    new_value = agent.critic(base_out)
                 else:
                     mb_obs = obs_buf[mb_inds]
+                    logits = agent.actor(mb_obs)
+                    new_value = agent.critic(mb_obs)
 
-                _, new_logp, entropy, new_value = agent.get_action_and_value(mb_obs, act_buf[mb_inds])
+                # Reaplica máscara de ações baseado em pos_buf armazenado
+                m = torch.zeros((len(mb_inds), act_dim), dtype=torch.bool, device=device)
+                for i, p in enumerate(pos_buf[mb_inds].tolist()):
+                    if env.long_only:
+                        if p == 0:
+                            m[i,0]=True; m[i,1]=True
+                        elif p == 1:
+                            m[i,0]=True; m[i,2]=True
+                        else:
+                            m[i,0]=True
+                    else:
+                        if p == 0:
+                            m[i,0]=True; m[i,1]=True; m[i,3]=True
+                        elif p == 1:
+                            m[i,0]=True; m[i,2]=True
+                        elif p == -1:
+                            m[i,0]=True; m[i,4]=True
+                        else:
+                            m[i,0]=True
+                masked_logits = logits.clone()
+                masked_logits[~m] = -1e9
+                dist = Categorical(logits=masked_logits)
+                new_logp = dist.log_prob(act_buf[mb_inds])
+                entropy = dist.entropy()
                 
                 logratio = new_logp - logp_buf[mb_inds]
                 ratio = logratio.exp()
@@ -385,13 +468,31 @@ def ppo_train_torch(
                 v_loss = 0.5 * ((new_value.view(-1) - returns[mb_inds]) ** 2).mean()
                 entropy_loss = entropy.mean()
                 loss = pg_loss - cfg.ent_coef * entropy_loss + cfg.vf_coef * v_loss
+                # Behavioral Cloning auxiliar (exclui Hold e ações fora do espaço)
+                if getattr(cfg, 'bc_weight', 0.0) and float(cfg.bc_weight) > 0.0:
+                    mb_heur = heur_buf[mb_inds]
+                    mask = (mb_heur > 0) & (mb_heur < act_dim)
+                    if mask.any():
+                        _, logp_bc, _, _ = agent.get_action_and_value(mb_obs, mb_heur)
+                        bc_loss = -(logp_bc[mask].mean()) * float(cfg.bc_weight)
+                        loss = loss + bc_loss
+                # Behavioral Cloning auxiliar
+                if getattr(cfg, 'bc_weight', 0.0) and float(cfg.bc_weight) > 0.0:
+                    mb_heur = heur_buf[mb_inds]
+                    mask = mb_heur != -1
+                    if mask.any():
+                        _, logp_bc, _, _ = agent.get_action_and_value(mb_obs, mb_heur)
+                        bc_loss = -(logp_bc[mask].mean()) * float(cfg.bc_weight)
+                        loss = loss + bc_loss
 
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(agent.parameters(), cfg.grad_clip)
                 optimizer.step()
 
-        print(f"Episódio {ep}, Recompensa Total: {rew_buf.sum().item():.2f}")
+        print(f"Episódio {ep}, Recompensa Total: {rew_buf.sum().item():.2f} | trades={trades_count} invalids={invalid_count}")
+        trades_count = 0
+        invalid_count = 0
 
     # Salvar o modelo
     if save:
@@ -463,6 +564,7 @@ if __name__ == "__main__":
     parser.add_argument("--episode_len", type=int, default=2048)
     parser.add_argument("--long_only", action="store_true")
     parser.add_argument("--model", type=str, default=None, help="Caminho para o modelo .pt a ser carregado")
+    parser.add_argument("--bc_weight", type=float, default=0.0, help="Peso de imitação da heurística (BC)")
     # PPO hyperparams
     parser.add_argument("--ent_coef", type=float, default=0.01)
     parser.add_argument("--vf_coef", type=float, default=0.5)
@@ -551,6 +653,7 @@ if __name__ == "__main__":
         invalid_action_penalty=args.invalid_action_penalty,
         fee_rate=args.fee_rate,
         slippage_bps=args.slippage_bps,
+        bc_weight=args.bc_weight,
     )
     
     groups = [s.strip() for s in args.ablation_groups.split(',') if s.strip()]
