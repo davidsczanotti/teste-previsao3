@@ -58,6 +58,7 @@ def load_policy(model_path: str):
             include_mtf=bool(cfg_dict.get("include_mtf", False)),
             mtf_timeframes=tuple(cfg_dict.get("mtf_timeframes", ("1h", "4h"))),
             include_regime_features=bool(cfg_dict.get("include_regime_features", False)),
+            long_only=bool(cfg_dict.get("long_only", False)),
         )
         obs_size = tmp_env.observation_size
         act_dim = tmp_env.action_size

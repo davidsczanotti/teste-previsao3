@@ -199,6 +199,7 @@ if __name__ == "__main__":
         include_mtf=use_mtf,
         mtf_timeframes=cfg_mtf_tfs,
         include_regime_features=use_reg,
+        long_only=bool(cfg.get("long_only", False)),
     )
 
     # 3. Executa o backtest
