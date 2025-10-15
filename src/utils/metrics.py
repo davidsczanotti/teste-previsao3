@@ -80,6 +80,8 @@ def calculate_metrics(trades: List[Dict[str, Any]]) -> Dict[str, float]:
         'win_rate': win_rate,
         'profit_factor': profit_factor,
         'total_pnl': total_pnl,
+        'total_profit': total_profit,
+        'total_loss': total_loss,
         'winning_trades': len(winning_trades),
         'losing_trades': len(losing_trades),
         'avg_win': avg_win,

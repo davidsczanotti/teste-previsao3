@@ -20,7 +20,14 @@ from ...binance_client import get_current_price, get_historical_klines
 from .config import load_active_config
 from .indicators import add_indicators
 
-position_state = {"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0, "capital": 100.0}
+position_state = {
+    "position": None,
+    "entry_price": 0.0,
+    "stop_loss": 0.0,
+    "take_profit": 0.0,
+    "capital": 100.0,
+    "entry_fill": 0.0,  # preço de execução com slippage
+}
 
 PULLBACK_LOOKBACK = 10
 
@@ -118,15 +125,26 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
     now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     entry_price = position_state["entry_price"]
     lot_size = params["lot_size"]
+    fee_pct = float(params.get("taker_fee_pct", 0.0))
+    slip_pct = float(params.get("slippage_pct", 0.0))
 
-    if position_state["position"] == "long":
-        pnl = (price - entry_price) * lot_size
+    side = position_state.get("position")
+    # Calcula fills com slippage e P&L líquido de taxas
+    if side == "long":
+        entry_fill = float(position_state.get("entry_fill") or (entry_price * (1 + slip_pct)))
+        exit_fill = float(price) * (1 - slip_pct)
+        gross = (exit_fill - entry_fill) * lot_size
     else:
-        pnl = (entry_price - price) * lot_size
+        entry_fill = float(position_state.get("entry_fill") or (entry_price * (1 - slip_pct)))
+        exit_fill = float(price) * (1 + slip_pct)
+        gross = (entry_fill - exit_fill) * lot_size
+    fee_entry = entry_fill * lot_size * fee_pct
+    fee_exit = exit_fill * lot_size * fee_pct
+    pnl = gross - fee_entry - fee_exit
 
     position_state["capital"] += pnl
     print(
-        f"[{now_str}] PREÇO: {price:.2f} | SAÍDA: {exit_type} | P&L: ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
+        f"[{now_str}] PREÇO: {price:.2f} | SAÍDA: {exit_type} | P&L (net): ${pnl:.2f} | CAPITAL: ${position_state['capital']:.2f}"
     )
     # Log exit marker for plotting
     try:
@@ -138,7 +156,7 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
         t = datetime.now().replace(tzinfo=None)
     TRADE_EVENTS.append({
         "type": "exit",
-        "side": position_state.get("position") or "",
+        "side": side or "",
         "time": t,
         "price": float(price),
         "label": exit_type,
@@ -148,7 +166,7 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
         event_time=t,
         event_type="exit",
         subtype=exit_type,
-        side=position_state.get("position") or "",
+        side=side or "",
         price=float(price),
         entry_price=float(entry_price),
         stop_loss=float(position_state.get("stop_loss", 0.0)),
@@ -156,7 +174,13 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
         capital=float(position_state.get("capital", 0.0)),
         reason="",
     )
-    position_state.update({"position": None, "entry_price": 0.0, "stop_loss": 0.0, "take_profit": 0.0})
+    position_state.update({
+        "position": None,
+        "entry_price": 0.0,
+        "stop_loss": 0.0,
+        "take_profit": 0.0,
+        "entry_fill": 0.0,
+    })
 
 
 def manage_existing_position(df: pd.DataFrame, current_price: float, params: dict) -> None:
@@ -185,16 +209,23 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
     cur_high = cur_candle.get("high", np.nan)
     cur_low = cur_candle.get("low", np.nan)
 
+    fee_pct = float(params.get("taker_fee_pct", 0.0))
+    slip_pct = float(params.get("slippage_pct", 0.0))
+
     if position == "long":
         if not np.isnan(cur_low) and cur_low <= position_state["stop_loss"]:
             handle_exit("STOP LOSS", position_state["stop_loss"], params, df.iloc[-1]["Date"])
         elif not np.isnan(cur_high) and cur_high >= position_state["take_profit"]:
             handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
-            unrealized = (current_price - position_state["entry_price"]) * params["lot_size"]
+            entry_fill = float(position_state.get("entry_fill") or (position_state["entry_price"] * (1 + slip_pct)))
+            exit_fill_now = float(current_price) * (1 - slip_pct)
+            gross = (exit_fill_now - entry_fill) * params["lot_size"]
+            fees = (entry_fill + exit_fill_now) * params["lot_size"] * fee_pct
+            unrealized = gross - fees
             print(
                 f"PREÇO: {current_price:.2f} | POSIÇÃO: LONG | STOP: {position_state['stop_loss']:.2f} | "
-                f"ALVO: {position_state['take_profit']:.2f} | P&L flutuante: ${unrealized:.2f}"
+                f"ALVO: {position_state['take_profit']:.2f} | P&L flutuante (net): ${unrealized:.2f}"
             )
     else:
         if not np.isnan(cur_high) and cur_high >= position_state["stop_loss"]:
@@ -202,10 +233,14 @@ def manage_existing_position(df: pd.DataFrame, current_price: float, params: dic
         elif not np.isnan(cur_low) and cur_low <= position_state["take_profit"]:
             handle_exit("TAKE PROFIT", position_state["take_profit"], params, df.iloc[-1]["Date"])
         else:
-            unrealized = (position_state["entry_price"] - current_price) * params["lot_size"]
+            entry_fill = float(position_state.get("entry_fill") or (position_state["entry_price"] * (1 - slip_pct)))
+            exit_fill_now = float(current_price) * (1 + slip_pct)
+            gross = (entry_fill - exit_fill_now) * params["lot_size"]
+            fees = (entry_fill + exit_fill_now) * params["lot_size"] * fee_pct
+            unrealized = gross - fees
             print(
                 f"PREÇO: {current_price:.2f} | POSIÇÃO: SHORT | STOP: {position_state['stop_loss']:.2f} | "
-                f"ALVO: {position_state['take_profit']:.2f} | P&L flutuante: ${unrealized:.2f}"
+                f"ALVO: {position_state['take_profit']:.2f} | P&L flutuante (net): ${unrealized:.2f}"
             )
 
 
@@ -587,9 +622,15 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
             if stop is None or target is None:
                 print(f"[{now_str}] SINAL LONG descartado (níveis inválidos).")
                 return
-            position_state.update(
-                {"position": "long", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
-            )
+            slip_pct = float(params.get("slippage_pct", 0.0))
+            entry_fill = float(entry_price) * (1 + slip_pct)
+            position_state.update({
+                "position": "long",
+                "entry_price": entry_price,
+                "stop_loss": stop,
+                "take_profit": target,
+                "entry_fill": entry_fill,
+            })
             print(f"[{now_str}] ENTRADA LONG | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
             # Log entry marker at the time of the last closed candle
             entry_time = df.iloc[-2]["Date"]
@@ -623,9 +664,15 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
             if stop is None or target is None:
                 print(f"[{now_str}] SINAL SHORT descartado (níveis inválidos).")
                 return
-            position_state.update(
-                {"position": "short", "entry_price": entry_price, "stop_loss": stop, "take_profit": target}
-            )
+            slip_pct = float(params.get("slippage_pct", 0.0))
+            entry_fill = float(entry_price) * (1 - slip_pct)
+            position_state.update({
+                "position": "short",
+                "entry_price": entry_price,
+                "stop_loss": stop,
+                "take_profit": target,
+                "entry_fill": entry_fill,
+            })
             print(f"[{now_str}] ENTRADA SHORT | Preço: {entry_price:.2f} | Stop: {stop:.2f} | Alvo: {target:.2f}")
             entry_time = df.iloc[-2]["Date"]
             try:

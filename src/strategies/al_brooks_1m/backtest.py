@@ -30,6 +30,8 @@ def backtest_al_brooks_inside_bar(
     use_htf_bias: bool = True,
     min_atr: float = 0.0,
     pullback_lookback: int = 10,
+    taker_fee_pct: float = 0.0004,
+    slippage_pct: float = 0.0005,
 ) -> tuple[list[dict], float, pd.DataFrame]:
     """
     Executa um backtest para a estratégia de Inside Bar de Al Brooks utilizando filtros de tendência e volatilidade.
@@ -92,10 +94,21 @@ def backtest_al_brooks_inside_bar(
             if exit_price is not None:
                 trade["exit_price"] = exit_price
                 trade["exit_date"] = row["Date"]
+                # Aplica slippage adverso nas execuções e desconta taxa taker
                 if position == "long":
-                    trade["pnl"] = (exit_price - trade["entry_price"]) * lot_size
+                    entry_fill = trade["entry_price"] * (1 + slippage_pct)
+                    exit_fill = exit_price * (1 - slippage_pct)
+                    gross = (exit_fill - entry_fill) * lot_size
                 else:
-                    trade["pnl"] = (trade["entry_price"] - exit_price) * lot_size
+                    entry_fill = trade["entry_price"] * (1 - slippage_pct)
+                    exit_fill = exit_price * (1 + slippage_pct)
+                    gross = (entry_fill - exit_fill) * lot_size
+                fee_entry = entry_fill * lot_size * taker_fee_pct
+                fee_exit = exit_fill * lot_size * taker_fee_pct
+                trade["pnl"] = gross - fee_entry - fee_exit
+                trade["entry_fill"] = entry_fill
+                trade["exit_fill"] = exit_fill
+                trade["fees"] = fee_entry + fee_exit
                 trade["exit_reason"] = exit_reason
                 position = None
                 continue
@@ -196,9 +209,19 @@ def backtest_al_brooks_inside_bar(
         trade["exit_price"] = final_price
         trade["exit_date"] = df["Date"].iloc[-1]
         if position == "long":
-            trade["pnl"] = (final_price - trade["entry_price"]) * lot_size
+            entry_fill = trade["entry_price"] * (1 + slippage_pct)
+            exit_fill = final_price * (1 - slippage_pct)
+            gross = (exit_fill - entry_fill) * lot_size
         else:
-            trade["pnl"] = (trade["entry_price"] - final_price) * lot_size
+            entry_fill = trade["entry_price"] * (1 - slippage_pct)
+            exit_fill = final_price * (1 + slippage_pct)
+            gross = (entry_fill - exit_fill) * lot_size
+        fee_entry = entry_fill * lot_size * taker_fee_pct
+        fee_exit = exit_fill * lot_size * taker_fee_pct
+        trade["pnl"] = gross - fee_entry - fee_exit
+        trade["entry_fill"] = entry_fill
+        trade["exit_fill"] = exit_fill
+        trade["fees"] = fee_entry + fee_exit
         trade["exit_reason"] = "eod"
         position = None
 

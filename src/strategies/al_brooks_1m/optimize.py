@@ -10,6 +10,9 @@ from ...utils.optimizer import run_optimization_cli
 def make_objective(df_train, lot_size: float, min_trade_threshold: int = 20):
     """Creates the objective function for Optuna."""
     threshold = max(1, min_trade_threshold)
+    # Parâmetros fixos de custos (mantidos constantes durante a otimização)
+    FEE_PCT = 0.0004
+    SLIPPAGE_PCT = 0.0005
 
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
@@ -40,6 +43,8 @@ def make_objective(df_train, lot_size: float, min_trade_threshold: int = 20):
                 atr_trail_multiplier=atr_trail_multiplier,
                 htf_lookback=htf_lookback,
                 min_atr=min_atr,
+                taker_fee_pct=FEE_PCT,
+                slippage_pct=SLIPPAGE_PCT,
             )
         except Exception as e:
             trial.set_user_attr("error", str(e))

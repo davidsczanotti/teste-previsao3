@@ -31,6 +31,9 @@ class AlBrooksConfig:
     use_htf_bias: bool = True
     min_trades_per_window: int = 15
     min_atr: float = 0.0
+    # Custos de execução
+    taker_fee_pct: float = 0.0004  # 4 bps
+    slippage_pct: float = 0.0005   # 5 bps
 
     @classmethod
     def from_dict(cls, data: dict) -> AlBrooksConfig:

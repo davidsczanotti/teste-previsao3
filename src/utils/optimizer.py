@@ -137,4 +137,5 @@ def run_optimization_cli(
 
     if not df_valid.empty and plot_func:
         print("\nGenerating chart for the validation period...")
-        plot_func(df_valid_indicators, trades_valid, f"al_brooks_backtest_{args.ticker}_validation.png")
+        # Passa apenas o sufixo do ticker; a função de plot já monta o nome.
+        plot_func(df_valid_indicators, trades_valid, f"{args.ticker}_validation")
