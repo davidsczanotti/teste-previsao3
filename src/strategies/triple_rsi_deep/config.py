@@ -11,8 +11,8 @@ class DeepTripleRsiConfig:
     Defaults target 15m candles on BTCUSDT.
     """
 
-    ticker: str = "BTCUSDT"
-    interval: str = "15m"
+    symbol: str = "BTCUSDT"
+    interval: str = "1m"
     days: int = 120
 
     # Trading params
@@ -39,15 +39,15 @@ class DeepTripleRsiConfig:
     stoch_lower: float = 0.25  # 25%
 
     # Gating around stochastic thresholds
-    gate_enabled: bool = True
+    gate_enabled: bool = False
     gate_margin: float = 0.05  # allow opens when within margin of thresholds
     gate_recent_k: int = 3     # or if crossed threshold within last K bars
 
     # Reward shaping
     realized_weight: float = 1.0
     m2m_weight: float = 0.1
-    midrange_penalty: float = 0.5  # penalty when opening in mid (e.g., 0.4..0.6)
-    close_bonus_factor: float = 0.2  # bonus when closing near the target extreme
+    midrange_penalty: float = 0.0  # penalty when opening in mid (e.g., 0.4..0.6)
+    close_bonus_factor: float = 0.0  # bonus when closing near the target extreme
 
     # Episode control
     episode_len: Optional[int] = 2048

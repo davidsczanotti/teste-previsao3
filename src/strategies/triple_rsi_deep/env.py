@@ -34,6 +34,9 @@ class StepResult:
     info: Dict[str, Any]
 
 
+import pandas_ta as ta
+
+
 class TripleRsiEnv:
     """RL environment for Triple RSI + Stochastic.
 
@@ -44,6 +47,8 @@ class TripleRsiEnv:
       - stoch_k (0..1)
       - dist_to_upper, dist_to_lower
       - cross_down_upper (0/1), cross_up_lower (0/1)
+      - atr (volatility measure)
+      - obv (volume measure)
       - position_long (0/1), position_short (0/1)
 
     Actions (discrete):
@@ -152,20 +157,39 @@ class TripleRsiEnv:
             self._df = df.sort_values("Date").reset_index(drop=True)
 
         df = self._df.copy()
+        
+        # Calculate indicators
+        df.ta.obv(append=True)
+        df.ta.atr(append=True)
+        
         closes = df["close"].astype(float)
         rsi_s = _calculate_rsi(closes, self.short_p)
         rsi_m = _calculate_rsi(closes, self.med_p)
         rsi_l = _calculate_rsi(closes, self.long_p)
         stoch_k = _stochastic_k(df, self.stoch_p)
 
+        # Normalize OBV
+        obv_cols = df.columns[df.columns.str.startswith('OBV')]
+        obv = df[obv_cols[0]] if not obv_cols.empty else pd.Series(np.nan, index=df.index)
+        obv_norm = (obv - obv.rolling(2048, min_periods=1).mean()) / obv.rolling(2048, min_periods=1).std()
+        obv_norm = obv_norm.fillna(0)
+
+        # Normalize ATR
+        atr_cols = df.columns[df.columns.str.startswith('ATRr')]
+        atr = df[atr_cols[0]] if not atr_cols.empty else pd.Series(np.nan, index=df.index)
+        atr_norm = (atr / closes).fillna(0)
+
         # Align to remove NaNs
-        start = max(self.short_p, self.med_p, self.long_p, self.stoch_p)
+        start = max(self.short_p, self.med_p, self.long_p, self.stoch_p, 14) # 14 for ATR default
         df = df.iloc[start:].reset_index(drop=True)
         closes = closes.iloc[start:].reset_index(drop=True)
         rsi_s = rsi_s.iloc[start:].reset_index(drop=True)
         rsi_m = rsi_m.iloc[start:].reset_index(drop=True)
         rsi_l = rsi_l.iloc[start:].reset_index(drop=True)
         stoch_k = stoch_k.iloc[start:].reset_index(drop=True)
+        atr_norm = atr_norm.iloc[start:].reset_index(drop=True)
+        obv_norm = obv_norm.iloc[start:].reset_index(drop=True)
+
 
         # Compute crosses and distances
         st = (stoch_k.values / 100.0).astype(np.float32)
@@ -185,6 +209,8 @@ class TripleRsiEnv:
             dist_lower.astype(np.float32),
             cross_down_upper.astype(np.float32),
             cross_up_lower.astype(np.float32),
+            atr_norm.values.astype(np.float32),
+            obv_norm.values.astype(np.float32),
         ], axis=1)
 
         self._features = feats
@@ -193,7 +219,7 @@ class TripleRsiEnv:
 
     @property
     def observation_size(self) -> int:
-        return 10  # 3 RSI + stoch + distances + crosses + 2 position flags
+        return 12  # 8 base + 2 new (atr, obv) + 2 position flags
 
     @property
     def action_size(self) -> int:
