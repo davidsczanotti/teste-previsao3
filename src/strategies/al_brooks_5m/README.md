@@ -23,6 +23,25 @@ A estratégia foi baseada na transcrição de um vídeo que detalha um setup de 
   - **Stop Loss**: Posicionado abaixo da mínima de todo o movimento de pullback (para compras) ou acima da máxima do rally (para vendas).
   - **Take Profit (Alvo)**: Definido por uma relação Risco/Recompensa (ex: 2.0, significando um alvo de 2x o tamanho do risco).
 
+### A Paciência do Caçador: A Seletividade da Estratégia
+
+É comum observar o robô emitir a mensagem `SINAL: hold` por longos períodos. Isso pode parecer contraintuitivo, mas é o comportamento esperado e demonstra que a estratégia está funcionando como projetada: sendo **extremamente seletiva** e aguardando pacientemente que todas as condições rigorosas definidas na otimização sejam atendidas ao mesmo tempo.
+
+Pense na estratégia como um caçador de elite (*sniper*), não como uma metralhadora. Ele não atira em tudo que se move; ele espera pelo alvo perfeito.
+
+Para que um trade aconteça, o mercado precisa satisfazer a seguinte lista de critérios simultaneamente:
+
+1.  **Filtro de Volatilidade Mínima**: O ATR do candle anterior é maior que o valor otimizado (ex: `23.0`)? Se a volatilidade estiver muito baixa, ele não opera.
+2.  **Filtro de Tendência (ADX)**: O ADX é maior que o valor otimizado (ex: `23.0`)? Se o mercado estiver lateral e sem força, ele não opera.
+3.  **Filtro de Afastamento da Média**: O preço está a menos de X% (ex: `1.45%`) de distância da EMA lenta? Se o preço estiver muito "esticado", ele não opera.
+4.  **Filtro de Viés de Timeframe Maior**: A tendência no timeframe superior está alinhada com a direção do trade?
+5.  **Alinhamento das Médias**: As EMAs (rápida, média e lenta) estão perfeitamente alinhadas para cima ou para baixo?
+6.  **Sinal de Pullback**: O preço fez um recuo em direção à EMA rápida?
+7.  **Padrão de Candle**: O candle anterior foi um **Inside Bar**?
+8.  **Gatilho de Entrada**: O preço atual rompeu a máxima/mínima do candle anterior?
+
+A chance de todas essas condições se alinharem é estatisticamente baixa, e é exatamente por isso que a estratégia se mostrou lucrativa nos testes: ela só entra em cenários de altíssima probabilidade. O estado `hold` é o comportamento padrão e mais seguro.
+
 ## 2. O Que Foi Feito por Nós
 
 1.  **Implementação do Backtest**: O arquivo `backtest.py` foi criado para simular a estratégia, incluindo as lógicas de compra e venda, o filtro de afastamento médio e o gerenciamento de risco.

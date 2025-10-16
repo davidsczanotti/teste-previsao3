@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import asdict
 from datetime import datetime, timedelta, UTC
 
 import mplfinance as mpf
@@ -29,6 +30,8 @@ def backtest_al_brooks_inside_bar(
     use_htf_bias: bool = True,
     min_atr: float = 0.0,
     pullback_lookback: int = 10,
+    taker_fee_pct: float = 0.0004,
+    slippage_pct: float = 0.0005,
 ) -> tuple[list[dict], float, pd.DataFrame]:
     """
     Executa um backtest para a estratégia de Inside Bar de Al Brooks utilizando filtros de tendência e volatilidade.
@@ -91,10 +94,21 @@ def backtest_al_brooks_inside_bar(
             if exit_price is not None:
                 trade["exit_price"] = exit_price
                 trade["exit_date"] = row["Date"]
+                # Aplica slippage adverso nas execuções e desconta taxa taker
                 if position == "long":
-                    trade["pnl"] = (exit_price - trade["entry_price"]) * lot_size
+                    entry_fill = trade["entry_price"] * (1 + slippage_pct)
+                    exit_fill = exit_price * (1 - slippage_pct)
+                    gross = (exit_fill - entry_fill) * lot_size
                 else:
-                    trade["pnl"] = (trade["entry_price"] - exit_price) * lot_size
+                    entry_fill = trade["entry_price"] * (1 - slippage_pct)
+                    exit_fill = exit_price * (1 + slippage_pct)
+                    gross = (entry_fill - exit_fill) * lot_size
+                fee_entry = entry_fill * lot_size * taker_fee_pct
+                fee_exit = exit_fill * lot_size * taker_fee_pct
+                trade["pnl"] = gross - fee_entry - fee_exit
+                trade["entry_fill"] = entry_fill
+                trade["exit_fill"] = exit_fill
+                trade["fees"] = fee_entry + fee_exit
                 trade["exit_reason"] = exit_reason
                 position = None
                 continue
@@ -195,9 +209,19 @@ def backtest_al_brooks_inside_bar(
         trade["exit_price"] = final_price
         trade["exit_date"] = df["Date"].iloc[-1]
         if position == "long":
-            trade["pnl"] = (final_price - trade["entry_price"]) * lot_size
+            entry_fill = trade["entry_price"] * (1 + slippage_pct)
+            exit_fill = final_price * (1 - slippage_pct)
+            gross = (exit_fill - entry_fill) * lot_size
         else:
-            trade["pnl"] = (trade["entry_price"] - final_price) * lot_size
+            entry_fill = trade["entry_price"] * (1 - slippage_pct)
+            exit_fill = final_price * (1 + slippage_pct)
+            gross = (entry_fill - exit_fill) * lot_size
+        fee_entry = entry_fill * lot_size * taker_fee_pct
+        fee_exit = exit_fill * lot_size * taker_fee_pct
+        trade["pnl"] = gross - fee_entry - fee_exit
+        trade["entry_fill"] = entry_fill
+        trade["exit_fill"] = exit_fill
+        trade["fees"] = fee_entry + fee_exit
         trade["exit_reason"] = "eod"
         position = None
 
@@ -275,15 +299,13 @@ def main():
 
     if active_cfg:
         print(f"Usando configuração ativa para {args.ticker}@{args.interval}")
-        params = {
-            "ema_fast_period": active_cfg.ema_fast_period,
-            "ema_medium_period": active_cfg.ema_medium_period,
-            "ema_slow_period": active_cfg.ema_slow_period,
-            "risk_reward_ratio": active_cfg.risk_reward_ratio,
-            "max_avg_deviation_pct": active_cfg.max_avg_deviation_pct,
-            "lot_size": active_cfg.lot_size,
-        }
-        days_to_load = active_cfg.days
+        # Usar model_dump() do Pydantic é mais limpo e seguro para obter todos os parâmetros.
+        # Ele retorna um dicionário com todos os campos do modelo.
+        params = asdict(active_cfg)
+        # Removemos chaves que não são parâmetros diretos da estratégia
+        for key in ["ticker", "interval", "days", "min_trades_per_window"]:
+            params.pop(key, None)
+        days_to_load = active_cfg.days  # Garante que o backtest use o mesmo período da otimização
     else:
         print("Nenhuma configuração ativa encontrada. Usando parâmetros padrão.")
         params = {
@@ -294,6 +316,16 @@ def main():
             "max_avg_deviation_pct": 0.5,
             "lot_size": args.lot_size,
         }
+        # Adiciona parâmetros padrão para os novos filtros, caso não haja config ativa
+        params.update(
+            {
+                "adx_threshold": 22.0,
+                "atr_stop_multiplier": 1.5,
+                "atr_trail_multiplier": 0.5,
+                "htf_lookback": 20,
+                "min_atr": 0.0,
+            }
+        )
         days_to_load = args.days
 
     # Carregar dados

@@ -10,6 +10,9 @@ from ...utils.optimizer import run_optimization_cli
 def make_objective(df_train, lot_size: float, min_trade_threshold: int = 20):
     """Creates the objective function for Optuna."""
     threshold = max(1, min_trade_threshold)
+    # Parâmetros fixos de custos (mantidos constantes durante a otimização)
+    FEE_PCT = 0.0004
+    SLIPPAGE_PCT = 0.0005
 
     def objective(trial: optuna.Trial) -> float:
         # Definir o espaço de busca para os parâmetros
@@ -27,7 +30,7 @@ def make_objective(df_train, lot_size: float, min_trade_threshold: int = 20):
 
         # Roda o backtest com os parâmetros sugeridos
         try:
-            trades, total_pnl, _ = backtest_al_brooks_inside_bar(
+            trades, pnl, _ = backtest_al_brooks_inside_bar(
                 df_train.copy(),
                 ema_fast_period=ema_fast,
                 ema_medium_period=ema_medium,
@@ -40,11 +43,15 @@ def make_objective(df_train, lot_size: float, min_trade_threshold: int = 20):
                 atr_trail_multiplier=atr_trail_multiplier,
                 htf_lookback=htf_lookback,
                 min_atr=min_atr,
+                taker_fee_pct=FEE_PCT,
+                slippage_pct=SLIPPAGE_PCT,
             )
         except Exception as e:
             trial.set_user_attr("error", str(e))
             return -1e9  # Penaliza configurações que causam erro
 
+        # Métrica de otimização: Profit Factor
+        # Queremos maximizar o Profit Factor, mas também garantir que seja lucrativo
         metrics = calculate_metrics(trades)
         trade_count = metrics["total_trades"]
         total_pnl = metrics["total_pnl"]
