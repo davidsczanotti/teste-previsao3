@@ -1,68 +1,108 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+import json
 
 
 @dataclass
 class DeepTripleRsiConfig:
-    """
-    Configuration for a PPO-based trading agent using Multi-Timeframe Analysis.
-    
-    The agent operates on a primary interval (e.g., 1m) and uses features from a 
-    longer 'trend' interval (e.g., 15m) to provide trend context.
-    """
-
+    # Market / data
     symbol: str = "BTCUSDT"
     interval: str = "1m"
-    days: int = 365  # Use a larger dataset for more robust training
+    days: int = 180
+    trend_intervals: List[str] = field(default_factory=lambda: ["5m", "15m", "1h"])  # Multi-timeframe context
 
-    # --- Feature Engineering ---
-    # Primary interval features
-    rsi_periods: tuple[int, ...] = (14, 21, 33)
+    # Feature engineering
+    rsi_periods: List[int] = field(default_factory=lambda: [6, 14, 21])
     stoch_period: int = 14
-    stoch_upper: float = 80.0
-    stoch_lower: float = 20.0
-    
-    # Trend interval features (Multi-Timeframe Analysis)
-    trend_interval: str = "15m"
     trend_adx_period: int = 14
+    trend_rsi_periods: List[int] = field(default_factory=lambda: [14])
+    trend_ema_periods: List[int] = field(default_factory=lambda: [20, 50])
 
-    # --- Trading & Risk Management ---
-    lot_size: float = 0.001
-    fee_rate: float = 0.00075  # More realistic fee for a high-volume trader
-    slippage_bps: float = 0.5  # 0.5 bps = 0.00005
-    action_cost_open: float = 0.1  # Reduced penalty, let the model learn churn
-    action_cost_close: float = 0.1
-    invalid_action_penalty: float = 1.0  # Strong penalty for invalid actions
-    min_hold_bars: int = 4
-    reopen_cooldown_bars: int = 4
-    max_position_bars: Optional[int] = 240  # e.g., 4 hours on 1m candles
-    long_only: bool = True
-
-    # --- Reward System ---
-    # The primary reward will be based on a risk-adjusted metric like Sharpe Ratio,
-    # calculated at the end of the episode. These weights are for step-by-step rewards.
-    reward_pnl_weight: float = 1.0  # Weight for realized PnL
-    reward_m2m_weight: float = 0.0  # Mark-to-market PnL (can be noisy, start with 0)
-
-    # --- Episode & Data Handling ---
-    episode_len: int = 4096  # Longer episodes for more context
+    # Episode / environment
+    episode_len: int = 2_000
     random_start: bool = True
-    train_val_test_split: tuple[float, float, float] = (0.7, 0.15, 0.15)
+    long_only: bool = True
+    base_lot_size: float = 0.001
+    lot_size: Optional[float] = None  # Backward compatibility alias
+    dynamic_position_sizing: bool = True
+    kelly_fraction_cap: float = 0.6
+    target_atr_pct: float = 0.015  # aim for 1.5% ATR risk
 
-    # --- PPO Algorithm Parameters ---
-    hidden_size: int = 64  # Increased complexity for more features
-    gamma: float = 0.995  # Discount factor for future rewards
-    learning_rate: float = 1e-4
-    entropy_beta: float = 0.01  # Higher entropy bonus to encourage exploration
-    grad_clip: float = 1.0
+    # Trading costs & execution
+    fee_rate: float = 0.001
+    slippage_bps: float = 1.0
+    action_cost_open: float = 0.0
+    action_cost_close: float = 0.0
+    invalid_action_penalty: float = 0.01
+    min_hold_bars: int = 2
+    reopen_cooldown_bars: int = 2
+    max_position_bars: Optional[int] = 240  # e.g., 4 hours on 1m
+
+    # Reward shaping / risk
+    reward_pnl_weight: float = 0.3
+    reward_sharpe_weight: float = 0.4
+    reward_sortino_weight: float = 0.2
+    reward_calmar_weight: float = 0.1
+    reward_kelly_weight: float = 0.0
+    reward_profile: Optional[str] = None  # 'conservative'|'balanced'|'aggressive'
+    calmar_window: int = 24 * 60 * 30  # ~30 days of 1m bars
+    max_drawdown_limit: Optional[float] = None  # e.g., 0.2 => 20% max DD hard stop
+
+    # PPO / training
+    seed: int = 1337
+    episodes: int = 50
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    ppo_clip_epsilon: float = 0.2
+    ppo_epochs: int = 4
+    ppo_batch_size: int = 256
+    entropy_beta: float = 0.01
+    grad_clip: float = 0.5
     normalize_advantages: bool = True
-    ppo_clip_epsilon: float = 0.2  # PPO-specific clipping parameter
-    ppo_epochs: int = 10  # Number of optimization epochs per data batch
-    ppo_batch_size: int = 64
-
-    # --- Training ---
-    seed: int = 42
-    episodes: int = 200  # More training episodes
     max_steps: Optional[int] = None
+
+    # Architectures
+    use_transformer: bool = False
+    transformer_layers: int = 2
+    transformer_heads: int = 4
+    transformer_dim: int = 64
+    dropout: float = 0.1
+
+    mlp_hidden_sizes: List[int] = field(default_factory=lambda: [128, 64, 32])
+    use_skip_connections: bool = True
+
+    # Convenience properties for backward compatibility
+    @property
+    def SYMBOL(self) -> str:  # noqa: N802
+        return self.symbol
+
+    @property
+    def TIMEFRAME(self) -> str:  # noqa: N802
+        return self.interval
+
+
+# --- Simple helpers to persist active configs for optimization results ---
+
+def save_active_config_record(strategy_name: str, symbol: str, interval: str, best_params: Dict[str, Any], reports_dir: str = "reports") -> Path:
+    out = Path(reports_dir) / "active"
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{strategy_name}_{symbol}_{interval}.json"
+    rec = {
+        "strategy": strategy_name,
+        "symbol": symbol,
+        "interval": interval,
+        "best_params": best_params,
+    }
+    path.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+# Legacy constants kept for backwards references in optimize.py/strategy.py
+SYMBOL = "BTCUSDT"
+TIMEFRAME = "1m"
+INITIAL_CAPITAL = 1_000.0
+POSITION_SIZE_PCT = 0.50
+FEE = 0.001

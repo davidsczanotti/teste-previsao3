@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
+import math
 
 import numpy as np
 import torch
@@ -9,46 +10,171 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
 from torch.utils.data import TensorDataset, DataLoader
+import torch.nn.functional as F
 
 from .config import DeepTripleRsiConfig
 from .env import TripleRsiEnv
 
-# --- Enhanced PyTorch Actor-Critic Model with Skip Connection ---
+# --- Advanced Transformer-based Actor-Critic Model ---
 
-class ActorCritic(nn.Module):
+class PositionalEncoding(nn.Module):
+    """Positional encoding for transformer models."""
+    def __init__(self, d_model: int, max_len: int = 5000):
+        super().__init__()
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.pe[:x.size(0)]
+
+class TransformerActorCritic(nn.Module):
     """
-    An Actor-Critic model with a shared MLP backbone and a skip connection.
-    The skip connection can help with gradient flow for deeper or more complex models.
+    Advanced Transformer-based Actor-Critic model with multi-head attention.
+    Incorporates temporal dependencies and advanced feature processing.
     """
-    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
-        super(ActorCritic, self).__init__()
-        self.layer1 = nn.Linear(input_dim, hidden_dim)
-        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
-        # Skip connection will be from input to the second layer
-        self.skip_connection = nn.Linear(input_dim, hidden_dim)
-        
-        self.policy_head = nn.Linear(hidden_dim, output_dim)
-        self.value_head = nn.Linear(hidden_dim, 1)
-        
-        self.relu = nn.ReLU()
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 3,
+                 num_heads: int = 8, dropout: float = 0.1):
+        super(TransformerActorCritic, self).__init__()
+
+        self.input_projection = nn.Linear(input_dim, hidden_dim)
+        self.pos_encoder = PositionalEncoding(hidden_dim)
+
+        # Transformer encoder layers
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout,
+            batch_first=True
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Policy and value heads
+        self.policy_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim // 2, output_dim)
+        )
+
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim // 2, 1)
+        )
 
     def forward(self, x: torch.Tensor) -> tuple[Categorical, torch.Tensor]:
         if not isinstance(x, torch.Tensor):
             x = torch.from_numpy(x).float()
 
-        # Main path
-        out1 = self.relu(self.layer1(x))
-        # Add skip connection before the second layer's activation
-        out2 = self.relu(self.layer2(out1) + self.skip_connection(x))
-        
-        # Actor: get action logits, then create a distribution
-        action_logits = self.policy_head(out2)
+        # Handle single observation (add batch and sequence dimensions)
+        if x.dim() == 1:
+            x = x.unsqueeze(0).unsqueeze(0)  # [1, 1, input_dim]
+        elif x.dim() == 2:
+            x = x.unsqueeze(1)  # [batch, 1, input_dim]
+
+        # Project input to hidden dimension
+        x = self.input_projection(x)  # [batch, seq_len, hidden_dim]
+
+        # Add positional encoding
+        x = self.pos_encoder(x.transpose(0, 1)).transpose(0, 1)
+
+        # Apply transformer encoder
+        transformer_out = self.transformer_encoder(x)  # [batch, seq_len, hidden_dim]
+
+        # Use the last sequence element for prediction
+        features = transformer_out[:, -1, :]  # [batch, hidden_dim]
+
+        # Actor: get action logits
+        action_logits = self.policy_head(features)
         action_dist = Categorical(logits=action_logits)
-        
+
         # Critic: get state value
-        state_value = self.value_head(out2)
-        
-        return action_dist, state_value.squeeze(-1)
+        state_value = self.value_head(features).squeeze(-1)
+
+        return action_dist, state_value
+
+class EnsembleActorCritic(nn.Module):
+    """
+    Ensemble of models for improved stability and performance.
+    """
+    def __init__(self, models: List[nn.Module]):
+        super(EnsembleActorCritic, self).__init__()
+        self.models = nn.ModuleList(models)
+
+    def forward(self, x: torch.Tensor) -> tuple[Categorical, torch.Tensor]:
+        # Average predictions across ensemble
+        action_dists = []
+        state_values = []
+
+        for model in self.models:
+            action_dist, state_value = model(x)
+            action_dists.append(action_dist)
+            state_values.append(state_value)
+
+        # Average logits for action distribution
+        avg_logits = torch.stack([dist.logits for dist in action_dists]).mean(0)
+        avg_action_dist = Categorical(logits=avg_logits)
+
+        # Average state values
+        avg_state_value = torch.stack(state_values).mean(0)
+
+        return avg_action_dist, avg_state_value
+
+# --- Legacy MLP Model for Backward Compatibility ---
+
+class MLPActorCritic(nn.Module):
+    """
+    Enhanced MLP Actor-Critic with skip connections and advanced architecture.
+    """
+    def __init__(self, input_dim: int, hidden_dims: List[int], output_dim: int, use_skip: bool = True):
+        super(MLPActorCritic, self).__init__()
+
+        self.layers = nn.ModuleList()
+        self.skip_connections = nn.ModuleList() if use_skip else None
+
+        # Build hidden layers
+        prev_dim = input_dim
+        for i, hidden_dim in enumerate(hidden_dims):
+            self.layers.append(nn.Linear(prev_dim, hidden_dim))
+            if use_skip and i > 0:
+                if self.skip_connections is not None:
+                    self.skip_connections.append(nn.Linear(input_dim, hidden_dim))
+            prev_dim = hidden_dim
+
+        self.policy_head = nn.Linear(prev_dim, output_dim)
+        self.value_head = nn.Linear(prev_dim, 1)
+
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, x: torch.Tensor) -> tuple[Categorical, torch.Tensor]:
+        if not isinstance(x, torch.Tensor):
+            x = torch.from_numpy(x).float()
+
+        original_x = x.clone()
+
+        # Forward through hidden layers
+        for i, layer in enumerate(self.layers):
+            x = self.relu(layer(x))
+            if self.skip_connections and i > 0:
+                skip_x = self.skip_connections[i-1](original_x)
+                x = x + skip_x  # Residual connection
+            x = self.dropout(x)
+
+        # Actor: get action logits
+        action_logits = self.policy_head(x)
+        action_dist = Categorical(logits=action_logits)
+
+        # Critic: get state value
+        state_value = self.value_head(x).squeeze(-1)
+
+        return action_dist, state_value
 
 
 def _calculate_gae(rewards: list, values: list, dones: list, gamma: float, lam: float) -> list:
@@ -82,11 +208,24 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
 
     # The environment needs to be reset to determine observation_size
     env.reset(seed=cfg.seed)
-    model = ActorCritic(
-        input_dim=env.observation_size,
-        hidden_dim=cfg.hidden_size,
-        output_dim=env.action_size
-    ).to(device)
+
+    # Choose model architecture based on config
+    if cfg.use_transformer:
+        model = TransformerActorCritic(
+            input_dim=env.observation_size,
+            hidden_dim=cfg.transformer_dim,
+            output_dim=env.action_size,
+            num_layers=cfg.transformer_layers,
+            num_heads=cfg.transformer_heads,
+            dropout=cfg.dropout
+        ).to(device)
+    else:
+        model = MLPActorCritic(
+            input_dim=env.observation_size,
+            hidden_dims=cfg.mlp_hidden_sizes,
+            output_dim=env.action_size,
+            use_skip=cfg.use_skip_connections
+        ).to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
@@ -140,8 +279,8 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
             values_list.append(last_value.cpu().numpy())
 
         advantages = _calculate_gae(reward_list, values_list, done_list, cfg.gamma, 0.95) # Using a standard lambda for GAE
-        returns = (torch.tensor(advantages, dtype=torch.float32) + torch.tensor(values_list[:-1], dtype=torch.float32)).to(device)
-        advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
+        returns = (torch.from_numpy(np.array(advantages)) + torch.from_numpy(np.array(values_list[:-1]))).float().to(device)
+        advantages = torch.from_numpy(np.array(advantages)).float().to(device)
 
         if cfg.normalize_advantages:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -178,7 +317,7 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
                 # Value loss
-                value_loss = nn.functional.mse_loss(new_values, batch_returns)
+                value_loss = nn.functional.mse_loss(new_values, batch_returns.squeeze(-1))
 
                 # Total loss
                 total_loss = policy_loss + 0.5 * value_loss - cfg.entropy_beta * entropy
@@ -212,7 +351,7 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
             break
             
     eval_sharpe = eval_env.calculate_sharpe_ratio()
-    eval_reward = sum(eval_env.portfolio_values) - eval_env.initial_capital
+    eval_reward = eval_env.portfolio_values[-1] - eval_env.initial_capital
     print(f"Greedy evaluation: Reward={eval_reward:.2f}, Sharpe Ratio={eval_sharpe:.2f}\n")
 
     # --- Save Model ---
