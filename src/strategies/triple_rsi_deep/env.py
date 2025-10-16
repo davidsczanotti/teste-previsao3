@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pandas_ta as ta
 
-from ...binance_client import get_historical_klines
+from ...binance_client import get_historical_klines, get_cached_klines
 from .config import DeepTripleRsiConfig
 
 
@@ -95,7 +95,10 @@ class TripleRsiEnv:
         start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
 
         # Primary
-        df_primary = get_historical_klines(self.cfg.symbol, self.cfg.interval, start_str)
+        if getattr(self.cfg, 'cache_only', False):
+            df_primary = get_cached_klines(self.cfg.symbol, self.cfg.interval, start_str)
+        else:
+            df_primary = get_historical_klines(self.cfg.symbol, self.cfg.interval, start_str)
         if df_primary.empty:
             raise RuntimeError(f"No primary data for {self.cfg.symbol}|{self.cfg.interval}")
 
@@ -103,7 +106,10 @@ class TripleRsiEnv:
         trend_dfs: Dict[str, pd.DataFrame] = {}
         intervals = getattr(self.cfg, 'trend_intervals', ["15m"]) or ["15m"]
         for tf in intervals:
-            tdf = get_historical_klines(self.cfg.symbol, tf, start_str)
+            if getattr(self.cfg, 'cache_only', False):
+                tdf = get_cached_klines(self.cfg.symbol, tf, start_str)
+            else:
+                tdf = get_historical_klines(self.cfg.symbol, tf, start_str)
             if tdf.empty:
                 continue
             trend_dfs[tf] = tdf.sort_values("Date").reset_index(drop=True)
@@ -280,7 +286,11 @@ class TripleRsiEnv:
             self._start_i = 0
         
         self._i = self._start_i
-        self._end_i = self._i + self.cfg.episode_len
+        if getattr(self.cfg, 'episode_len', None) is None:
+            # run to the end of available features
+            self._end_i = (len(self._features) - 1) if self._features is not None else 0
+        else:
+            self._end_i = self._i + int(self.cfg.episode_len)
 
         self._pos = 0
         self._entry_price = 0.0
@@ -310,7 +320,24 @@ class TripleRsiEnv:
         return np.concatenate([base_features, pos_flags, [bars_in_pos_norm]]).astype(np.float32)
 
     def calculate_step_reward(self, action: int, prev_value: float, current_value: float, info: Dict[str, Any]) -> float:
-        """Multi-scale reward system for stable learning."""
+        """Reward function. Supports a simple training reward to stabilize learning."""
+
+        # Simple dense reward for training: position * price return with optional scaling
+        if getattr(self.cfg, 'training_simple_reward', False):
+            try:
+                if self._i <= 0 or self._prices is None:
+                    return 0.0
+                p_prev = float(self._prices[self._i - 1])
+                p_cur = float(self._prices[self._i])
+                if p_prev <= 0:
+                    return 0.0
+                ret = (p_cur - p_prev) / p_prev
+                pos_sign = 1.0 if self._pos == 1 else 0.0
+                scale = float(getattr(self.cfg, 'simple_reward_scale', 0.001) or 0.001)
+                # Clip via tanh for PPO stability
+                return float(np.tanh((pos_sign * ret) / scale))
+            except Exception:
+                return 0.0
 
         # Get lot size from config (backward compatibility)
         lot_size = getattr(self.cfg, 'lot_size', getattr(self.cfg, 'base_lot_size', 0.001))
@@ -335,8 +362,9 @@ class TripleRsiEnv:
                     action_reward -= 0.05  # Penalty for opening against momentum
 
         elif info.get("trade") == "CLOSE_LONG":
-            # Reward profitable closes, penalize losses
-            pnl = (self._prices[self._i] - self._entry_price) * lot_size
+            # Reward profitable closes, penalize losses using actual position size
+            current_size = self._pos_size if hasattr(self, '_pos_size') else getattr(self.cfg, 'lot_size', getattr(self.cfg, 'base_lot_size', 0.001))
+            pnl = (self._prices[self._i] - self._entry_price) * float(current_size)
             pnl_normalized = pnl / self.initial_capital
 
             if pnl > 0:
@@ -350,18 +378,17 @@ class TripleRsiEnv:
         if info.get("invalid_action"):
             action_reward -= 0.2
 
-        # Holding penalties (encourage appropriate action)
-        if action == 0:  # Hold action
-            if self._pos != 0:  # Holding in position
-                # Small penalty that increases with position duration
-                hold_penalty = 0.005 * (self._bars_in_pos / (self.cfg.max_position_bars or 100))
-                action_reward -= min(hold_penalty, 0.05)
-            else:  # Holding flat
-                # Small penalty for not acting when market moves
-                if self._features is not None and self._i > 0:
-                    price_change = (self._prices[self._i] - self._prices[self._i-1]) / self._prices[self._i-1]
-                    if abs(price_change) > 0.001:  # Significant price movement
-                        action_reward -= 0.01
+        # Holding penalties (disabled during simple training reward)
+        if not getattr(self.cfg, 'training_simple_reward', False):
+            if action == 0:  # Hold action
+                if self._pos != 0:  # Holding in position
+                    hold_penalty = 0.005 * (self._bars_in_pos / (self.cfg.max_position_bars or 100))
+                    action_reward -= min(hold_penalty, 0.05)
+                else:  # Holding flat
+                    if self._features is not None and self._i > 0:
+                        price_change = (self._prices[self._i] - self._prices[self._i-1]) / self._prices[self._i-1]
+                        if abs(price_change) > 0.001:  # Significant price movement
+                            action_reward -= 0.01
 
         # Risk management rewards
         if self._pos != 0:

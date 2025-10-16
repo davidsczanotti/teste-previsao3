@@ -25,9 +25,10 @@ class DeepTripleRsiConfig:
     episode_len: int = 2_000
     random_start: bool = True
     long_only: bool = True
+    cache_only: bool = False
     base_lot_size: float = 0.001
     lot_size: Optional[float] = None  # Backward compatibility alias
-    dynamic_position_sizing: bool = True
+    dynamic_position_sizing: bool = False
     kelly_fraction_cap: float = 0.6
     target_atr_pct: float = 0.015  # aim for 1.5% ATR risk
 
@@ -37,9 +38,9 @@ class DeepTripleRsiConfig:
     action_cost_open: float = 0.0
     action_cost_close: float = 0.0
     invalid_action_penalty: float = 0.01
-    min_hold_bars: int = 2
-    reopen_cooldown_bars: int = 2
-    max_position_bars: Optional[int] = 240  # e.g., 4 hours on 1m
+    min_hold_bars: int = 5
+    reopen_cooldown_bars: int = 5
+    max_position_bars: Optional[int] = 120  # e.g., 2 hours on 1m
 
     # Reward shaping / risk
     reward_pnl_weight: float = 0.3
@@ -54,12 +55,14 @@ class DeepTripleRsiConfig:
     # PPO / training
     seed: int = 1337
     episodes: int = 50
-    learning_rate: float = 3e-4
+    learning_rate: float = 1e-4
     gamma: float = 0.99
     ppo_clip_epsilon: float = 0.2
     ppo_epochs: int = 4
     ppo_batch_size: int = 256
-    entropy_beta: float = 0.01
+    entropy_beta: float = 0.02
+    entropy_beta_start: float = 0.02
+    entropy_beta_end: float = 0.005
     grad_clip: float = 0.5
     normalize_advantages: bool = True
     max_steps: Optional[int] = None
@@ -73,6 +76,15 @@ class DeepTripleRsiConfig:
 
     mlp_hidden_sizes: List[int] = field(default_factory=lambda: [128, 64, 32])
     use_skip_connections: bool = True
+
+    # Training-only overrides (for stability)
+    training_relaxed_costs: bool = True
+    train_fee_rate: float = 0.0
+    train_slippage_bps: float = 0.0
+    train_invalid_action_penalty: float = 0.0
+    train_dynamic_position_sizing: bool = False
+    training_simple_reward: bool = True
+    simple_reward_scale: float = 0.001
 
     # Convenience properties for backward compatibility
     @property

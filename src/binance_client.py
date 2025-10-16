@@ -6,6 +6,8 @@ from binance.client import Client
 import urllib3
 
 from .cache.klines_cache import cached_klines, to_timestamp_ms
+from .cache.klines_cache import load_range as _cache_load_range
+from .cache.klines_cache import latest_open_time as _cache_latest_open_time
 
 # É uma boa prática não colocar chaves de API diretamente no código.
 # Para dados públicos como histórico de preços, elas não são necessárias.
@@ -122,4 +124,28 @@ def get_historical_klines(symbol, interval, start_str, end_str=None):
         end_ms = int(time.time() * 1000)
 
     df = _cached_dataframe(symbol, interval, start_ms, end_ms)
+    return _format_output(df)
+
+
+def get_cached_klines(symbol: str, interval: str, start_str, end_str=None) -> pd.DataFrame:
+    """Retorna somente dados do cache local, sem chamadas à Binance.
+
+    - Ajusta o end_ms para o último candle disponível no cache.
+    - Se não houver dados, retorna DataFrame vazio.
+    """
+    start_ms: Optional[int] = to_timestamp_ms(start_str)
+    end_ms: Optional[int] = to_timestamp_ms(end_str) if end_str else None
+
+    if start_ms is None:
+        # Se o start não é timestamp parseável, não tentamos rede; devolvemos vazio
+        return pd.DataFrame(columns=["Date", "open", "high", "low", "close", "volume"])
+
+    latest = _cache_latest_open_time(symbol, interval)
+    if latest is None:
+        return pd.DataFrame(columns=["Date", "open", "high", "low", "close", "volume"])
+
+    if end_ms is None or end_ms > latest:
+        end_ms = latest
+
+    df = _cache_load_range(symbol, interval, start_ms, end_ms)
     return _format_output(df)

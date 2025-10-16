@@ -12,6 +12,7 @@ from torch.distributions import Categorical
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
 
+from dataclasses import replace
 from .config import DeepTripleRsiConfig
 from .env import TripleRsiEnv
 
@@ -199,8 +200,15 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
     """
     cfg = config or DeepTripleRsiConfig()
     
-    # Setup environment
-    env = TripleRsiEnv(config=cfg)
+    # Setup environment (use relaxed training settings for stability)
+    train_cfg = replace(
+        cfg,
+        fee_rate=(cfg.train_fee_rate if cfg.training_relaxed_costs else cfg.fee_rate),
+        slippage_bps=(cfg.train_slippage_bps if cfg.training_relaxed_costs else cfg.slippage_bps),
+        invalid_action_penalty=(cfg.train_invalid_action_penalty if cfg.training_relaxed_costs else cfg.invalid_action_penalty),
+        dynamic_position_sizing=(cfg.train_dynamic_position_sizing if cfg.training_relaxed_costs else cfg.dynamic_position_sizing),
+    )
+    env = TripleRsiEnv(config=train_cfg)
 
     # Setup model and optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -239,6 +247,11 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
     # --- PPO Training Loop ---
     history = []
     for ep in range(cfg.episodes):
+        # Entropy scheduler (linear decay)
+        ent_start = getattr(cfg, 'entropy_beta_start', cfg.entropy_beta)
+        ent_end = getattr(cfg, 'entropy_beta_end', cfg.entropy_beta)
+        frac = float(ep) / float(max(1, cfg.episodes - 1))
+        entropy_beta = ent_start + (ent_end - ent_start) * frac
         # --- 1. Collect Rollout Data ---
         obs_list, reward_list, action_list, log_prob_list, values_list, done_list = [], [], [], [], [], []
         
@@ -320,7 +333,7 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
                 value_loss = nn.functional.mse_loss(new_values, batch_returns.squeeze(-1))
 
                 # Total loss
-                total_loss = policy_loss + 0.5 * value_loss - cfg.entropy_beta * entropy
+                total_loss = policy_loss + 0.5 * value_loss - entropy_beta * entropy
 
                 # Update
                 optimizer.zero_grad()

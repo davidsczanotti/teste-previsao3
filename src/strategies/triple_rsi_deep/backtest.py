@@ -53,7 +53,7 @@ class Backtester:
         Run backtest for a specific date range.
         """
         # Load data
-        df = load_data_range(self.cfg.symbol, self.cfg.interval, start_date, end_date)
+        df = load_data_range(self.cfg.symbol, self.cfg.interval, start_date, end_date, use_cache_only=getattr(self.cfg, 'cache_only', False))
 
         # Create environment with loaded data
         env = TripleRsiEnv(config=self.cfg, df_primary=df)
@@ -193,8 +193,8 @@ class Backtester:
             env = TripleRsiEnv(config=config_sim)
             env.reset(seed=i)
 
-            # Load model
-            model = self.load_model(model_path)
+            # Load model using environment dimensions
+            model = self.load_model(model_path, input_dim=env.observation_size, output_dim=env.action_size)
 
             # Run simulation
             obs = env.reset(seed=i)
@@ -245,12 +245,16 @@ class Backtester:
         }
 
 
-def run_comprehensive_backtest(model_path: str, start_date: str = "2023-01-01 00:00:00",
-                              end_date: str = "2024-01-01 00:00:00") -> Dict[str, Any]:
+def run_comprehensive_backtest(model_path: str,
+                              start_date: str = "2023-01-01 00:00:00",
+                              end_date: str = "2024-01-01 00:00:00",
+                              validation_splits: int = 5,
+                              num_simulations: int = 500,
+                              config: Optional[DeepTripleRsiConfig] = None) -> Dict[str, Any]:
     """
     Run comprehensive backtest with multiple validation methods.
     """
-    backtester = Backtester()
+    backtester = Backtester(config=config)
 
     print("Running comprehensive backtest...")
     print(f"Model: {model_path}")
@@ -265,13 +269,13 @@ def run_comprehensive_backtest(model_path: str, start_date: str = "2023-01-01 00
 
     # 2. Walk-forward validation
     print("\n2. Running walk-forward validation...")
-    wfa_results = backtester.walk_forward_validation(model_path, start_date, end_date)
+    wfa_results = backtester.walk_forward_validation(model_path, start_date, end_date, validation_splits=validation_splits)
     print(f"WFA - Mean Sharpe: {wfa_results['aggregated'].get('mean_sharpe', 0):.3f}, "
           f"Sharpe Stability: {wfa_results['aggregated'].get('sharpe_stability', 0):.3f}")
 
     # 3. Monte Carlo simulation
     print("\n3. Running Monte Carlo simulation...")
-    mc_results = backtester.monte_carlo_simulation(model_path, start_date, end_date, num_simulations=500)
+    mc_results = backtester.monte_carlo_simulation(model_path, start_date, end_date, num_simulations=num_simulations)
     print(f"MC - Expected Return: {mc_results['return_distribution']['mean']:.3f}, "
           f"VaR 95%: {mc_results['return_distribution']['var_95']:.3f}")
 
