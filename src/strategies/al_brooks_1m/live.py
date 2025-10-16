@@ -154,20 +154,24 @@ def handle_exit(exit_type: str, price: float, params: dict, event_time) -> None:
             t = t.tz_localize(None)
     except Exception:
         t = datetime.now().replace(tzinfo=None)
+    # Armazena o preço de execução (fill) e o PnL para uso no gráfico
     TRADE_EVENTS.append({
         "type": "exit",
         "side": side or "",
         "time": t,
-        "price": float(price),
+        "price": float(exit_fill),
         "label": exit_type,
+        "pnl": float(pnl),
+        "capital": float(position_state.get("capital", 0.0)),
     })
     # Persist trade to CSV
+    # Persiste evento de saída usando o preço de execução
     _append_trade(
         event_time=t,
         event_type="exit",
         subtype=exit_type,
         side=side or "",
-        price=float(price),
+        price=float(exit_fill),
         entry_price=float(entry_price),
         stop_loss=float(position_state.get("stop_loss", 0.0)),
         take_profit=float(position_state.get("take_profit", 0.0)),
@@ -557,6 +561,10 @@ def _render_png(
     entries_short_x, entries_short_y = [], []
     exits_long_x, exits_long_y = [], []
     exits_short_x, exits_short_y = [], []
+    # Rastreia o último P&L realizado (para título/anotação)
+    last_exit_xy = None
+    last_exit_pnl = None
+    last_exit_cap = None
     for ev in TRADE_EVENTS:
         try:
             ev_time = pd.to_datetime(ev.get("time")).to_pydatetime()
@@ -577,10 +585,18 @@ def _render_png(
         else:
             if ev.get("side") == "long":
                 exits_long_x.append(ev_time)
-                exits_long_y.append(ev.get("price"))
+                price_val = ev.get("price")
+                exits_long_y.append(price_val)
+                last_exit_xy = (ev_time, price_val)
+                last_exit_pnl = ev.get("pnl") if ev.get("pnl") is not None else last_exit_pnl
+                last_exit_cap = ev.get("capital") if ev.get("capital") is not None else last_exit_cap
             else:
                 exits_short_x.append(ev_time)
-                exits_short_y.append(ev.get("price"))
+                price_val = ev.get("price")
+                exits_short_y.append(price_val)
+                last_exit_xy = (ev_time, price_val)
+                last_exit_pnl = ev.get("pnl") if ev.get("pnl") is not None else last_exit_pnl
+                last_exit_cap = ev.get("capital") if ev.get("capital") is not None else last_exit_cap
 
     if entries_long_x:
         ax.scatter(entries_long_x, entries_long_y, marker="^", s=50, color="#2ca02c", edgecolor="black", linewidths=0.5, label="entry long")
@@ -594,9 +610,28 @@ def _render_png(
     # Optionally show current price as well
     ax.axhline(current_price, color="#7f7f7f", linestyle="-.", linewidth=0.8, label="last price")
 
+    # Anota o último P&L realizado, se disponível
+    if last_exit_xy and (last_exit_pnl is not None):
+        color_pnl = "#2ca02c" if float(last_exit_pnl) >= 0 else "#d62728"
+        ax.annotate(
+            f"{float(last_exit_pnl):+,.2f}",
+            xy=last_exit_xy,
+            xytext=(0, 10),
+            textcoords="offset points",
+            fontsize=8,
+            color=color_pnl,
+            ha="center",
+        )
+
+    cap_now = position_state.get("capital", 0.0)
+    extra = (
+        f" | last PnL: {float(last_exit_pnl):+,.2f} | capital: ${float(last_exit_cap if last_exit_cap is not None else cap_now):,.2f}"
+        if last_exit_pnl is not None
+        else f" | capital: ${float(cap_now):,.2f}"
+    )
     ax.set_title(
         f"ALBROOKS {params['ticker']}@{params['interval']} | {plot_df['Date'].iloc[-1].strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"signal={signal} | {reason}"
+        f"signal={signal} | {reason}{extra}"
     )
     ax.legend(loc="upper left", fontsize=8)
     ax.grid(True, linestyle=":", linewidth=0.5)
@@ -640,14 +675,22 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
                     t = t.tz_localize(None)
             except Exception:
                 t = datetime.now().replace(tzinfo=None)
-            TRADE_EVENTS.append({"type": "entry", "side": "long", "time": t, "price": float(entry_price), "label": "ENTRY"})
+            # Usa o preço de execução (fill) para o marcador do gráfico
+            TRADE_EVENTS.append({
+                "type": "entry",
+                "side": "long",
+                "time": t,
+                "price": float(entry_fill),
+                "label": "ENTRY",
+            })
             # Persist entry to trades CSV
             _append_trade(
                 event_time=t,
                 event_type="entry",
                 subtype="ENTRY",
                 side="long",
-                price=float(entry_price),
+                # Persiste o preço de execução
+                price=float(entry_fill),
                 entry_price=float(entry_price),
                 stop_loss=float(stop),
                 take_profit=float(target),
@@ -681,13 +724,19 @@ def check_for_new_entry(df: pd.DataFrame, current_price: float, params: dict) ->
                     t = t.tz_localize(None)
             except Exception:
                 t = datetime.now().replace(tzinfo=None)
-            TRADE_EVENTS.append({"type": "entry", "side": "short", "time": t, "price": float(entry_price), "label": "ENTRY"})
+            TRADE_EVENTS.append({
+                "type": "entry",
+                "side": "short",
+                "time": t,
+                "price": float(entry_fill),
+                "label": "ENTRY",
+            })
             _append_trade(
                 event_time=t,
                 event_type="entry",
                 subtype="ENTRY",
                 side="short",
-                price=float(entry_price),
+                price=float(entry_fill),
                 entry_price=float(entry_price),
                 stop_loss=float(stop),
                 take_profit=float(target),

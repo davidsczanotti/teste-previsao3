@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict
 from typing import Dict, Any, Optional
 
 import numpy as np
@@ -9,68 +8,80 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
+from torch.utils.data import TensorDataset, DataLoader
 
 from .config import DeepTripleRsiConfig
 from .env import TripleRsiEnv
 
-# --- PyTorch Actor-Critic Model ---
+# --- Enhanced PyTorch Actor-Critic Model with Skip Connection ---
 
 class ActorCritic(nn.Module):
     """
-    An Actor-Critic model with a shared MLP backbone.
-    - Actor head: outputs action probabilities (policy)
-    - Critic head: outputs state value
+    An Actor-Critic model with a shared MLP backbone and a skip connection.
+    The skip connection can help with gradient flow for deeper or more complex models.
     """
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
         super(ActorCritic, self).__init__()
-        self.shared_layer = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.Tanh()
-        )
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        # Skip connection will be from input to the second layer
+        self.skip_connection = nn.Linear(input_dim, hidden_dim)
+        
         self.policy_head = nn.Linear(hidden_dim, output_dim)
         self.value_head = nn.Linear(hidden_dim, 1)
+        
+        self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> tuple[Categorical, torch.Tensor]:
-        """
-        Forward pass.
-        Returns a distribution over actions and the estimated state value.
-        """
         if not isinstance(x, torch.Tensor):
             x = torch.from_numpy(x).float()
 
-        shared_features = self.shared_layer(x)
+        # Main path
+        out1 = self.relu(self.layer1(x))
+        # Add skip connection before the second layer's activation
+        out2 = self.relu(self.layer2(out1) + self.skip_connection(x))
         
         # Actor: get action logits, then create a distribution
-        action_logits = self.policy_head(shared_features)
+        action_logits = self.policy_head(out2)
         action_dist = Categorical(logits=action_logits)
         
         # Critic: get state value
-        state_value = self.value_head(shared_features)
+        state_value = self.value_head(out2)
         
         return action_dist, state_value.squeeze(-1)
 
 
-# --- Main Training Function ---
+def _calculate_gae(rewards: list, values: list, dones: list, gamma: float, lam: float) -> list:
+    """Calculate Generalized Advantage Estimation (GAE)."""
+    advantages = []
+    last_advantage = 0
+    for i in reversed(range(len(rewards))):
+        if dones[i]:
+            delta = rewards[i] - values[i]
+            last_advantage = delta
+        else:
+            delta = rewards[i] + gamma * values[i+1] - values[i]
+            last_advantage = delta + gamma * lam * last_advantage
+        advantages.insert(0, last_advantage)
+    return advantages
+
+# --- Main PPO Training Function ---
 
 def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Trains the Actor-Critic agent using PyTorch.
+    Trains the Actor-Critic agent using Proximal Policy Optimization (PPO).
     """
     cfg = config or DeepTripleRsiConfig()
     
-    # Filter config to only pass env-specific args
-    import inspect
-    config_dict = asdict(cfg)
-    env_arg_names = [p.name for p in inspect.signature(TripleRsiEnv).parameters.values()]
-    env_config = {k: v for k, v in config_dict.items() if k in env_arg_names}
-
     # Setup environment
-    env = TripleRsiEnv(**env_config)
+    env = TripleRsiEnv(config=cfg)
 
     # Setup model and optimizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # The environment needs to be reset to determine observation_size
+    env.reset(seed=cfg.seed)
     model = ActorCritic(
         input_dim=env.observation_size,
         hidden_dim=cfg.hidden_size,
@@ -79,7 +90,6 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
     
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
-    # Load model if path is provided
     if model_path and os.path.exists(model_path):
         try:
             model.load_state_dict(torch.load(model_path, map_location=device))
@@ -87,12 +97,11 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
         except Exception as e:
             print(f"Could not load model, starting from scratch. Error: {e}")
 
-    # --- Training Loop ---
+    # --- PPO Training Loop ---
     history = []
     for ep in range(cfg.episodes):
-        # --- Collect episode data ---
-        obs_list, reward_list = [], []
-        log_probs_list, values_list, entropy_list = [], [], []
+        # --- 1. Collect Rollout Data ---
+        obs_list, reward_list, action_list, log_prob_list, values_list, done_list = [], [], [], [], [], []
         
         obs = env.reset(seed=cfg.seed + ep)
         done = False
@@ -102,28 +111,20 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
         while not done:
             obs_tensor = torch.from_numpy(obs).float().to(device).unsqueeze(0)
             
-            # Get action and value from model
-            action_dist, state_value = model(obs_tensor)
-            
-            # Epsilon-greedy exploration
-            frac_left = 1.0 - (ep / max(cfg.episodes - 1, 1))
-            eps = cfg.epsilon_end + (cfg.epsilon_start - cfg.epsilon_end) * frac_left
-            
-            if torch.rand(1) < eps:
-                action = torch.randint(0, env.action_size, (1,)).item()
-            else:
-                action = action_dist.sample().item()
+            with torch.no_grad():
+                action_dist, state_value = model(obs_tensor)
+                action = action_dist.sample()
+                log_prob = action_dist.log_prob(action)
 
-            # Store results from the model
-            log_probs_list.append(action_dist.log_prob(torch.tensor(action, device=device)))
-            values_list.append(state_value)
-            entropy_list.append(action_dist.entropy())
-
-            # Step the environment
-            res = env.step(action)
+            res = env.step(action.item())
             
+            # Store rollout data
             obs_list.append(obs)
+            action_list.append(action.cpu().numpy())
             reward_list.append(res.reward)
+            log_prob_list.append(log_prob.cpu().numpy())
+            values_list.append(state_value.cpu().numpy())
+            done_list.append(res.done)
             
             obs = res.obs
             done = res.done
@@ -131,85 +132,97 @@ def train(config: Optional[DeepTripleRsiConfig] = None, model_path: Optional[str
             steps += 1
             if cfg.max_steps is not None and steps >= cfg.max_steps:
                 break
-
-        # --- A2C Update Step ---
         
-        # Calculate returns (Gt)
-        returns = []
-        R = 0
-        for r in reversed(reward_list):
-            R = r + cfg.gamma * R
-            returns.insert(0, R)
-        
-        returns = torch.tensor(returns, dtype=torch.float32).to(device)
-        log_probs = torch.stack(log_probs_list)
-        values = torch.stack(values_list).squeeze()
-        entropy = torch.stack(entropy_list).mean()
+        # --- 2. Calculate Advantages and Returns ---
+        with torch.no_grad():
+            obs_tensor = torch.from_numpy(obs).float().to(device).unsqueeze(0)
+            _, last_value = model(obs_tensor)
+            values_list.append(last_value.cpu().numpy())
 
-        # Normalize returns (optional, but can stabilize)
-        # returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        advantages = _calculate_gae(reward_list, values_list, done_list, cfg.gamma, 0.95) # Using a standard lambda for GAE
+        returns = (torch.tensor(advantages, dtype=torch.float32) + torch.tensor(values_list[:-1], dtype=torch.float32)).to(device)
+        advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
 
-        # Calculate advantages
-        advantages = returns - values
         if cfg.normalize_advantages:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-            
-        # Calculate losses
-        policy_loss = -(log_probs * advantages.detach()).mean()
-        value_loss = nn.functional.mse_loss(values, returns.detach())
-        
-        # Entropy bonus for exploration
-        frac = 1.0 - (ep / max(cfg.episodes - 1, 1))
-        entropy_beta = cfg.entropy_beta_end + (cfg.entropy_beta - cfg.entropy_beta_end) * frac
-        
-        total_loss = policy_loss + 0.5 * value_loss - entropy_beta * entropy
 
-        # Update model
-        optimizer.zero_grad()
-        total_loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-        optimizer.step()
+        # --- 3. PPO Update Step ---
+        dataset = TensorDataset(
+            torch.from_numpy(np.array(obs_list)),
+            torch.from_numpy(np.array(action_list)),
+            torch.from_numpy(np.array(log_prob_list)),
+            advantages,
+            returns
+        )
+        loader = DataLoader(dataset, batch_size=cfg.ppo_batch_size, shuffle=True)
 
-        # --- Logging ---
-        history.append({"episode": ep + 1, "steps": steps, "reward": episode_reward, "entropy": entropy.item()})
+        for _ in range(cfg.ppo_epochs):
+            for batch_obs, batch_actions, batch_log_probs, batch_advantages, batch_returns in loader:
+                batch_obs = batch_obs.to(device)
+                batch_actions = batch_actions.to(device)
+                batch_log_probs = batch_log_probs.to(device)
+                batch_advantages = batch_advantages.to(device)
+                batch_returns = batch_returns.to(device)
+
+                # Get new action distributions and values
+                new_dist, new_values = model(batch_obs)
+                new_log_probs = new_dist.log_prob(batch_actions.squeeze())
+                entropy = new_dist.entropy().mean()
+
+                # Calculate PPO ratio
+                ratio = (new_log_probs - batch_log_probs.squeeze()).exp()
+
+                # Clipped surrogate objective
+                surr1 = ratio * batch_advantages
+                surr2 = torch.clamp(ratio, 1.0 - cfg.ppo_clip_epsilon, 1.0 + cfg.ppo_clip_epsilon) * batch_advantages
+                policy_loss = -torch.min(surr1, surr2).mean()
+                
+                # Value loss
+                value_loss = nn.functional.mse_loss(new_values, batch_returns)
+
+                # Total loss
+                total_loss = policy_loss + 0.5 * value_loss - cfg.entropy_beta * entropy
+
+                # Update
+                optimizer.zero_grad()
+                total_loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                optimizer.step()
+
+        # --- 4. Logging ---
+        sharpe_ratio = env.calculate_sharpe_ratio()
+        history.append({"episode": ep + 1, "steps": steps, "reward": episode_reward, "sharpe_ratio": sharpe_ratio, "entropy": entropy.item()})
         if (ep + 1) % 5 == 0:
-            print(f"Episode {ep+1}/{cfg.episodes} | steps={steps} reward={episode_reward:.2f} ent={entropy.item():.3f}")
+            print(f"Ep {ep+1}/{cfg.episodes} | Steps={steps} | Reward={episode_reward:.2f} | Sharpe={sharpe_ratio:.2f} | Ent={entropy.item():.3f}")
 
     # --- Final Evaluation ---
     print("\n--- Running Final Evaluation ---")
-    eval_env = TripleRsiEnv(**asdict(cfg))
+    eval_env = TripleRsiEnv(config=cfg)
     obs = eval_env.reset(seed=4242) # Use a fixed seed for eval
     done = False
-    eval_reward = 0
-    eval_steps = 0
-    eval_trades = 0
     while not done:
         with torch.no_grad():
             obs_tensor = torch.from_numpy(obs).float().to(device).unsqueeze(0)
             action_dist, _ = model(obs_tensor)
             action = action_dist.probs.argmax().item() # Greedy action
-        
         res = eval_env.step(action)
         obs = res.obs
         done = res.done
-        eval_reward += res.reward
-        eval_steps += 1
-        if "trade" in res.info or "trade_forced" in res.info:
-            eval_trades += 1
-        if cfg.max_steps is not None and eval_steps >= cfg.max_steps:
+        if cfg.max_steps is not None and eval_env._i >= cfg.max_steps:
             break
             
-    eval_res = {"reward": eval_reward, "steps": eval_steps, "trades": eval_trades}
-    print(f"Greedy evaluation: reward={eval_res['reward']:.2f} steps={eval_res['steps']} trades={eval_res['trades']}\n")
+    eval_sharpe = eval_env.calculate_sharpe_ratio()
+    eval_reward = sum(eval_env.portfolio_values) - eval_env.initial_capital
+    print(f"Greedy evaluation: Reward={eval_reward:.2f}, Sharpe Ratio={eval_sharpe:.2f}\n")
 
     # --- Save Model ---
     out_dir = os.path.join("reports", "agents", "triple_rsi_deep")
     os.makedirs(out_dir, exist_ok=True)
-    final_model_path = os.path.join(out_dir, f"{cfg.symbol}_{cfg.interval}.pt")
+    final_model_path = os.path.join(out_dir, f"{cfg.symbol}_{cfg.interval}_ppo.pt")
     torch.save(model.state_dict(), final_model_path)
     print(f"Saved agent to {final_model_path}")
 
-    return {"history": history, "eval": eval_res, "model_path": final_model_path}
+    return {"history": history, "eval": {"reward": eval_reward, "sharpe": eval_sharpe}, "model_path": final_model_path}
 
 
 if __name__ == "__main__":
