@@ -145,7 +145,8 @@ def backtest_ema_cross(
         gate_trend = bool(row.get("trend_ok", 1))
         gate_atr = bool(row.get("atr_ok", 1))
         gate_vol = bool(row.get("vol_ok", 1))
-        allow = gate_trend and gate_atr and gate_vol
+        gate_vwap = bool(row.get("vwap_ok", 1))
+        allow = gate_trend and gate_atr and gate_vol and gate_vwap
 
         sig = int(row.get("signal", 0))
         if position is None and allow and sig == 1 and cfg.side in ("long", "both"):

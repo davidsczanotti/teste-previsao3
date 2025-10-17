@@ -11,7 +11,7 @@ from ..data.synth import generate_ohlcv
 from ..data.utils import tf_to_minutes
 from ..data.align import merge_context
 from ..data.loader import load_mtf_from_cache_or_binance, update_cache_for_mtf
-from ..indicators.common import ema, atr
+from ..indicators.common import ema, atr, compute_ma, vwap_daily
 from ..signals.ema_cross import generate_signals
 from ..filters.apply import apply_all_filters
 from ..engine.backtest import BacktestConfig, backtest_ema_cross
@@ -67,14 +67,49 @@ def main() -> None:
     base_ema_slow = cfg["indicators"][0]["params"]["slow"]
     df_base["ema_fast_30m"] = ema(df_base["close"], base_ema_fast)
     df_base["ema_slow_30m"] = ema(df_base["close"], base_ema_slow)
-    df_base["atr_30m"] = atr(df_base, length=cfg["indicators"][2]["params"]["length"])
+    # ATR length from indicators config if present, else default 14
+    atr_len = 14
+    for ind in cfg.get("indicators", []):
+        if ind.get("name") == "atr" and ind.get("tf") == base_tf:
+            atr_len = int(ind.get("params", {}).get("length", atr_len))
+            break
+    df_base["atr_30m"] = atr(df_base, length=atr_len)
 
-    # 15m trend EMA
-    if "15m" in ctx_dfs:
+    # 15m trend EMA (legacy)
+    if "trend_tf" in cfg.get("filters", {}) and "15m" in ctx_dfs:
         df15 = ctx_dfs["15m"].copy()
         df15["ema_fast_15m"] = ema(df15["close"], cfg["filters"]["trend_tf"]["ema_fast"])
         df15["ema_slow_15m"] = ema(df15["close"], cfg["filters"]["trend_tf"]["ema_slow"])
         df_base = merge_context(df_base, df15[["close_time", "ema_fast_15m", "ema_slow_15m"]], suffix="")
+
+    # Generic MA trend (configurable type/tf)
+    if "ma_trend" in cfg.get("filters", {}):
+        mt = cfg["filters"]["ma_trend"]
+        ma_type = mt.get("ma_type", "ema")
+        tf_mt = mt.get("tf", "15m")
+        fast = int(mt.get("fast", 9))
+        slow = int(mt.get("slow", 20))
+        if tf_mt == base_tf:
+            df_base[f"ma_fast_{tf_mt}"] = compute_ma(df_base["close"], ma_type, fast)
+            df_base[f"ma_slow_{tf_mt}"] = compute_ma(df_base["close"], ma_type, slow)
+        else:
+            if tf_mt in ctx_dfs:
+                d = ctx_dfs[tf_mt].copy()
+                d[f"ma_fast_{tf_mt}"] = compute_ma(d["close"], ma_type, fast)
+                d[f"ma_slow_{tf_mt}"] = compute_ma(d["close"], ma_type, slow)
+                df_base = merge_context(df_base, d[["close_time", f"ma_fast_{tf_mt}", f"ma_slow_{tf_mt}"]], suffix="")
+
+    # VWAP bias (daily reset) on desired TF
+    if "vwap_bias" in cfg.get("filters", {}):
+        vb = cfg["filters"]["vwap_bias"]
+        tf_v = vb.get("tf", base_tf)
+        if tf_v == base_tf:
+            df_base[f"vwap_{tf_v}"] = vwap_daily(df_base)
+        else:
+            if tf_v in ctx_dfs:
+                d = ctx_dfs[tf_v].copy()
+                d[f"vwap_{tf_v}"] = vwap_daily(d)
+                df_base = merge_context(df_base, d[["close_time", f"vwap_{tf_v}"]], suffix="")
 
     # 5m can be used for future extension; skip for minimal pipeline
 
@@ -87,7 +122,7 @@ def main() -> None:
         exit_on_cross=bool(cfg["signal_generators"][0]["params"].get("exit_on_cross", False)),
     )
 
-    # Filters
+    # Filters (now supports ma_trend and vwap_bias)
     df_signals = apply_all_filters(df_signals, cfg["filters"]) 
 
     # Backtest

@@ -13,7 +13,7 @@ import sqlite3
 
 from ..data.loader import update_cache_for_mtf, load_mtf_from_cache_or_binance
 from ..data.align import merge_context
-from ..indicators.common import ema, atr
+from ..indicators.common import ema, atr, compute_ma, vwap_daily
 from ..signals.ema_cross import generate_signals
 from ..filters.apply import apply_all_filters
 from ..engine.backtest import BacktestConfig, backtest_ema_cross
@@ -41,16 +41,55 @@ def compute_metrics(trades) -> Dict[str, float]:
 
 def apply_indicators(df_base: pd.DataFrame, ctx_dfs: Dict[str, pd.DataFrame], params: Dict[str, Any], cfg: Dict[str, Any]) -> pd.DataFrame:
     df = df_base.copy()
+    # Base EMA + ATR
     df["ema_fast_30m"] = ema(df["close"], int(params.get("ema_fast", cfg["indicators"][0]["params"]["fast"])) )
     df["ema_slow_30m"] = ema(df["close"], int(params.get("ema_slow", cfg["indicators"][0]["params"]["slow"])) )
-    df["atr_30m"] = atr(df, length=int(params.get("atr_len", cfg["indicators"][2]["params"]["length"])) )
-    if "15m" in ctx_dfs:
+    # Determine ATR length from params or indicators config
+    atr_default = 14
+    for ind in cfg.get("indicators", []):
+        if ind.get("name") == "atr" and ind.get("tf") == cfg["base_timeframe"]:
+            atr_default = int(ind.get("params", {}).get("length", atr_default))
+            break
+    df["atr_30m"] = atr(df, length=int(params.get("atr_len", atr_default)) )
+
+    # Legacy 15m EMA trend (if configured)
+    if "trend_tf" in cfg.get("filters", {}) and "15m" in ctx_dfs:
         d15 = ctx_dfs["15m"].copy()
         ema_f = int(params.get("trend_ema_fast", cfg["filters"]["trend_tf"]["ema_fast"]))
         ema_s = int(params.get("trend_ema_slow", cfg["filters"]["trend_tf"]["ema_slow"]))
         d15["ema_fast_15m"] = ema(d15["close"], ema_f)
         d15["ema_slow_15m"] = ema(d15["close"], ema_s)
         df = merge_context(df, d15[["close_time", "ema_fast_15m", "ema_slow_15m"]], suffix="")
+
+    # Generic MA trend (ma_type/tf/fast/slow)
+    if "ma_trend" in cfg.get("filters", {}):
+        mt = cfg["filters"]["ma_trend"]
+        ma_type = mt.get("ma_type", "ema")
+        tf_mt = mt.get("tf", "15m")
+        fast = int(mt.get("fast", 9))
+        slow = int(mt.get("slow", 20))
+        if tf_mt == cfg["base_timeframe"]:
+            df[f"ma_fast_{tf_mt}"] = compute_ma(df["close"], ma_type, fast)
+            df[f"ma_slow_{tf_mt}"] = compute_ma(df["close"], ma_type, slow)
+        else:
+            if tf_mt in ctx_dfs:
+                d = ctx_dfs[tf_mt].copy()
+                d[f"ma_fast_{tf_mt}"] = compute_ma(d["close"], ma_type, fast)
+                d[f"ma_slow_{tf_mt}"] = compute_ma(d["close"], ma_type, slow)
+                df = merge_context(df, d[["close_time", f"ma_fast_{tf_mt}", f"ma_slow_{tf_mt}"]], suffix="")
+
+    # VWAP bias (daily reset)
+    if "vwap_bias" in cfg.get("filters", {}):
+        vb = cfg["filters"]["vwap_bias"]
+        tf_v = vb.get("tf", cfg["base_timeframe"])
+        if tf_v == cfg["base_timeframe"]:
+            df[f"vwap_{tf_v}"] = vwap_daily(df)
+        else:
+            if tf_v in ctx_dfs:
+                d = ctx_dfs[tf_v].copy()
+                d[f"vwap_{tf_v}"] = vwap_daily(d)
+                df = merge_context(df, d[["close_time", f"vwap_{tf_v}"]], suffix="")
+
     return df
 
 
@@ -112,8 +151,13 @@ def main() -> None:
     base_tf = cfg["base_timeframe"]
     ctx_tfs = cfg["context_timeframes"]
     days = int(cfg["data"].get("days", 180))
-    update_cache_for_mtf(cfg["symbol"], base_tf, ctx_tfs, days)
-    df_base, ctx_dfs = load_mtf_from_cache_or_binance(cfg["symbol"], base_tf, ctx_tfs, days, use_cache_only=True)
+    auto_update = bool(cfg.get("data", {}).get("update_cache", True))
+    if auto_update:
+        update_cache_for_mtf(cfg["symbol"], base_tf, ctx_tfs, days)
+        use_cache_only = False
+    else:
+        use_cache_only = True
+    df_base, ctx_dfs = load_mtf_from_cache_or_binance(cfg["symbol"], base_tf, ctx_tfs, days, use_cache_only=use_cache_only)
 
     # Compute default indicators for base; per-trial faster to adjust base EMAs? For WFO we compute per window with fixed params.
     # We'll recompute per window with fixed params for validation.
