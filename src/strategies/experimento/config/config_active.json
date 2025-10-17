@@ -49,5 +49,9 @@
   "storage": {
     "results_db": "src/strategies/experimento/experimento.sqlite",
     "artifacts_dir": "src/strategies/experimento/artifacts"
+  },
+  "report": {
+    "normalize_equity": true,
+    "show_drawdown": true
   }
 }
