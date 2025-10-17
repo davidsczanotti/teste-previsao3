@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import sqlite3
-import mplfinance as mpf
+# Using line plots instead of candles for visibility
 
 
 def load_config() -> Dict[str, Any]:
@@ -21,6 +21,95 @@ def latest_wfo_dir(artifacts_root: Path) -> Path | None:
     if not dirs:
         return None
     return sorted(dirs)[-1]
+
+
+def latest_wfo_group_from_db(db_path: str) -> str | None:
+    with sqlite3.connect(db_path) as cx:
+        df = pd.read_sql_query("SELECT DISTINCT value as grp FROM params WHERE key='wfo_group' ORDER BY grp", cx)
+        if df.empty:
+            return None
+        return str(df["grp"].iloc[-1])
+
+
+def build_wfo_artifacts_from_db(cfg: Dict[str, Any], group_id: str, out_dir: Path) -> None:
+    """Construct wfo_summary.json and equity_curve.csv from DB runs tagged with wfo_group=group_id.
+    Also generate per-window params JSON files for convenience.
+    """
+    db = cfg["storage"]["results_db"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    windows_dir = out_dir / "windows"
+    windows_dir.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db) as cx:
+        # Get runs with this group and window indices
+        runs = pd.read_sql_query(
+            """
+            SELECT r.run_id, r.finished_at,
+                   MAX(CASE WHEN p.key='window_index' THEN CAST(p.value AS INTEGER) END) AS wi
+            FROM runs r JOIN params p ON r.run_id=p.run_id
+            WHERE r.finished_at IS NOT NULL AND EXISTS (
+                SELECT 1 FROM params p2 WHERE p2.run_id=r.run_id AND p2.key='wfo_group' AND p2.value=?
+            )
+            GROUP BY r.run_id, r.finished_at
+            ORDER BY wi
+            """,
+            cx,
+            params=(group_id,),
+        )
+
+        summary: List[Dict[str, Any]] = []
+        equity_rows: List[Dict[str, Any]] = []
+        capital0 = float(cfg["risk"]["capital"]) if not runs.empty else 0.0
+        cur_equity = capital0
+
+        for _, row in runs.iterrows():
+            rid = str(row["run_id"]) ; wi = int(row["wi"]) if row["wi"] is not None else 0
+            # Metrics
+            m = pd.read_sql_query("SELECT key,value FROM metrics WHERE run_id=?", cx, params=(rid,))
+            md = {str(k): float(v) for k, v in zip(m["key"], m["value"])}
+            # Best params -> write file for convenience
+            params_df = pd.read_sql_query("SELECT key,value FROM params WHERE run_id=? AND key LIKE 'best.%'", cx, params=(rid,))
+            best = {str(k): json.loads(v) if str(v).startswith('{') or str(v).startswith('[') else (json.loads(v) if v in ('true','false','null') else v) for k, v in zip(params_df["key"], params_df["value"])}
+            if best:
+                (windows_dir / f"window_{wi:02d}_params.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
+
+            # Trades to build equity
+            tr = pd.read_sql_query("SELECT exit_time, pnl FROM trades WHERE run_id=? ORDER BY exit_time", cx, params=(rid,))
+            for _, t in tr.iterrows():
+                cur_equity += float(t["pnl"]) ; equity_rows.append({"time": pd.to_datetime(t["exit_time"]).isoformat(), "equity": cur_equity})
+
+            summary.append({
+                "window": wi,
+                "run_id": rid,
+                "profit_factor": float(md.get("profit_factor", 0.0)),
+                "sharpe": float(md.get("sharpe", 0.0)),
+                "trades": float(md.get("trades", 0.0)),
+                "pnl_total": float(md.get("pnl_total", 0.0)),
+            })
+
+    # Aggregate PF across runs
+    agg_pf = 0.0
+    if summary:
+        with sqlite3.connect(db) as cx:
+            profit = 0.0 ; loss = 0.0
+            for s in summary:
+                rid = s["run_id"]
+                rows = pd.read_sql_query("SELECT pnl FROM trades WHERE run_id=?", cx, params=(rid,))
+                p = rows[rows["pnl"] > 0]["pnl"].sum() ; l = -rows[rows["pnl"] < 0]["pnl"].sum()
+                profit += float(p) ; loss += float(l)
+            agg_pf = (profit / loss) if loss > 0 else float('inf')
+
+    summary_obj = {
+        "windows": summary,
+        "agg": {
+            "trades": int(sum(int(s["trades"]) for s in summary)),
+            "pnl_total": float(sum(float(s["pnl_total"]) for s in summary)),
+            "profit_factor": float(agg_pf),
+        },
+        "group": group_id,
+    }
+    (out_dir / "wfo_summary.json").write_text(json.dumps(summary_obj, indent=2), encoding="utf-8")
+    pd.DataFrame(equity_rows).to_csv(out_dir / "equity_curve.csv", index=False)
 
 
 def plot_equity(equity_csv: Path, out_path: Path) -> None:
@@ -104,31 +193,44 @@ def per_window_reports(cfg: Dict[str, Any], wfo_dir: Path) -> None:
                 fig.savefig(windows_dir / f"window_{wi:02d}_equity.png", dpi=150)
                 plt.close(fig)
 
-            # Candlestick with EMAs and trade markers
-            bars = pd.read_sql_query("SELECT close_time, open, high, low, close, volume, ema_fast_30m, ema_slow_30m FROM bars WHERE run_id=? ORDER BY idx", cx, params=(rid,))
+            # Line chart with EMAs and trade markers (better visibility)
+            bars = pd.read_sql_query(
+                "SELECT close_time, close, ema_fast_30m, ema_slow_30m FROM bars WHERE run_id=? ORDER BY idx",
+                cx,
+                params=(rid,),
+            )
             if not bars.empty:
                 bars["Date"] = pd.to_datetime(bars["close_time"]) ; bars = bars.set_index("Date")
-                ohlc = bars[["open", "high", "low", "close", "volume"]].copy()
-                apds = [
-                    mpf.make_addplot(bars["ema_fast_30m"], color="#3b82f6"),
-                    mpf.make_addplot(bars["ema_slow_30m"], color="#f59e0b"),
-                ]
+                fig, ax = plt.subplots(figsize=(12, 5))
+                ax.plot(bars.index, bars["close"], color="black", linewidth=1, label="Close")
+                if "ema_fast_30m" in bars:
+                    ax.plot(bars.index, bars["ema_fast_30m"], color="#3b82f6", linewidth=1.0, label="EMA Fast")
+                if "ema_slow_30m" in bars:
+                    ax.plot(bars.index, bars["ema_slow_30m"], color="#f59e0b", linewidth=1.0, label="EMA Slow")
+
                 # Trade markers
-                tr2 = pd.read_sql_query("SELECT entry_time, exit_time, side, entry_price, exit_price FROM trades WHERE run_id=? ORDER BY trade_id", cx, params=(rid,))
+                tr2 = pd.read_sql_query(
+                    "SELECT entry_time, exit_time, side, entry_price, exit_price FROM trades WHERE run_id=? ORDER BY trade_id",
+                    cx,
+                    params=(rid,),
+                )
                 if not tr2.empty:
                     tr2["entry_time"] = pd.to_datetime(tr2["entry_time"]) ; tr2["exit_time"] = pd.to_datetime(tr2["exit_time"])
-                    # Entry markers
-                    em = pd.Series(index=ohlc.index, dtype=float)
-                    xm = pd.Series(index=ohlc.index, dtype=float)
+                    # Entry and exit points mapped to nearest timestamps
                     for _, t in tr2.iterrows():
                         et = t["entry_time"] ; xt = t["exit_time"]
-                        if et in em.index:
-                            em.loc[et] = float(t["entry_price"])
-                        if xt in xm.index:
-                            xm.loc[xt] = float(t["exit_price"])
-                    apds.append(mpf.make_addplot(em, scatter=True, markersize=50, marker='^', color='green'))
-                    apds.append(mpf.make_addplot(xm, scatter=True, markersize=50, marker='v', color='red'))
-                mpf.plot(ohlc, type='candle', volume=True, addplot=apds, style='yahoo', savefig=str(windows_dir / f"window_{wi:02d}_candles.png"))
+                        ep = float(t["entry_price"]) ; xp = float(t["exit_price"]) 
+                        # Only plot if timestamp exists in index
+                        if et in bars.index:
+                            ax.scatter([et], [ep], color="green", marker="^", s=40, zorder=3)
+                        if xt in bars.index:
+                            ax.scatter([xt], [xp], color="red", marker="v", s=40, zorder=3)
+
+                ax.set_title(f"Window {wi} — Price (line)")
+                ax.legend()
+                fig.tight_layout()
+                fig.savefig(windows_dir / f"window_{wi:02d}_candles.png", dpi=150)
+                plt.close(fig)
 
 
 
@@ -136,9 +238,14 @@ def main() -> None:
     cfg = load_config()
     root = Path(cfg["storage"]["artifacts_dir"]) ; root.mkdir(parents=True, exist_ok=True)
     wfo_dir = latest_wfo_dir(root)
+    # If no artifacts, try to reconstruct from DB using latest group id
     if not wfo_dir:
-        print("No WFO artifacts found.")
-        return
+        group = latest_wfo_group_from_db(cfg["storage"]["results_db"])
+        if not group:
+            print("No WFO artifacts or groups found.")
+            return
+        wfo_dir = root / group
+        build_wfo_artifacts_from_db(cfg, group, wfo_dir)
     summary_json = wfo_dir / "wfo_summary.json"
     equity_csv = wfo_dir / "equity_curve.csv"
     plot_equity(equity_csv, wfo_dir / "wfo_equity.png")

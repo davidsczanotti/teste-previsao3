@@ -162,3 +162,14 @@ def insert_fill(
 def insert_metrics(cx: sqlite3.Connection, run_id: str, metrics: Dict[str, float]) -> None:
     rows = [(run_id, k, float(v)) for k, v in metrics.items()]
     cx.executemany("INSERT INTO metrics (run_id, key, value) VALUES (?, ?, ?)", rows)
+
+
+def insert_params(cx: sqlite3.Connection, run_id: str, params: Dict[str, Any]) -> None:
+    rows = []
+    for k, v in params.items():
+        try:
+            val = json.dumps(v)
+        except Exception:
+            val = str(v)
+        rows.append((run_id, str(k), val))
+    cx.executemany("INSERT INTO params (run_id, key, value) VALUES (?, ?, ?)", rows)

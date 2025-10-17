@@ -151,3 +151,91 @@ Manter tudo dentro de `src/strategies/experimento` (sem reaproveitar de outros m
 - Configuração exclusivamente via JSON; não usar flags em comandos.
 - Evitar lookahead rigorosamente nos alinhamentos MTF e nos indicadores.
 
+## Comandos e Fluxos (guia rápido)
+
+Pipelines (1‑clique)
+
+- `poetry run python -m src.strategies.experimento.scripts.pipeline`
+  - update (implícito) → backtest → monte_carlo → report.
+  - Uso: rodada rápida com saídas essenciais (gráfico do último run sob demanda).
+
+- `poetry run python -m src.strategies.experimento.scripts.pipeline_wfo`
+  - update (implícito) → walk_forward → report_wfo.
+  - Uso: validação walk‑forward + geração de relatórios agregados (reconstrói do DB se artifacts desativados).
+
+Comandos atômicos
+
+- `poetry run python -m src.strategies.experimento.scripts.backtest`
+  - Efeito: executa um backtest único lendo `config_active.json` (atualiza o cache antes, consome do cache).
+  - Entrada: JSON em `config/config_active.json` (símbolo, timeframes, filtros, risco, etc.).
+  - Saída: resultados persistidos no SQLite `experimento.sqlite` (`runs`, `bars`, `signals`, `trades`, `metrics`).
+
+- `poetry run python -m src.strategies.experimento.scripts.optimize`
+  - Efeito: otimiza parâmetros (EMA/ATR/filtros/stops) via Optuna usando métrica PF penalizado + Sharpe.
+  - Entrada: `config_active.json` (seeds, trials, pesos de PF/Sharpe, min/target trades).
+  - Saída: grava o run de melhor parâmetro no DB; salva `params` com chaves `best.*` para reuso/auditoria.
+
+- `poetry run python -m src.strategies.experimento.scripts.walk_forward`
+  - Efeito: executa Walk‑Forward por janelas em dias (treino/validação/passo), otimizando dentro de cada janela.
+  - Entrada: `walk_forward` no JSON (`opt_days`, `val_days`, `step_days`).
+  - Saída: múltiplos runs no DB (um por janela), `metrics` por janela e `params` com `best.*` + tags `wfo_group`/`window_index`.
+
+- `poetry run python -m src.strategies.experimento.scripts.monte_carlo`
+  - Efeito: roda Monte Carlo (bootstrap por trade) para o último run finalizado; grava métricas `mc_*` no DB e artefato JSON.
+  - Entrada: `analysis.monte_carlo` no JSON (sims, steps opcional, seed).
+  - Saída: `metrics` (mc_p05, mc_p50, mc_p95, mc_mean) do último run e artefato `monte_carlo.json` no diretório do run.
+
+- `poetry run python -m src.strategies.experimento.scripts.report`
+  - Efeito: exporta CSVs (bars/trades/metrics) e um gráfico PNG (preço + entradas/saídas + equity) do último run.
+  - Saída: pasta `artifacts/<run_id>/` com `bars.csv`, `trades.csv`, `metrics.csv` e `report.png`.
+
+- `poetry run python -m src.strategies.experimento.scripts.report_wfo`
+  - Efeito: gera relatórios agregados do WFO mais recente (ou reconstrói a partir do DB se não houver arquivos).
+  - Saída: em `artifacts/wfo-<group>/` → `wfo_summary.json`, `equity_curve.csv`, `wfo_equity.png`, `wfo_windows.png` e por janela: `windows/window_XX_equity.csv|.png|_candles.png|_params.json`.
+  - Observação: por padrão usamos gráfico de linha (Close) com EMAs e marcadores de entradas/saídas (melhor visibilidade).
+
+- `poetry run python -m src.strategies.experimento.scripts.selftest`
+  - Efeito: executa um backtest em dados sintéticos tendenciosos (configuráveis) para validação rápida do pipeline.
+  - Entrada: `tests.selftest` no JSON (direction, drift).
+  - Saída: grava run no DB com métricas; útil como “teste de fumaça”.
+
+- `poetry run python -m src.strategies.experimento.scripts.app`
+  - Efeito: inicia uma interface Flask simples para navegar por runs, trades, métricas e artefatos (inclui seção WFO).
+  - URL: `http://127.0.0.1:5001` (rotas: `/`, `/run/<run_id>`, `/wfo`, `/wfo/<group>`, `/artifacts/<path>`).
+
+- `poetry run python -m src.strategies.experimento.scripts.cleanup`
+  - Efeito: purge dos artifacts conforme o JSON (mantém apenas os últimos WFO e remove outras pastas de runs).
+  - Config: `cleanup.keep_last_wfo`, `cleanup.remove_other_runs` em `config_active.json`.
+
+Exemplos de uso comuns
+
+- WFO mensal + relatórios agregados
+  1) Ajuste no JSON: `data.days` para cobrir os últimos meses e `walk_forward` (ex.: 60/20/20) conforme desejado.
+  2) Rode: `poetry run python -m src.strategies.experimento.scripts.pipeline_wfo`.
+  3) Veja artefatos: `artifacts/wfo-<group>/` ou acesse o Flask em `/wfo`.
+
+- Rodada rápida de estratégia (um período)
+  1) Ajuste filtros/risco/sinais no JSON.
+  2) Rode: `poetry run python -m src.strategies.experimento.scripts.pipeline`.
+  3) Inspecione o relatório do último run (report.png) e métricas no DB.
+
+- Limpeza de artefatos
+  - `poetry run python -m src.strategies.experimento.scripts.cleanup` (mantém só o último WFO; remove outras pastas de runs)
+
+Configuração e encadeamentos automáticos
+- Fonte de dados: `data.source` no JSON controla a origem (`cache`, `binance`, `synthetic`).
+- Atualização do cache: se `data.update_cache` for `true`, os scripts atualizam o cache antes de ler (evita rodar comandos adicionais).
+- Artefatos: por padrão `storage.write_artifacts = false` (evita acúmulo). Gere imagens/CSVs com `report`/`report_wfo` sob demanda.
+- Banco de dados: toda a verdade (trades, métricas e parâmetros “best.*”) fica no SQLite `experimento.sqlite`.
+
+Fluxos recomendados
+- Análise rápida (um período):
+  1) `backtest` → 2) `monte_carlo` → 3) `report`
+- Otimização + validação:
+  1) `optimize` (grava `best.*` no DB) → 2) `report` (opcional) → 3) `walk_forward` → 4) `report_wfo`
+- Visualização Web:
+  - `app` e acesse `/wfo` para navegar por janelas (candles em linha + EMAs e equity)
+
+Notas
+- Se um relatório WFO não existir em disco, `report_wfo` reconstrói tudo a partir do DB (usando o `wfo_group` mais recente).
+- Para alternar entre long/short/both e saída por cross, use `signal_generators[0].params` no JSON (`side`, `exit_on_cross`).

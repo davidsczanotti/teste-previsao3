@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from flask import Flask, render_template_string, request, send_from_directory
+from flask import Flask, render_template_string, request, send_from_directory, redirect, url_for
 from pathlib import Path
+from .report_wfo import build_wfo_artifacts_from_db, latest_wfo_group_from_db
+from importlib import import_module
 
 
 app = Flask(__name__)
@@ -28,8 +30,43 @@ def get_artifacts_root() -> Path:
 def index():
     with sqlite3.connect(get_db_path()) as cx:
         runs = cx.execute("SELECT run_id, started_at, finished_at FROM runs ORDER BY started_at DESC LIMIT 200").fetchall()
+    # Latest WFO group indicator
+    root = get_artifacts_root()
+    latest_group = latest_wfo_group_from_db(str(get_db_path()))
+    latest_dir = (root / latest_group) if latest_group else None
+    has_files = latest_dir.exists() if latest_dir else False
     html = """
     <h1>Experimento — Runs</h1>
+    <p>
+      <a href="/wfo" style="padding:8px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">Ir para WFO</a>
+    </p>
+    <div style=\"margin:12px 0;padding:10px;border:1px solid #ddd;border-radius:6px;\">
+      <b>WFO mais recente:</b>
+      {% if latest_group %}
+        <code>{{ latest_group }}</code>
+        {% if has_files %}
+          — <a href=\"/artifacts/{{ latest_group }}/wfo_summary.json\">Resumo</a>
+          — <a href=\"/artifacts/{{ latest_group }}/equity_curve.csv\">Equity CSV</a>
+          — <a href=\"/wfo/{{ latest_group }}\">Ver janelas</a>
+        {% else %}
+          (sem arquivos ainda) 
+          <form method=\"post\" action=\"/wfo/rebuild/latest\" style=\"display:inline-block; margin-left:8px;\">
+            <button type=\"submit\" style=\"padding:4px 8px;background:#16a34a;color:white;border:none;border-radius:6px;\">Regenerar</button>
+          </form>
+        {% endif %}
+      {% else %}
+        (não há grupo WFO registrado no DB)
+      {% endif %}
+    </div>
+    <form method="post" action="/pipeline/run" style="margin:10px 0;display:inline-block;">
+      <button type="submit" style="padding:8px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;">Executar Pipeline (Backtest → MC → Report)</button>
+    </form>
+    <form method="post" action="/pipeline_wfo/run" style="margin:10px 0;display:inline-block;margin-left:8px;">
+      <button type="submit" style="padding:8px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;">Executar Pipeline WFO</button>
+    </form>
+    <form method="post" action="/cleanup/run" style="margin:10px 0;display:inline-block;margin-left:8px;">
+      <button type="submit" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:6px;">Limpar artifacts (manter último WFO)</button>
+    </form>
     <table border=1 cellpadding=4>
       <tr><th>run_id</th><th>started_at</th><th>finished_at</th></tr>
       {% for r in runs %}
@@ -41,7 +78,7 @@ def index():
       {% endfor %}
     </table>
     """
-    return render_template_string(html, runs=runs)
+    return render_template_string(html, runs=runs, latest_group=latest_group, has_files=has_files)
 
 
 @app.route("/run/<run_id>")
@@ -85,15 +122,43 @@ def run_detail(run_id: str):
 def wfo_index():
     root = get_artifacts_root()
     dirs = sorted([p.name for p in root.iterdir() if p.is_dir() and p.name.startswith("wfo-")])
+    # Latest WFO group (from DB)
+    latest_group = latest_wfo_group_from_db(str(get_db_path()))
+    latest_dir = (root / latest_group) if latest_group else None
+    has_files = latest_dir.exists() if latest_dir else False
     html = """
     <h1>WFO Artifacts</h1>
+    <form method="post" action="/pipeline_wfo/run" style="margin:10px 0;">
+      <button type="submit" style="padding:8px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;">Executar Pipeline WFO (update → WFO → relatório)</button>
+    </form>
+    <form method="post" action="/wfo/rebuild/latest" style="margin:10px 0;">
+      <button type="submit" style="padding:8px 12px;background:#16a34a;color:white;border:none;border-radius:6px;">Regenerar WFO mais recente (a partir do DB)</button>
+    </form>
+    <form method="post" action="/cleanup/run" style="margin:10px 0;">
+      <button type="submit" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:6px;">Limpar artifacts (manter último WFO)</button>
+    </form>
+    <div style="margin:12px 0;padding:10px;border:1px solid #ddd;border-radius:6px;">
+      <b>WFO mais recente:</b>
+      {% if latest_group %}
+        <code>{{ latest_group }}</code>
+        {% if has_files %}
+          — <a href="/artifacts/{{ latest_group }}/wfo_summary.json">Resumo</a>
+          — <a href="/artifacts/{{ latest_group }}/equity_curve.csv">Equity CSV</a>
+          — <a href="/artifacts/{{ latest_group }}/windows/">Windows</a>
+        {% else %}
+          (sem arquivos ainda — use "Regenerar WFO mais recente")
+        {% endif %}
+      {% else %}
+        (não há grupo WFO registrado no DB)
+      {% endif %}
+    </div>
     <ul>
     {% for d in dirs %}
       <li><a href="/wfo/{{ d }}">{{ d }}</a></li>
     {% endfor %}
     </ul>
     """
-    return render_template_string(html, dirs=dirs)
+    return render_template_string(html, dirs=dirs, latest_group=latest_group, has_files=has_files)
 
 
 @app.route("/wfo/<name>")
@@ -105,6 +170,10 @@ def wfo_detail(name: str):
     windows = sorted([p.name for p in (d / "windows").glob("window_*_candles.png")])
     html = """
     <h1>WFO {{ name }}</h1>
+    <form method="post" action="/wfo/{{ name }}/rebuild" style="margin:10px 0;">
+      <button type="submit" style="padding:8px 12px;background:#16a34a;color:white;border:none;border-radius:6px;">Regenerar este WFO (a partir do DB)</button>
+      <a href="/wfo" style="margin-left:8px;padding:8px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">Voltar WFO</a>
+    </form>
     <p>
       <a href="/artifacts/{{ name }}/wfo_summary.json">wfo_summary.json</a> |
       <a href="/artifacts/{{ name }}/equity_curve.csv">equity_curve.csv</a> |
@@ -125,6 +194,62 @@ def wfo_detail(name: str):
     </ul>
     """
     return render_template_string(html, name=name, windows=windows)
+
+
+@app.route("/wfo/rebuild/latest", methods=["POST"]) 
+def wfo_rebuild_latest():
+    group = latest_wfo_group_from_db(str(get_db_path()))
+    if not group:
+        return "No WFO group found in DB", 404
+    out = get_artifacts_root() / group
+    out.mkdir(parents=True, exist_ok=True)
+    cfg_path = Path("src/strategies/experimento/config/config_active.json")
+    import json
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    build_wfo_artifacts_from_db(cfg, group, out)
+    return redirect(url_for('wfo_detail', name=group))
+
+
+@app.route("/wfo/<name>/rebuild", methods=["POST"]) 
+def wfo_rebuild_name(name: str):
+    out = get_artifacts_root() / name
+    out.mkdir(parents=True, exist_ok=True)
+    cfg_path = Path("src/strategies/experimento/config/config_active.json")
+    import json
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    build_wfo_artifacts_from_db(cfg, name, out)
+    return redirect(url_for('wfo_detail', name=name))
+
+
+@app.route("/cleanup/run", methods=["POST"]) 
+def cleanup_run():
+    try:
+        mod = import_module("src.strategies.experimento.scripts.cleanup")
+        mod.main()
+        return redirect(url_for('wfo_index'))
+    except Exception as e:
+        return f"Cleanup error: {e}", 500
+
+
+@app.route("/pipeline/run", methods=["POST"]) 
+def run_pipeline():
+    # pipeline: backtest -> monte_carlo -> report
+    try:
+        mod = import_module("src.strategies.experimento.scripts.pipeline")
+        mod.main()
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"Pipeline error: {e}", 500
+
+
+@app.route("/pipeline_wfo/run", methods=["POST"]) 
+def run_pipeline_wfo():
+    try:
+        mod = import_module("src.strategies.experimento.scripts.pipeline_wfo")
+        mod.main()
+        return redirect(url_for('wfo_index'))
+    except Exception as e:
+        return f"Pipeline WFO error: {e}", 500
 
 
 @app.route("/artifacts/<path:subpath>")

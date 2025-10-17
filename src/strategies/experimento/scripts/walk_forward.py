@@ -17,7 +17,7 @@ from ..indicators.common import ema, atr
 from ..signals.ema_cross import generate_signals
 from ..filters.apply import apply_all_filters
 from ..engine.backtest import BacktestConfig, backtest_ema_cross
-from ..storage.db import init_db, insert_run, finish_run, insert_bars, insert_trade, insert_metrics
+from ..storage.db import init_db, insert_run, finish_run, insert_bars, insert_trade, insert_metrics, insert_params
 from ..analysis.monte_carlo import save_artifact as save_json_artifact
 
 
@@ -141,12 +141,15 @@ def main() -> None:
 
     sampler = optuna.samplers.TPESampler(seed=int(cfg["optimization"].get("seed", 42)))
 
-    # Prepare artifacts dir for this WFO run
+    # Prepare grouping id and (optionally) artifacts dir for this WFO run
     ts = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
-    wfo_dir = Path(cfg["storage"]["artifacts_dir"]) / f"wfo-{ts}"
-    wfo_dir.mkdir(parents=True, exist_ok=True)
-    windows_dir = wfo_dir / "windows"
-    windows_dir.mkdir(parents=True, exist_ok=True)
+    group_id = f"wfo-{ts}"
+    write_artifacts = bool(cfg["storage"].get("write_artifacts", True))
+    if write_artifacts:
+        wfo_dir = Path(cfg["storage"]["artifacts_dir"]) / group_id
+        wfo_dir.mkdir(parents=True, exist_ok=True)
+        windows_dir = wfo_dir / "windows"
+        windows_dir.mkdir(parents=True, exist_ok=True)
 
     summary = []
     for wi, w in enumerate(windows):
@@ -213,7 +216,8 @@ def main() -> None:
         study.optimize(objective, n_trials=trials, show_progress_bar=False)
         best = study.best_params
         # Persist per-window best params
-        (windows_dir / f"window_{wi:02d}_params.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
+        if write_artifacts:
+            (windows_dir / f"window_{wi:02d}_params.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
 
         # Validation with best params
         df_val = apply_indicators(df_val_base, ctx_dfs, best, cfg)
@@ -289,6 +293,9 @@ def main() -> None:
                     pnl=float(t["pnl"]),
                 )
             insert_metrics(cx, run_id, {**m, "pnl_total": float(pnl)})
+            # Persist best params per window in DB as params + link to WFO group
+            insert_params(cx, run_id, {"wfo_group": group_id, "window_index": wi})
+            insert_params(cx, run_id, {f"best.{k}": v for k, v in best.items()})
             finish_run(cx, run_id, datetime.now(timezone.utc).isoformat())
             cx.commit()
 
@@ -329,9 +336,10 @@ def main() -> None:
             equity.append({"time": t.isoformat(), "equity": cur_equity})
 
     # Save summary + equity artifact
-    summary_obj = {"windows": summary, "agg": {"trades": total_trades, "pnl_total": total_pnl, "profit_factor": agg_pf}}
-    (wfo_dir / "wfo_summary.json").write_text(json.dumps(summary_obj, indent=2), encoding="utf-8")
-    pd.DataFrame(equity).to_csv(wfo_dir / "equity_curve.csv", index=False)
+    summary_obj = {"windows": summary, "agg": {"trades": total_trades, "pnl_total": total_pnl, "profit_factor": agg_pf}, "group": group_id}
+    if write_artifacts:
+        (wfo_dir / "wfo_summary.json").write_text(json.dumps(summary_obj, indent=2), encoding="utf-8")
+        pd.DataFrame(equity).to_csv(wfo_dir / "equity_curve.csv", index=False)
     print("WFO completed with", len(summary), "windows.", "Agg PF=", f"{agg_pf:.2f}", "Trades=", total_trades)
 
 

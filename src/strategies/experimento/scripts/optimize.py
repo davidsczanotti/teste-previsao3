@@ -16,7 +16,7 @@ from ..indicators.common import ema, atr
 from ..signals.ema_cross import generate_signals
 from ..filters.apply import apply_all_filters
 from ..engine.backtest import BacktestConfig, backtest_ema_cross
-from ..storage.db import init_db, insert_run, finish_run, insert_bars, insert_signals, insert_trade, insert_metrics
+from ..storage.db import init_db, insert_run, finish_run, insert_bars, insert_signals, insert_trade, insert_metrics, insert_params
 
 
 def load_config() -> Dict[str, Any]:
@@ -231,16 +231,18 @@ def main() -> None:
                 pnl=float(t["pnl"]),
             )
         insert_metrics(cx, run_id, {**m, "pnl_total": float(pnl)})
+        # Persist best params in DB to avoid relying on files only
+        insert_params(cx, run_id, {f"best.{k}": v for k, v in best.items()})
         finish_run(cx, run_id, datetime.now(timezone.utc).isoformat())
         cx.commit()
 
     # Save best params artifact
-    artifacts = Path(cfg["storage"]["artifacts_dir"]) / run_id
-    artifacts.mkdir(parents=True, exist_ok=True)
-    (artifacts / "best_params.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
+    if bool(cfg["storage"].get("write_artifacts", True)):
+        artifacts = Path(cfg["storage"]["artifacts_dir"]) / run_id
+        artifacts.mkdir(parents=True, exist_ok=True)
+        (artifacts / "best_params.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
     print(f"Optimization finished. Best score={study.best_value:.4f}. Run {run_id} saved.")
 
 
 if __name__ == "__main__":
     main()
-
