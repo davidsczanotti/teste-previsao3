@@ -47,7 +47,13 @@ def main() -> None:
     base_ema_slow = cfg["indicators"][0]["params"]["slow"]
     df_base["ema_fast_30m"] = ema(df_base["close"], base_ema_fast)
     df_base["ema_slow_30m"] = ema(df_base["close"], base_ema_slow)
-    df_base["atr_30m"] = atr(df_base, length=cfg["indicators"][2]["params"]["length"])
+    # ATR: detecta dinamicamente no JSON ou usa 14 por padrão
+    atr_len = 14
+    for ind in cfg.get("indicators", []):
+        if ind.get("name") == "atr" and ind.get("tf") == base_tf:
+            atr_len = int(ind.get("params", {}).get("length", atr_len))
+            break
+    df_base["atr_30m"] = atr(df_base, length=atr_len)
 
     # Signals + Filters
     df_signals = generate_signals(

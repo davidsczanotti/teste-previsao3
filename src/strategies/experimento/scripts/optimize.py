@@ -12,7 +12,7 @@ import sqlite3
 
 from ..data.loader import update_cache_for_mtf, load_mtf_from_cache_or_binance
 from ..data.align import merge_context
-from ..indicators.common import ema, atr
+from ..indicators.common import ema, atr, compute_ma, vwap_daily
 from ..signals.ema_cross import generate_signals
 from ..filters.apply import apply_all_filters
 from ..engine.backtest import BacktestConfig, backtest_ema_cross
@@ -46,9 +46,14 @@ def build_dataset(cfg: Dict[str, Any]) -> pd.DataFrame:
     base_tf = cfg["base_timeframe"]
     ctx_tfs = cfg["context_timeframes"]
     days = int(cfg["data"].get("days", 180))
-    update_cache_for_mtf(symbol=cfg["symbol"], base_tf=base_tf, ctx_tfs=ctx_tfs, days=days)
+    auto_update = bool(cfg.get("data", {}).get("update_cache", True))
+    if auto_update:
+        update_cache_for_mtf(symbol=cfg["symbol"], base_tf=base_tf, ctx_tfs=ctx_tfs, days=days)
+        use_cache_only = False
+    else:
+        use_cache_only = True
     df_base, ctx_dfs = load_mtf_from_cache_or_binance(
-        symbol=cfg["symbol"], base_tf=base_tf, ctx_tfs=ctx_tfs, days=days, use_cache_only=True
+        symbol=cfg["symbol"], base_tf=base_tf, ctx_tfs=ctx_tfs, days=days, use_cache_only=use_cache_only
     )
 
     # Base indicators (will be re-computed per trial if params vary)
@@ -60,16 +65,51 @@ def apply_indicators(df_base: pd.DataFrame, ctx_dfs: Dict[str, pd.DataFrame], pa
     # Base EMA & ATR
     df["ema_fast_30m"] = ema(df["close"], int(params.get("ema_fast", cfg["indicators"][0]["params"]["fast"])) )
     df["ema_slow_30m"] = ema(df["close"], int(params.get("ema_slow", cfg["indicators"][0]["params"]["slow"])) )
-    df["atr_30m"] = atr(df, length=int(params.get("atr_len", cfg["indicators"][2]["params"]["length"])) )
+    # Dynamic ATR length from config or fallback 14
+    atr_default = 14
+    for ind in cfg.get("indicators", []):
+        if ind.get("name") == "atr" and ind.get("tf") == cfg["base_timeframe"]:
+            atr_default = int(ind.get("params", {}).get("length", atr_default))
+            break
+    df["atr_30m"] = atr(df, length=int(params.get("atr_len", atr_default)) )
 
-    # 15m trend
-    if "15m" in ctx_dfs:
+    # Legacy 15m EMA trend
+    if "trend_tf" in cfg.get("filters", {}) and "15m" in ctx_dfs:
         d15 = ctx_dfs["15m"].copy()
         ema_f = int(params.get("trend_ema_fast", cfg["filters"]["trend_tf"]["ema_fast"]))
         ema_s = int(params.get("trend_ema_slow", cfg["filters"]["trend_tf"]["ema_slow"]))
         d15["ema_fast_15m"] = ema(d15["close"], ema_f)
         d15["ema_slow_15m"] = ema(d15["close"], ema_s)
         df = merge_context(df, d15[["close_time", "ema_fast_15m", "ema_slow_15m"]], suffix="")
+
+    # Generic MA trend (ma_trend)
+    if "ma_trend" in cfg.get("filters", {}):
+        mt = cfg["filters"]["ma_trend"]
+        ma_type = mt.get("ma_type", "ema")
+        tf_mt = mt.get("tf", "15m")
+        fast = int(mt.get("fast", 9))
+        slow = int(mt.get("slow", 20))
+        if tf_mt == cfg["base_timeframe"]:
+            df[f"ma_fast_{tf_mt}"] = compute_ma(df["close"], ma_type, fast)
+            df[f"ma_slow_{tf_mt}"] = compute_ma(df["close"], ma_type, slow)
+        else:
+            if tf_mt in ctx_dfs:
+                d = ctx_dfs[tf_mt].copy()
+                d[f"ma_fast_{tf_mt}"] = compute_ma(d["close"], ma_type, fast)
+                d[f"ma_slow_{tf_mt}"] = compute_ma(d["close"], ma_type, slow)
+                df = merge_context(df, d[["close_time", f"ma_fast_{tf_mt}", f"ma_slow_{tf_mt}"]], suffix="")
+
+    # VWAP bias support (compute vwap_<tf> if configured)
+    if "vwap_bias" in cfg.get("filters", {}):
+        vb = cfg["filters"]["vwap_bias"]
+        tf_v = vb.get("tf", cfg["base_timeframe"])
+        if tf_v == cfg["base_timeframe"]:
+            df[f"vwap_{tf_v}"] = vwap_daily(df)
+        else:
+            if tf_v in ctx_dfs:
+                d = ctx_dfs[tf_v].copy()
+                d[f"vwap_{tf_v}"] = vwap_daily(d)
+                df = merge_context(df, d[["close_time", f"vwap_{tf_v}"]], suffix="")
     return df
 
 

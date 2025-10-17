@@ -37,7 +37,7 @@
       "params": {
         "fast": 9,
         "slow": 21,
-        "side": "both",
+        "side": "long",
         "exit_on_cross": true
       }
     }
@@ -45,7 +45,7 @@
   "filters": {
     "ma_trend": {
       "tf": "15m",
-      "ma_type": "hma",
+      "ma_type": "ema",
       "fast": 9,
       "slow": 20
     },
@@ -56,7 +56,7 @@
     },
     "volume_min": {
       "tf": "30m",
-      "percentile": 0.5
+      "percentile": 0.55
     },
     "vwap_bias": {
       "tf": "30m",
@@ -101,7 +101,7 @@
     "selftest": {
       "enabled": true,
       "direction": "up",
-      "drift_per_bar": 0.001
+      "drift_per_bar": 0.0002
     }
   },
   "walk_forward": {
