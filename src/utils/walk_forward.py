@@ -40,6 +40,7 @@ class WalkForwardValidator:
         min_trades_per_window: int,
         objective_func_creator: Callable,
         backtest_func: Callable,
+        use_cache_only: bool = False,
     ):
         """
         Initializes the walk-forward validator.
@@ -65,6 +66,7 @@ class WalkForwardValidator:
         self.results: List[Dict[str, Any]] = []
         self.summary_stats: Dict[str, Any] = {}
         self._aggregation_base: List[Dict[str, Any]] = []
+        self.use_cache_only = bool(use_cache_only)
 
     def _get_candles_per_day(self) -> int:
         """Calculates the approximate number of candles per day for a given timeframe."""
@@ -191,7 +193,7 @@ class WalkForwardValidator:
     def run_walk_forward(self, optimization_window: int, validation_window: int, step_size: int) -> Dict[str, Any]:
         """Executes the complete walk-forward validation."""
         logger.info("Starting walk-forward validation...")
-        data = load_data(self.symbol, self.timeframe, self.days)
+        data = load_data(self.symbol, self.timeframe, self.days, use_cache_only=self.use_cache_only)
         logger.info(f"Data loaded: {len(data)} candles from {data['Date'].iloc[0]} to {data['Date'].iloc[-1]}")
 
         periods = self.create_periods(data, optimization_window, validation_window, step_size)
@@ -428,6 +430,7 @@ def run_walk_forward_cli(
         default=10,
         help="Minimum trades in validation window to consider a period successful.",
     )
+    parser.add_argument("--cache-only", action="store_true", help="Use only local cache (no network)")
     args = parser.parse_args()
 
     validator = WalkForwardValidator(
@@ -439,6 +442,7 @@ def run_walk_forward_cli(
         min_trades_per_window=args.min_trades,
         objective_func_creator=objective_func_creator,
         backtest_func=backtest_func,
+        use_cache_only=args.cache_only,
     )
 
     validator.run_walk_forward(

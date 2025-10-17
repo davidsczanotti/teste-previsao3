@@ -14,14 +14,18 @@ import pandas as pd
 from pydantic import BaseModel
 
 from ..binance_client import get_historical_klines
+from .data_loader import load_data as _dl_load_data
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def load_data(ticker: str, interval: str, days: int) -> pd.DataFrame:
-    """Loads historical data from Binance."""
+def load_data(ticker: str, interval: str, days: int, cache_only: bool = False) -> pd.DataFrame:
+    """Loads historical data, optionally from cache-only."""
+    if cache_only:
+        df = _dl_load_data(ticker, interval, days=days, use_cache_only=True)
+        return df
     start_dt = datetime.now(UTC) - timedelta(days=days)
     start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
     df = get_historical_klines(ticker, interval, start_str)
@@ -80,10 +84,13 @@ def run_optimization_cli(
     parser.add_argument(
         "--min-trades", type=int, default=20, help="Minimum trade threshold for the objective function."
     )
+    parser.add_argument("--cache-only", action="store_true", help="Use only local cache (no network)")
     args = parser.parse_args()
 
-    logger.info(f"Loading data: {args.ticker} @ {args.interval} for {args.days} days...")
-    df = load_data(args.ticker, args.interval, args.days)
+    logger.info(
+        f"Loading data: {args.ticker} @ {args.interval} for {args.days} days... (cache_only={args.cache_only})"
+    )
+    df = load_data(args.ticker, args.interval, args.days, cache_only=args.cache_only)
 
     n = len(df)
     split_idx = int(n * args.train_frac)

@@ -1,0 +1,53 @@
+{
+  "symbol": "BTCUSDT",
+  "base_timeframe": "30m",
+  "context_timeframes": ["15m", "5m"],
+  "data": {
+    "source": "cache",
+    "update_cache": true,
+    "days": 180,
+    "seed": 42
+  },
+  "indicators": [
+    { "name": "ema", "tf": "30m", "params": {"fast": 9, "slow": 21}, "role": "score" },
+    { "name": "ema", "tf": "15m", "params": {"fast": 50, "slow": 200}, "role": "gate" },
+    { "name": "atr", "tf": "30m", "params": {"length": 14}, "role": "stop" }
+  ],
+  "signal_generators": [
+    { "name": "ema_cross", "variant": "A", "params": {"fast": 9, "slow": 21, "side": "both", "exit_on_cross": true} }
+  ],
+  "filters": {
+    "trend_tf": { "tf": "15m", "ema_fast": 50, "ema_slow": 200 },
+    "atr_min": { "tf": "30m", "length": 14, "min_atr_frac": 0.001 },
+    "volume_min": { "tf": "30m", "percentile": 0.4 }
+  },
+  "risk": {
+    "capital": 10000.0,
+    "sizing": { "type": "fixed_fraction", "fraction": 0.02 },
+    "stop":   { "type": "atr", "mult": 2.0 },
+    "trailing":{ "type": "atr", "mult": 1.5 },
+    "costs":   { "fee_bp": 2.0, "slippage_ticks": 1, "tick_size": 1.0 }
+  },
+  "optimization": {
+    "metric": "pf_penalized_sharpe",
+    "min_trades": 10,
+    "target_trades": 30,
+    "w_pf": 0.7,
+    "w_sharpe": 0.3
+  },
+  "analysis": {
+    "monte_carlo": { "sims": 1000, "seed": 42 }
+  },
+  "tests": {
+    "selftest": { "enabled": true, "direction": "up", "drift_per_bar": 0.001 }
+  },
+  "walk_forward": {
+    "opt_days": 60,
+    "val_days": 20,
+    "step_days": 20
+  },
+  "storage": {
+    "results_db": "src/strategies/experimento/experimento.sqlite",
+    "artifacts_dir": "src/strategies/experimento/artifacts"
+  }
+}
