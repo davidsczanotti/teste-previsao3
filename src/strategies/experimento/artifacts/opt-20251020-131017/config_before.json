@@ -16,8 +16,8 @@
       "name": "ema",
       "tf": "30m",
       "params": {
-        "fast": 25,
-        "slow": 42
+        "fast": 24,
+        "slow": 43
       },
       "role": "score"
     },
@@ -47,16 +47,16 @@
       "tf": "15m",
       "ma_type": "ema",
       "fast": 37,
-      "slow": 175
+      "slow": 228
     },
     "atr_min": {
       "tf": "30m",
       "length": 14,
-      "min_atr_frac": 0.0005250435041797857 
+      "min_atr_frac": 0.0005023545710155589
     },
     "volume_min": {
       "tf": "30m",
-      "percentile": 0.80
+      "percentile": 0.55
     },
     "vwap_bias": {
       "tf": "30m",
@@ -77,11 +77,11 @@
     },
     "stop": {
       "type": "atr",
-      "mult": 0.540060191565315
+      "mult": 0.5575818022009219
     },
     "trailing": {
       "type": "atr",
-      "mult": 3.214503413823331
+      "mult": 3.5719999756104905
     },
     "costs": {
       "fee_bp": 2.0,

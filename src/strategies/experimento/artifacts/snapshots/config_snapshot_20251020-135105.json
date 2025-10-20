@@ -52,11 +52,11 @@
     "atr_min": {
       "tf": "30m",
       "length": 14,
-      "min_atr_frac": 0.0005250435041797857 
+      "min_atr_frac": 0.0005250435041797857
     },
     "volume_min": {
       "tf": "30m",
-      "percentile": 0.80
+      "percentile": 0.75
     },
     "vwap_bias": {
       "tf": "30m",
