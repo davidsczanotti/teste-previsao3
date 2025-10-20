@@ -40,6 +40,12 @@ def index():
     <p>
       <a href="/wfo" style="padding:8px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">Ir para WFO</a>
     </p>
+    <form method="post" action="/apply_best" style="margin:10px 0;display:inline-block;">
+      <button type="submit" style="padding:8px 12px;background:#059669;color:white;border:none;border-radius:6px;">Aplicar Best Params ao Config</button>
+    </form>
+    <form method="post" action="/snapshot_config" style="margin:10px 0;display:inline-block;margin-left:8px;">
+      <button type="submit" style="padding:8px 12px;background:#111827;color:white;border:none;border-radius:6px;">Snapshot Config Atual</button>
+    </form>
     <div style=\"margin:12px 0;padding:10px;border:1px solid #ddd;border-radius:6px;\">
       <b>WFO mais recente:</b>
       {% if latest_group %}
@@ -128,6 +134,8 @@ def wfo_index():
     has_files = latest_dir.exists() if latest_dir else False
     html = """
     <h1>WFO Artifacts</h1>
+    <form method=\"post\" action=\"/apply_best\" style=\"margin:10px 0;display:inline-block;\">\n      <button type=\"submit\" style=\"padding:8px 12px;background:#059669;color:white;border:none;border-radius:6px;\">Aplicar Best Params ao Config</button>\n    </form>
+    <form method=\"post\" action=\"/snapshot_config\" style=\"margin:10px 0;display:inline-block;margin-left:8px;\">\n      <button type=\"submit\" style=\"padding:8px 12px;background:#111827;color:white;border:none;border-radius:6px;\">Snapshot Config Atual</button>\n    </form>
     <form method="post" action="/pipeline_wfo/run" style="margin:10px 0;">
       <button type="submit" style="padding:8px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;">Executar Pipeline WFO (update → WFO → relatório)</button>
     </form>
@@ -250,6 +258,26 @@ def run_pipeline_wfo():
         return redirect(url_for('wfo_index'))
     except Exception as e:
         return f"Pipeline WFO error: {e}", 500
+
+
+@app.route("/apply_best", methods=["POST"]) 
+def apply_best():
+    try:
+        mod = import_module("src.strategies.experimento.scripts.apply_best")
+        mod.main()
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"ApplyBest error: {e}", 500
+
+
+@app.route("/snapshot_config", methods=["POST"]) 
+def snapshot_config():
+    try:
+        mod = import_module("src.strategies.experimento.scripts.snapshot_config")
+        mod.main()
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"Snapshot error: {e}", 500
 
 
 @app.route("/artifacts/<path:subpath>")

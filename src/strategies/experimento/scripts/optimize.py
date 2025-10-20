@@ -82,13 +82,13 @@ def apply_indicators(df_base: pd.DataFrame, ctx_dfs: Dict[str, pd.DataFrame], pa
         d15["ema_slow_15m"] = ema(d15["close"], ema_s)
         df = merge_context(df, d15[["close_time", "ema_fast_15m", "ema_slow_15m"]], suffix="")
 
-    # Generic MA trend (ma_trend)
+    # Generic MA trend (ma_trend) — usa params se presentes
     if "ma_trend" in cfg.get("filters", {}):
         mt = cfg["filters"]["ma_trend"]
         ma_type = mt.get("ma_type", "ema")
         tf_mt = mt.get("tf", "15m")
-        fast = int(mt.get("fast", 9))
-        slow = int(mt.get("slow", 20))
+        fast = int(params.get("ma_fast", mt.get("fast", 9)))
+        slow = int(params.get("ma_slow", mt.get("slow", 20)))
         if tf_mt == cfg["base_timeframe"]:
             df[f"ma_fast_{tf_mt}"] = compute_ma(df["close"], ma_type, fast)
             df[f"ma_slow_{tf_mt}"] = compute_ma(df["close"], ma_type, slow)
@@ -130,10 +130,16 @@ def objective_factory(df_base: pd.DataFrame, ctx_dfs: Dict[str, pd.DataFrame], c
             "trend_ema_slow": trial.suggest_int("trend_ema_slow", 100, 250),
             "stop_mult": trial.suggest_float("stop_mult", 0.0, 4.0),
             "trailing_mult": trial.suggest_float("trailing_mult", 0.0, 4.0),
+            # novos knobs
+            "ma_fast": trial.suggest_int("ma_fast", 8, 30),
+            "ma_slow": trial.suggest_int("ma_slow", 20, 80),
+            "vol_pct": trial.suggest_float("vol_pct", 0.4, 0.8),
         }
         if params["ema_fast"] >= params["ema_slow"]:
             raise optuna.TrialPruned()
         if params["trend_ema_fast"] >= params["trend_ema_slow"]:
+            raise optuna.TrialPruned()
+        if params["ma_fast"] >= params["ma_slow"]:
             raise optuna.TrialPruned()
 
         df = apply_indicators(df_base, ctx_dfs, params, cfg)
@@ -149,6 +155,9 @@ def objective_factory(df_base: pd.DataFrame, ctx_dfs: Dict[str, pd.DataFrame], c
         filters_cfg = dict(cfg["filters"])  # copy
         filters_cfg.setdefault("atr_min", {})
         filters_cfg["atr_min"]["min_atr_frac"] = params["atr_min_frac"]
+        # volume min
+        filters_cfg.setdefault("volume_min", {})
+        filters_cfg["volume_min"]["percentile"] = params["vol_pct"]
         df_sig = apply_all_filters(df_sig, filters_cfg)
 
         bt_cfg = BacktestConfig(

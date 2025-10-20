@@ -4,9 +4,9 @@ Fundação
 
 - [x] Criar estrutura base em src/strategies/experimento: data/, indicators/, signals/, filters/, risk/, engine/, storage/, scripts/.
 - [x] Definir arquivo config_active.json (fonte única de config, sem flags).
-- [ ] Adicionar artifacts/ para relatórios e gráficos.
-- [x] Confirmar remoção do .docx (feito manualmente) e manter README.md como referência.
- - [x] Forçar consumo do cache (data/klines_cache.db) com auto-update no início dos scripts.
+- [x] Adicionar artifacts/ para relatórios, snapshots e gráficos.
+- [x] Confirmar remoção do .docx e manter README.md como referência.
+- [x] Consumo do cache (data/klines_cache.db) com auto-update opcional via JSON.
 Dados / MTF
 
  - [x] Implementar loader MTF (data/loader.py) para 5m/15m/30m (cache + binance).
@@ -16,7 +16,7 @@ Dados / MTF
 Indicadores (plugáveis)
 
 - [ ] Interface base (indicators/base.py) com apply(df), role.
-- [x] Implementar EMA, ATR mínimos (indicators/common.py).
+- [x] EMA/ATR (indicators/common.py) + SMA/WMA/HMA + VWAP diário (reset por dia).
 - [ ] Registrar catálogo simples (indicators/registry.py) e RSI.
 Geradores de Sinal
 
@@ -25,10 +25,10 @@ Geradores de Sinal
 - [ ] Integração de scores (ponderação) e prioridade de sinais.
 Filtros
 
-- [x] filters/trend_mtf.py (EMA 15m 50>200).
-- [x] filters/atr_threshold.py (ATR mínimo 30m).
-- [x] filters/volume.py (percentil mínimo).
-- [ ] Orquestrador de filtros (filters/apply.py).
+- [x] trend_mtf (legacy) + ma_trend genérico (ma_type: ema/sma/wma/hma).
+- [x] atr_threshold (ATR mínimo 30m) – parametrizado via JSON.
+- [x] volume_min (percentil mínimo).
+- [x] Orquestrador de filtros (filters/apply.py), incluindo vwap_bias.
 Risco / Execução
 
 - [x] risk/sizing.py (fixed_fraction).
@@ -37,18 +37,19 @@ Risco / Execução
 - [x] Aplicar na simulação em pontos de entrada/saída (engine/backtest.py).
 Motor de Backtest
 
-- [x] engine/backtest.py: loop por barra 30m; sinais → filtros → risco; PnL.
-- [ ] Suporte a side bidirecional; uma posição por vez (atual long-only).
+- [x] engine/backtest.py: loop 30m; sinais → filtros (incl. vwap) → risco; PnL.
+- [x] Suporte a side long/short/both e exit_on_cross (config).
 - [ ] Logging de eventos por barra (detalhes adicionais) para auditoria.
 Otimização
 
-- [ ] scripts/optimize.py: carrega config_active.json, roda Optuna internamente.
-- [ ] Objetivo: PF penalizado por nº trades + Sharpe; mínimo de trades.
-- [ ] Atualiza config_active.json com melhores params (opcional: snapshot em artifacts/).
+- [x] scripts/optimize.py: Optuna com objetivo PF penalizado + Sharpe; mínimo de trades.
+- [x] Robustez: ATR dinâmico; update_cache opcional; otimiza também ma_trend (ma_fast/ma_slow) e volume_min.percentile.
+- [x] apply_best.py: aplica "best.*" do último Optimize no config_active.json (+ backups em artifacts/<run_id>/).
 Walk-Forward
 
-- [ ] scripts/walk_forward.py: janelas (60/20/20 sugeridas), rolling e acúmulo OOS.
-- [ ] Relatório final consolidado (PF, Sharpe, drawdown, nº trades).
+- [x] scripts/walk_forward.py: janelas configuráveis (60/20/20, 90/30/30, 60/30/30 validadas), rolling e acúmulo OOS.
+- [x] Relatório agregado (PF, trades) + equity OOS; tags wfo_group/window_index no DB.
+- [x] report_wfo: reconstrói do DB, gera equity/ventanas/params e per-window equity+drawdown.
 Armazenamento / Auditoria
 
 - [x] storage/db.py: SQLite experimento.sqlite.
@@ -56,8 +57,10 @@ Armazenamento / Auditoria
 - [x] Persistir cada execução, com config e timestamps.
 Interfaces / Relatórios
 
-- [ ] scripts/report.py: export CSV (signals/trades/metrics) e gerar gráficos.
-- [ ] Opcional: scripts/app.py (Flask) para listar runs e detalhes.
+- [x] scripts/report.py: export CSVs do run + gráfico preço/EMAs/setas + equity.
+- [x] scripts/report_wfo.py: relatórios agregados + por janela (linha, EMAs, entradas/saídas, equity, drawdown).
+- [x] scripts/app.py (Flask): navegação de runs/WFO + botões (pipelines, rebuild WFO, cleanup, aplicar best, snapshot).
+- [x] scripts/compare_wfo.py: CSV histórico com PF/trades por grupo WFO.
 Configuração (JSON)
 
 - [ ] config/schema.json (rótulos/validação leve).
@@ -68,9 +71,10 @@ Validação / Qualidade
 - [ ] Testes unitários críticos de alinhamento no-lookahead e custos.
 - [ ] Sanidade do PnL com custos vs sem custos.
 - [ ] Perf: cache/localização de merges, reduzir cópias de DF.
-Próximos passos imediatos
+Pipelines e automações
 
-- [x] Criar esqueleto de pastas/arquivos e config_active.json.
-- [x] Implementar pipeline mínimo: dados sintéticos + EMA cross + backtest simples + persistência em SQLite.
-- [x] Rodar um backtest de fumaça via poetry run python -m src.strategies.experimento.scripts.backtest.
- - [x] Adicionar Monte Carlo (scripts/monte_carlo.py) e Selftest (scripts/selftest.py) com dados tendenciosos.
+- [x] pipeline.py (Backtest → MonteCarlo → Report).
+- [x] pipeline_wfo.py (Walk-Forward → report_wfo).
+- [x] apply_best.py (aplicar "best.*" do Optimize no config).
+- [x] snapshot_config.py (snapshot do config em artifacts/snapshots/).
+- [x] cleanup.py (purge de artifacts conforme JSON).

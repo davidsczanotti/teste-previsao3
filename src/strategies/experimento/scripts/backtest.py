@@ -99,6 +99,23 @@ def main() -> None:
                 d[f"ma_slow_{tf_mt}"] = compute_ma(d["close"], ma_type, slow)
                 df_base = merge_context(df_base, d[["close_time", f"ma_fast_{tf_mt}", f"ma_slow_{tf_mt}"]], suffix="")
 
+    # Optional second trend gate (5m)
+    if "ma_trend_5m" in cfg.get("filters", {}):
+        mt2 = cfg["filters"]["ma_trend_5m"]
+        ma_type2 = mt2.get("ma_type", "ema")
+        tf_mt2 = mt2.get("tf", "5m")
+        fast2 = int(mt2.get("fast", 9))
+        slow2 = int(mt2.get("slow", 20))
+        if tf_mt2 == base_tf:
+            df_base[f"ma_fast_{tf_mt2}"] = compute_ma(df_base["close"], ma_type2, fast2)
+            df_base[f"ma_slow_{tf_mt2}"] = compute_ma(df_base["close"], ma_type2, slow2)
+        else:
+            if tf_mt2 in ctx_dfs:
+                d2 = ctx_dfs[tf_mt2].copy()
+                d2[f"ma_fast_{tf_mt2}"] = compute_ma(d2["close"], ma_type2, fast2)
+                d2[f"ma_slow_{tf_mt2}"] = compute_ma(d2["close"], ma_type2, slow2)
+                df_base = merge_context(df_base, d2[["close_time", f"ma_fast_{tf_mt2}", f"ma_slow_{tf_mt2}"]], suffix="")
+
     # VWAP bias (daily reset) on desired TF
     if "vwap_bias" in cfg.get("filters", {}):
         vb = cfg["filters"]["vwap_bias"]

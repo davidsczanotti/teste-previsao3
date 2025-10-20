@@ -25,6 +25,16 @@ def apply_all_filters(df: pd.DataFrame, cfg_filters: dict) -> pd.DataFrame:
     else:
         out["trend_ok"] = 1
 
+    # Optional second trend gate (5m, ou outro TF): ma_trend_5m
+    if "ma_trend_5m" in cfg_filters:
+        tf2 = cfg_filters["ma_trend_5m"].get("tf", "5m")
+        fast2 = f"ma_fast_{tf2}"
+        slow2 = f"ma_slow_{tf2}"
+        if fast2 in out.columns and slow2 in out.columns:
+            trend5 = (out[fast2] > out[slow2]).astype(int)
+            # combina com o trend_ok existente (AND)
+            out["trend_ok"] = (out["trend_ok"].astype(int) & trend5.astype(int)).astype(int)
+
     # ATR min threshold (requires atr_30m)
     if "atr_min" in cfg_filters:
         out["atr_ok"] = apply_atr_threshold(out, "atr_30m", cfg_filters["atr_min"]["min_atr_frac"]).astype(int)

@@ -16,8 +16,8 @@
       "name": "ema",
       "tf": "30m",
       "params": {
-        "fast": 9,
-        "slow": 21
+        "fast": 19,
+        "slow": 57
       },
       "role": "score"
     },
@@ -25,7 +25,7 @@
       "name": "atr",
       "tf": "30m",
       "params": {
-        "length": 14
+        "length": 11
       },
       "role": "stop"
     }
@@ -46,13 +46,13 @@
     "ma_trend": {
       "tf": "15m",
       "ma_type": "ema",
-      "fast": 9,
-      "slow": 20
+      "fast": 40,
+      "slow": 112
     },
     "atr_min": {
       "tf": "30m",
       "length": 14,
-      "min_atr_frac": 0.0008
+      "min_atr_frac": 0.0032616412838534464
     },
     "volume_min": {
       "tf": "30m",
@@ -61,6 +61,12 @@
     "vwap_bias": {
       "tf": "30m",
       "mode": "long_only"
+    },
+    "ma_trend_5m": {
+      "tf": "5m",
+      "ma_type": "ema",
+      "fast": 7,
+      "slow": 21
     }
   },
   "risk": {
@@ -71,11 +77,11 @@
     },
     "stop": {
       "type": "atr",
-      "mult": 2.0
+      "mult": 2.4350554919805933
     },
     "trailing": {
       "type": "atr",
-      "mult": 1.5
+      "mult": 1.6741420163141014
     },
     "costs": {
       "fee_bp": 2.0,
@@ -106,8 +112,8 @@
   },
   "walk_forward": {
     "opt_days": 60,
-    "val_days": 20,
-    "step_days": 20
+    "val_days": 30,
+    "step_days": 30
   },
   "storage": {
     "results_db": "src/strategies/experimento/experimento.sqlite",

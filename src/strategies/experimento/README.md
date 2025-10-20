@@ -43,6 +43,11 @@ df = pd.merge_asof(
 - Confirmação (score): atribui pontuações aos possíveis sinais. Ex.: confluência de EMAs/RSI/ADX.
 - Ajuste de saída/stop: modifica stop, alvo e trailing. Ex.: stop ATR, trailing por canal/ATR.
 
+Indicadores implementados (atual)
+- Médias móveis: EMA/SMA/WMA/HMA (via `compute_ma`), com uso em `ma_trend` no TF desejado (ex.: 15m).
+- ATR (30m): length dinâmico a partir do JSON; usado para stops/trailing e filtro de volatilidade.
+- VWAP diário (reset por dia): `vwap_bias` como gate (above/below), sem lookahead.
+
 ## Geradores de Sinal (base + variantes)
 - Estratégia base: cruzamento de EMAs no 30m.
 - Variante A: EMA(9/21) + filtro de tendência 15m.
@@ -53,6 +58,12 @@ df = pd.merge_asof(
 - Tendência MTF: somente compra se EMA(15m, 50) > EMA(15m, 200).
 - ATR limiar: ATR(30m) >= p_perc do range mediano dos últimos N dias.
 - Volume mínimo: volume(30m) >= percentual do seu percentil 40/50.
+
+Filtros implementados (atual)
+- `ma_trend`: tendência genérica por MA (ma_type: ema/sma/wma/hma) em TF configurável; gera `trend_ok`.
+- `atr_min`: gate por volatilidade; gera `atr_ok`.
+- `volume_min`: gate por percentil; gera `vol_ok`.
+- `vwap_bias`: viés comprador/vendedor baseado no VWAP diário; gera `vwap_ok`.
 
 ## Risco/Execução
 - Sizing: fração de capital fixa ou risco fixo por trade (em ATR).
@@ -146,6 +157,11 @@ Manter tudo dentro de `src/strategies/experimento` (sem reaproveitar de outros m
 - DB: tabelas `runs`, `bars`, `signals`, `trades`, `fills`, `params`, `metrics`.
 - Artefatos: salvar gráficos e JSONs de configuração por run em `artifacts/`.
 
+## Novos utilitários (atual)
+- `apply_best.py`: aplica automaticamente os parâmetros “best.*” do último Optimize ao `config_active.json` (com backups).
+- `snapshot_config.py`: salva snapshots do config em `artifacts/snapshots/`.
+- `compare_wfo.py`: gera CSV histórico (`wfo_summary_history.csv`) com PF/trades por grupo WFO.
+
 ## Observações finais
 - Não reutilizar módulos externos do projeto para a estratégia; manter tudo em `experimento/`.
 - Configuração exclusivamente via JSON; não usar flags em comandos.
@@ -202,6 +218,7 @@ Comandos atômicos
 - `poetry run python -m src.strategies.experimento.scripts.app`
   - Efeito: inicia uma interface Flask simples para navegar por runs, trades, métricas e artefatos (inclui seção WFO).
   - URL: `http://127.0.0.1:5001` (rotas: `/`, `/run/<run_id>`, `/wfo`, `/wfo/<group>`, `/artifacts/<path>`).
+  - Ações: pipelines (backtest/WFO), rebuild WFO, cleanup, “Aplicar Best Params ao Config”, “Snapshot Config Atual”.
 
 - `poetry run python -m src.strategies.experimento.scripts.cleanup`
   - Efeito: purge dos artifacts conforme o JSON (mantém apenas os últimos WFO e remove outras pastas de runs).
@@ -239,3 +256,11 @@ Fluxos recomendados
 Notas
 - Se um relatório WFO não existir em disco, `report_wfo` reconstrói tudo a partir do DB (usando o `wfo_group` mais recente).
 - Para alternar entre long/short/both e saída por cross, use `signal_generators[0].params` no JSON (`side`, `exit_on_cross`).
+- `poetry run python -m src.strategies.experimento.scripts.apply_best`
+  - Efeito: aplica ao JSON os “best.*” do último Optimize e salva backups.
+
+- `poetry run python -m src.strategies.experimento.scripts.snapshot_config`
+  - Efeito: salva o `config_active.json` atual em `artifacts/snapshots/`.
+
+- `poetry run python -m src.strategies.experimento.scripts.compare_wfo`
+  - Efeito: gera `artifacts/wfo_summary_history.csv` consolidando PF/trades por grupo WFO.
