@@ -38,14 +38,14 @@
         "fast": 9,
         "slow": 21,
         "side": "long",
-        "exit_on_cross": false
+        "exit_on_cross": true
       }
     }
   ],
   "filters": {
     "ma_trend": {
       "tf": "15m",
-      "ma_type": "sma",
+      "ma_type": "ema",
       "fast": 70,
       "slow": 228
     },

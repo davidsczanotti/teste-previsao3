@@ -16,8 +16,8 @@
       "name": "ema",
       "tf": "30m",
       "params": {
-        "fast": 27,
-        "slow": 40
+        "fast": 25,
+        "slow": 42
       },
       "role": "score"
     },
@@ -25,7 +25,7 @@
       "name": "atr",
       "tf": "30m",
       "params": {
-        "length": 7
+        "length": 8
       },
       "role": "stop"
     }
@@ -38,21 +38,21 @@
         "fast": 9,
         "slow": 21,
         "side": "long",
-        "exit_on_cross": false
+        "exit_on_cross": true
       }
     }
   ],
   "filters": {
     "ma_trend": {
       "tf": "15m",
-      "ma_type": "sma",
-      "fast": 70,
-      "slow": 228
+      "ma_type": "ema",
+      "fast": 37,
+      "slow": 175
     },
     "atr_min": {
       "tf": "30m",
       "length": 14,
-      "min_atr_frac": 0.0005378913106273268
+      "min_atr_frac": 0.0005250435041797857
     },
     "volume_min": {
       "tf": "30m",
@@ -77,11 +77,11 @@
     },
     "stop": {
       "type": "atr",
-      "mult": 0.8312398424867589
+      "mult": 0.540060191565315
     },
     "trailing": {
       "type": "atr",
-      "mult": 0.0357624662181588
+      "mult": 3.214503413823331
     },
     "costs": {
       "fee_bp": 2.0,
@@ -118,7 +118,7 @@
   "storage": {
     "results_db": "src/strategies/experimento/experimento.sqlite",
     "artifacts_dir": "src/strategies/experimento/artifacts",
-    "write_artifacts": true
+    "write_artifacts": false
   },
   "report": {
     "normalize_equity": true,
