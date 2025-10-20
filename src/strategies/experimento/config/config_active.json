@@ -43,12 +43,6 @@
     }
   ],
   "filters": {
-    "ma_trend": {
-      "tf": "15m",
-      "ma_type": "sma",
-      "fast": 70,
-      "slow": 228
-    },
     "atr_min": {
       "tf": "30m",
       "length": 14,
@@ -67,6 +61,12 @@
       "ma_type": "ema",
       "fast": 8,
       "slow": 23
+    },
+    "ma_trend": {
+      "tf": "15m",
+      "ma_type": "ema",
+      "fast": 70,
+      "slow": 228
     }
   },
   "risk": {
@@ -95,7 +95,7 @@
     "target_trades": 40,
     "w_pf": 0.7,
     "w_sharpe": 0.3,
-    "trials": 120
+    "trials": 600
   },
   "analysis": {
     "monte_carlo": {

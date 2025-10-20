@@ -1,0 +1,10 @@
+{
+  "ema_fast": 7,
+  "ema_slow": 11,
+  "atr_len": 7,
+  "atr_min_frac": 0.0008242639783629258,
+  "trend_ema_fast": 40,
+  "trend_ema_slow": 240,
+  "stop_mult": 0.6593081038020061,
+  "trailing_mult": 3.1855409556610867
+}
