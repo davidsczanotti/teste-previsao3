@@ -7,8 +7,8 @@
   ],
   "data": {
     "source": "cache",
-    "update_cache": false,
-    "days": 180,
+    "update_cache": true,
+    "days": 365,
     "seed": 42
   },
   "indicators": [
@@ -16,8 +16,8 @@
       "name": "ema",
       "tf": "30m",
       "params": {
-        "fast": 19,
-        "slow": 57
+        "fast": 24,
+        "slow": 43
       },
       "role": "score"
     },
@@ -25,7 +25,7 @@
       "name": "atr",
       "tf": "30m",
       "params": {
-        "length": 11
+        "length": 8
       },
       "role": "stop"
     }
@@ -46,13 +46,13 @@
     "ma_trend": {
       "tf": "15m",
       "ma_type": "ema",
-      "fast": 40,
-      "slow": 112
+      "fast": 37,
+      "slow": 228
     },
     "atr_min": {
       "tf": "30m",
       "length": 14,
-      "min_atr_frac": 0.0032616412838534464
+      "min_atr_frac": 0.0005023545710155589
     },
     "volume_min": {
       "tf": "30m",
@@ -65,8 +65,8 @@
     "ma_trend_5m": {
       "tf": "5m",
       "ma_type": "ema",
-      "fast": 7,
-      "slow": 21
+      "fast": 8,
+      "slow": 23
     }
   },
   "risk": {
@@ -77,11 +77,11 @@
     },
     "stop": {
       "type": "atr",
-      "mult": 2.4350554919805933
+      "mult": 0.5575818022009219
     },
     "trailing": {
       "type": "atr",
-      "mult": 1.6741420163141014
+      "mult": 3.5719999756104905
     },
     "costs": {
       "fee_bp": 2.0,
@@ -91,11 +91,11 @@
   },
   "optimization": {
     "metric": "pf_penalized_sharpe",
-    "min_trades": 12,
+    "min_trades": 20,
     "target_trades": 40,
     "w_pf": 0.7,
     "w_sharpe": 0.3,
-    "trials": 20
+    "trials": 120
   },
   "analysis": {
     "monte_carlo": {
@@ -111,9 +111,9 @@
     }
   },
   "walk_forward": {
-    "opt_days": 60,
-    "val_days": 30,
-    "step_days": 30
+    "opt_days": 90,
+    "val_days": 45,
+    "step_days": 45
   },
   "storage": {
     "results_db": "src/strategies/experimento/experimento.sqlite",
