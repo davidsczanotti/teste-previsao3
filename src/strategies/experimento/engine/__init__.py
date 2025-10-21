@@ -1,2 +1,0 @@
-"""Backtest engine for experimento."""
-
