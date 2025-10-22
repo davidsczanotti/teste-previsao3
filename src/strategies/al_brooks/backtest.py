@@ -405,8 +405,14 @@ def main():
         print(f"Duração Média do Trade: {str(avg_duration).split('.')[0]}")
 
     # Opcional: Salvar trades em um arquivo para análise mais profunda
-    # pd.DataFrame(closed_trades).to_csv("al_brooks_trades.csv", index=False)
-    # print("\nTrades salvos em 'al_brooks_trades.csv'")
+    try:
+        trades_dir = Path(__file__).resolve().parent / "reports" / "trades"
+        trades_dir.mkdir(parents=True, exist_ok=True)
+        trades_path = trades_dir / f"al_brooks_{run_ticker}_{run_interval}_trades.csv"
+        pd.DataFrame(closed_trades).to_csv(trades_path, index=False)
+        print(f"Trades salvos em: {trades_path}")
+    except Exception as e:
+        print(f"[warn] Falha ao salvar CSV de trades: {e}")
 
     # Plotar o resultado
     plot_backtest(df_with_indicators, trades, run_ticker)

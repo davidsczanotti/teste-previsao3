@@ -41,6 +41,7 @@ class WalkForwardValidator:
         objective_func_creator: Callable,
         backtest_func: Callable,
         use_cache_only: bool = False,
+        n_trials: int = 50,
     ):
         """
         Initializes the walk-forward validator.
@@ -67,6 +68,7 @@ class WalkForwardValidator:
         self.summary_stats: Dict[str, Any] = {}
         self._aggregation_base: List[Dict[str, Any]] = []
         self.use_cache_only = bool(use_cache_only)
+        self.n_trials = int(n_trials)
 
     def _get_candles_per_day(self) -> int:
         """Calculates the approximate number of candles per day for a given timeframe."""
@@ -137,7 +139,12 @@ class WalkForwardValidator:
         try:
             study = optuna.create_study(direction="maximize")
             objective = self.objective_func_creator(opt_data, self.lot_size)
-            study.optimize(objective, n_trials=50, show_progress_bar=False, gc_after_trial=True)
+            study.optimize(
+                objective,
+                n_trials=self.n_trials,
+                show_progress_bar=False,
+                gc_after_trial=True,
+            )
             best_params = study.best_params
             best_score = study.best_value
 

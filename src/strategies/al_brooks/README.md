@@ -99,6 +99,36 @@ poetry run python -m src.strategies.al_brooks.backtest
 
 O gráfico com os trades será salvo em `src/strategies/al_brooks/reports/charts/`.
 
+### Passo 4: Análise Walk‑Forward (sem flags)
+
+Executa otimizações rolantes e validações fora da amostra, gerando um gráfico e um resumo audível em JSON.
+
+```bash
+poetry run python -m src.strategies.al_brooks.walk_forward
+```
+
+Parâmetros dos janelamentos podem ser definidos opcionalmente em `config.json` no bloco `walk_forward`:
+
+```json
+"walk_forward": {"opt_window": 90, "val_window": 30, "step_size": 30, "min_trades": 10, "cache_only": true}
+```
+
+Artefatos:
+- Gráfico: `src/strategies/al_brooks/reports/charts/walk_forward_ALBROOKS_<TICKER>_<TF>.png`
+- Resumo: `src/strategies/al_brooks/reports/snapshots/wf_summary.json`
+
+### Passo 5: Simulação Monte Carlo (sem flags)
+
+Roda backtest, aplica bootstrap por blocos à sequência de trades e salva gráficos/estatísticas.
+
+```bash
+poetry run python -m src.strategies.al_brooks.monte_carlo
+```
+
+Artefatos:
+- Histogramas: `src/strategies/al_brooks/reports/monte_carlo/mc_*.png`
+- Sumário: `src/strategies/al_brooks/reports/monte_carlo/mc_summary_<TICKER>_<TF>_<TS>.json`
+
 ### Passo 4: Executar o Modo Live (Monitoramento)
 
 Este script também carrega a configuração ativa e começa a monitorar o mercado em tempo real, buscando por sinais de compra ou venda.
