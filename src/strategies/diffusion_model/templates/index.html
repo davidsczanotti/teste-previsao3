@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Diffusion Live — BTC Forecast</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+      html, body { height: 100%; margin: 0; background: #000; color: #ddd; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      #wrap { display: flex; flex-direction: column; height: 100%; }
+      header { padding: 8px 14px; font-weight: 600; letter-spacing: 0.5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      #chart { flex: 1; }
+      #controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 400; }
+      #controls label { display: flex; align-items: center; gap: 6px; }
+      input[type="range"] { width: 140px; }
+      .pill { opacity: 0.8; background: #111; padding: 4px 8px; border-radius: 8px; margin-left: 8px; border: 1px solid #222; }
+      a { color: #6ad1ff; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <header>
+        Diffusion Live
+        <span id="meta" class="pill">carregando...</span>
+        <span class="pill"><a href="/healthz" target="_blank">health</a></span>
+        <div id="controls">
+          <label><input id="chkPaths" type="checkbox" checked /> Paths</label>
+          <label><input id="chkBand" type="checkbox" checked /> Faixa P10–P90</label>
+          <label><input id="chkCandles" type="checkbox" /> Candles prev.</label>
+          <label><input id="chkMedianLine" type="checkbox" checked /> Mediana (linha)</label>
+          <label><input id="chkLegend" type="checkbox" /> Legend</label>
+          <label>Overlays <input id="rngOverlay" type="range" min="0" max="60" value="20" /></label>
+          <label>Mostrar H <input id="rngH" type="range" min="1" max="64" value="16" /></label>
+        </div>
+      </header>
+      <div id="chart"></div>
+    </div>
+    <script>
+      const el = document.getElementById('chart');
+      let initialized = false;
+      // Persist UI controls on localStorage
+      const loadPref = (k, d) => { try { const v = localStorage.getItem(k); return v===null? d : JSON.parse(v); } catch(e){ return d; } };
+      const savePref = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+      let overlayN = loadPref('dm_overlayN', 20);
+      let showPaths = loadPref('dm_showPaths', true), showBand = loadPref('dm_showBand', true), showCandles = loadPref('dm_showCandles', false), showMedianLine = loadPref('dm_showMedianLine', true), showLegend = loadPref('dm_showLegend', false);
+      let displayH = loadPref('dm_displayH', 16);
+
+      function isoToDate(x) { return new Date(x); }
+
+      async function fetchLive() {
+        const res = await fetch('/api/live', {cache: 'no-store'});
+        return await res.json();
+      }
+
+      // Preserve user-selected x-range across updates
+      let userRange = null;
+      el.addEventListener('plotly_relayout', ev => {
+        try {
+          const r0 = ev['xaxis.range[0]'];
+          const r1 = ev['xaxis.range[1]'];
+          if (r0 && r1) userRange = [new Date(r0), new Date(r1)];
+        } catch(e) {}
+      });
+
+      function buildFigure(payload) {
+        if (!initialized) {
+          const rngH = document.getElementById('rngH');
+          rngH.max = Math.max(1, payload.horizon);
+          if (!rngH._init) { rngH._init = true; if (!loadPref('dm_displayH', null)) displayH = payload.horizon; }
+          rngH.value = displayH;
+          const chkCandles = document.getElementById('chkCandles');
+          if (!loadPref('dm_showCandles', null)) chkCandles.checked = (payload.target_mode === 'ohlc3');
+          showCandles = chkCandles.checked;
+          document.getElementById('chkMedianLine').checked = showMedianLine;
+          document.getElementById('chkLegend').checked = showLegend;
+          document.getElementById('chkPaths').checked = showPaths;
+          document.getElementById('chkBand').checked = showBand;
+          document.getElementById('rngOverlay').value = overlayN;
+          initialized = true;
+        }
+        const tHist = payload.history.t.map(isoToDate);
+        const o = payload.history.open, h = payload.history.high, l = payload.history.low, c = payload.history.close;
+        const tFutFull = payload.forecast.t.map(isoToDate);
+        const medianFull = payload.forecast.median;
+        const p10Full = payload.forecast.p10, p90Full = payload.forecast.p90;
+        const pathsFull = payload.forecast.paths || [];
+        const snaps = (payload.forecast.history_snaps || []);
+        const tgtMode = payload.target_mode || 'close';
+
+        const H = Math.min(displayH, tFutFull.length);
+        const tFut = tFutFull.slice(0, H);
+        const median = medianFull.slice(0, H);
+        const p10 = p10Full.slice(0, H), p90 = p90Full.slice(0, H);
+        const paths = pathsFull.map(arr => arr.slice(0, H));
+
+        const traces = [];
+        // candles (histórico)
+        traces.push({
+          type: 'candlestick', x: tHist, open: o, high: h, low: l, close: c,
+          increasing: {line: {color: '#39d353', width: 1}}, decreasing: {line: {color: '#ff7b72', width: 1}},
+          name: `${payload.symbol} ${payload.timeframe}`,
+        });
+
+        if (showPaths) {
+          const n = Math.min(paths.length, overlayN);
+          for (let i=0; i<n; i++) {
+            traces.push({
+              type: 'scatter', mode: 'lines', x: tFut, y: paths[i],
+              line: {color: 'rgba(200,200,200,0.25)', width: 1}, name: 'path', hoverinfo: 'skip', showlegend: false
+            });
+          }
+          if (showMedianLine) {
+            traces.push({
+              type: 'scatter', mode: 'lines', x: tFut, y: median,
+              line: {color: '#00d1ff', width: 2}, name: 'median'
+            });
+          }
+        }
+
+        if (showBand) {
+          traces.push({
+            type: 'scatter', mode: 'lines', x: tFut, y: p90,
+            line: {width: 0}, hoverinfo: 'skip', showlegend: false
+          });
+          traces.push({
+            type: 'scatter', mode: 'lines', x: tFut, y: p10,
+            fill: 'tonexty', fillcolor: 'rgba(0,209,255,0.10)', line: {width: 0}, hoverinfo: 'skip', showlegend: false
+          });
+        }
+
+        // Predicted candles (median + few samples) when available
+        const candles = payload.forecast.candles || null;
+        if (showCandles && candles && tgtMode === 'ohlc3') {
+          const m = candles.median;
+          traces.push({
+            type: 'candlestick', x: tFut, open: m.open.slice(0,H), high: m.high.slice(0,H), low: m.low.slice(0,H), close: m.close.slice(0,H),
+            increasing: {line: {color: '#f5e663', width: 1.4}}, decreasing: {line: {color: '#f5e663', width: 1.4}},
+            opacity: 0.85, name: 'forecast (median)'
+          });
+          const s = candles.samples;
+          const nC = Math.min((s.open||[]).length, overlayN);
+          for (let i=0;i<nC;i++) {
+            traces.push({
+              type: 'candlestick', x: tFut, open: s.open[i].slice(0,H), high: s.high[i].slice(0,H), low: s.low[i].slice(0,H), close: s.close[i].slice(0,H),
+              increasing: {line: {color: 'rgba(200,200,200,0.45)', width: 1}}, decreasing: {line: {color: 'rgba(200,200,200,0.45)', width: 1}},
+              opacity: 0.18, name: 'forecast sample', showlegend: false
+            });
+          }
+        }
+
+        // ghost medians of previous snapshots (persist on chart)
+        for (let s of snaps) {
+          const xs = s.t.map(isoToDate);
+          traces.push({
+            type: 'scatter', mode: 'lines', x: xs, y: s.median,
+            line: {color: 'rgba(0,209,255,0.20)', width: 1}, name: 'past median', hoverinfo: 'skip', showlegend: false
+          });
+        }
+
+        // Compute tight y-range to avoid outliers exploding the scale
+        let yMin = Math.min(...l.slice(-Math.min(200, l.length)), ...p10);
+        let yMax = Math.max(...h.slice(-Math.min(200, h.length)), ...p90);
+        if (!isFinite(yMin) || !isFinite(yMax) || yMin>=yMax) { yMin = Math.min(...l); yMax = Math.max(...h); }
+        const pad = (yMax - yMin) * 0.08;
+        const layout = {
+          paper_bgcolor: '#000', plot_bgcolor: '#000',
+          margin: {l: 40, r: 20, t: 20, b: 40},
+          xaxis: {gridcolor: '#222', showgrid: false, rangeslider: {visible: true}},
+          yaxis: {gridcolor: '#222', range: [yMin - pad, yMax + pad]},
+          dragmode: 'pan', showlegend: !!showLegend,
+          // Keep user UI state (zoom/slider) across react updates
+          uirevision: 'dm-ui-v1',
+        };
+
+        // Apply last user x-range if any
+        if (userRange) {
+          layout.xaxis.range = userRange;
+        }
+
+        Plotly.react(el, traces, layout, {displayModeBar: false, responsive: true});
+        const meta = document.getElementById('meta');
+        let covTxt = '';
+        if (snaps.length > 0 && snaps[snaps.length-1].coverage) {
+          const cov = snaps[snaps.length-1].coverage;
+          if (cov.hit_rate !== null && cov.n_obs>0) covTxt = ` | Coverage ${Math.round(cov.hit_rate*100)}% (n=${cov.n_obs})`;
+        }
+        const updatedAt = payload.ts ? new Date(payload.ts) : new Date();
+        let cycTxt = '';
+        if (payload.cycle && payload.cycle.mode === 'cycle') {
+          cycTxt = ` | Cycle mode (refresca a cada ${payload.cycle.required})`;
+        }
+        meta.textContent = `${payload.symbol} ${payload.timeframe} | H=${payload.horizon}${covTxt}${cycTxt} | Loss ${payload.loss?.toFixed ? payload.loss.toFixed(6) : payload.loss} | Updated ${updatedAt.toLocaleTimeString()}`;
+      }
+
+      // UI handlers
+      document.getElementById('chkPaths').addEventListener('change', e => { showPaths = e.target.checked; savePref('dm_showPaths', showPaths); });
+      document.getElementById('chkBand').addEventListener('change', e => { showBand = e.target.checked; savePref('dm_showBand', showBand); });
+      document.getElementById('chkCandles').addEventListener('change', e => { showCandles = e.target.checked; savePref('dm_showCandles', showCandles); });
+      document.getElementById('chkMedianLine').addEventListener('change', e => { showMedianLine = e.target.checked; savePref('dm_showMedianLine', showMedianLine); });
+      document.getElementById('chkLegend').addEventListener('change', e => { showLegend = e.target.checked; savePref('dm_showLegend', showLegend); });
+      document.getElementById('rngOverlay').addEventListener('input', e => { overlayN = parseInt(e.target.value,10) || overlayN; savePref('dm_overlayN', overlayN); });
+      document.getElementById('rngH').addEventListener('input', e => { displayH = parseInt(e.target.value,10) || displayH; savePref('dm_displayH', displayH); });
+
+      async function tick() {
+        try {
+          const payload = await fetchLive();
+          if (!payload || payload.status === 'warming_up') return;
+          buildFigure(payload);
+        } catch(e) { /* ignore */ }
+      }
+
+      setInterval(tick, 1500);
+      tick();
+    </script>
+  </body>
+  </html>

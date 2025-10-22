@@ -8,17 +8,21 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 
 
-def plot_training_loss(losses: Sequence[float], out_path: str) -> None:
-    plt.figure(figsize=(10, 4))
-    plt.plot(losses, label="Train loss (MSE noise)")
-    plt.xlabel("Step")
-    plt.ylabel("Loss")
-    plt.title("Diffusion Training Loss")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_path)
-    plt.close()
+def plot_training_loss(losses: Sequence[float], out_path: str | None = None, return_fig: bool = False):
+    fig = plt.figure(figsize=(10, 4))
+    ax = fig.add_subplot(111)
+    ax.plot(losses, label="Train loss (MSE noise)")
+    ax.set_xlabel("Step")
+    ax.set_ylabel("Loss")
+    ax.set_title("Diffusion Training Loss")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    if out_path:
+        fig.savefig(out_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
 
 
 def plot_predictions_on_candles(
@@ -26,9 +30,9 @@ def plot_predictions_on_candles(
     last_lookback: int,
     future_dates: pd.DatetimeIndex,
     samples_close_paths: np.ndarray,
-    out_path: str,
+    out_path: str | None = None,
     title: str = "Diffusion Forecast (Close Paths)",
-) -> None:
+) -> plt.Figure | None:
     """
     - df: full dataframe, already sorted by Date
     - last_lookback: how many candles to show before forecast
@@ -64,8 +68,10 @@ def plot_predictions_on_candles(
     ax_price.legend(loc="upper left")
     # Use subplots_adjust instead of tight_layout to avoid warnings with mpf figures
     fig.subplots_adjust(left=0.08, right=0.97, top=0.93, bottom=0.08, hspace=0.15)
-    fig.savefig(out_path)
-    plt.close(fig)
+    if out_path:
+        fig.savefig(out_path)
+    # Caller decides whether to close
+    return fig
 
 
 def plot_prob_next_return_positive(sampled_returns: np.ndarray, out_path: str) -> None:

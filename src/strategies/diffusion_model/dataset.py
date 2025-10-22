@@ -34,6 +34,7 @@ class SeqConfig:
     lookback: int = 64  # L
     horizon: int = 16   # H
     features: Tuple[str, ...] = ("close", "volume", "open", "high", "low")
+    target_mode: str = "close"  # 'close' for close returns only; 'ohlc3' for [dClose,u,l]
     
 
 class OHLCVDiffusionDataset(Dataset):
@@ -41,7 +42,9 @@ class OHLCVDiffusionDataset(Dataset):
     Builds (condition, target) pairs from a OHLCV DataFrame for diffusion training.
 
     - cond_x: past window (L x d) -> encoded later to a vector
-    - y: future univariate sequence (H x 1) of log-returns of close
+    - y: future seq [H, d_y]
+        * target_mode=='close': d_y=1, log-returns of close
+        * target_mode=='ohlc3': d_y=3, [ΔC, u=High-C, l=C-Low]
     """
 
     def __init__(self, df: pd.DataFrame, cfg: SeqConfig):
@@ -83,10 +86,24 @@ class OHLCVDiffusionDataset(Dataset):
 
         L, H = cfg.lookback, cfg.horizon
         xs, ys = [], []
-        # target: future log returns of close (univariate)
+        # future windows
         for end in range(L, len(df) - H):
             x_win = X[end - L : end]  # [L, d]
-            y_seq = log_ret[end : end + H][:, None]  # [H, 1]
+            if cfg.target_mode == "close":
+                y_seq = log_ret[end : end + H][:, None]  # [H, 1]
+            elif cfg.target_mode == "ohlc3":
+                # ΔC: log return close
+                dclose = log_ret[end : end + H]
+                # Relative log gaps ensure positivity and scale stability
+                # u_rel = log(High) - log(Close) >= 0; l_rel = log(Close) - log(Low) >= 0
+                log_high = _safe_log(high[end : end + H])
+                log_low = _safe_log(low[end : end + H])
+                log_close_f = _safe_log(close[end : end + H])
+                u_rel = np.maximum(0.0, log_high - log_close_f)
+                l_rel = np.maximum(0.0, log_close_f - log_low)
+                y_seq = np.stack([dclose, u_rel, l_rel], axis=1)  # [H,3]
+            else:
+                raise ValueError(f"Unsupported target_mode: {cfg.target_mode}")
             xs.append(x_win.astype(np.float32))
             ys.append(y_seq.astype(np.float32))
 
