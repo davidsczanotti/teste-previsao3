@@ -40,7 +40,7 @@ data/
 - Comandos limpos: não passar flags de estratégia nos comandos; usar arquivos `.json` versionados.
 - Passo 0 obrigatório: atualizar o cache antes de qualquer backtest.
 - Consumo offline: backtests devem ler exclusivamente do `data/klines_cache.db`. Se faltar dado, falhar solicitando atualização do cache.
-- Artefatos por estratégia: relatórios, gráficos e configs ativas devem ficar em `src/strategies/<nome>/reports/`.
+- Artefatos por estratégia: relatórios e gráficos em `src/strategies/<nome>/reports/`. Configurações ficam em `src/strategies/<nome>/config.json`.
 
 ### 2.2 Comandos de terminal
 
@@ -59,31 +59,23 @@ data/
     # Ex.: poetry run python scripts/populate_cache.py BTCUSDT 1m
     ```
 
-- Backtest — al_brooks_1m (comando limpo, sem flags):
+- Backtest — al_brooks (comando limpo, sem flags):
 
   ```bash
-  poetry run python -m src.strategies.al_brooks_1m.backtest
+  poetry run python -m src.strategies.al_brooks.backtest
   ```
 
-  > O backtest deve ler a configuração ativa de `src/strategies/al_brooks_1m/reports/active/ALBROOKS_<SYMBOL>_<TF>.json`. Caso não exista, usa defaults internos (BTCUSDT/1m/365 dias).
+  > O backtest lê a configuração de `src/strategies/al_brooks/config.json`. Parâmetros são versionados nesse arquivo.
 
-- Otimização — al_brooks_1m (sem flags):
+- Otimização — al_brooks (sem flags):
 
   ```bash
-  poetry run python -m src.strategies.al_brooks_1m.optimize_noflags
+  poetry run python -m src.strategies.al_brooks.optimize
   ```
 
-  > Lê parâmetros do bloco `optimize` em `src/strategies/al_brooks_1m/config.json` e salva a configuração ativa.
+  > Lê parâmetros do bloco `optimize` em `src/strategies/al_brooks/config.json` e salva a configuração.
 
-- Sincronizar configuração ativa (sem utilitário dedicado):
-
-  - Padrão de arquivo: `src/strategies/al_brooks_1m/reports/active/ALBROOKS_<SYMBOL>_<TF>.json`
-  - Sugestão: manter versões em `config/strategies/al_brooks_1m/` e copiar para `reports/active/` conforme o alvo.
-  - Exemplo:
-
-    ```bash
-    cp config/strategies/al_brooks_1m/BTCUSDT_1m.json src/strategies/al_brooks_1m/reports/active/ALBROOKS_BTCUSDT_1m.json
-    ```
+- Sincronização de configuração: não é necessária. Edite `src/strategies/al_brooks/config.json` diretamente.
 
 ### 2.2 Acesso ao Python
 
@@ -141,9 +133,9 @@ poetry run python -m scripts.populate_cache BTCUSDT 1m
 
 ## 5) Esquemas de dados (para o agente)
 
-### 5.1 Configuração — al_brooks_1m (JSON)
+### 5.1 Configuração — al_brooks (JSON)
 
-Arquivo ativo consumido pelo backtest: `src/strategies/al_brooks_1m/reports/active/ALBROOKS_<SYMBOL>_<TF>.json`
+Arquivo de configuração consumido pelo backtest: `src/strategies/al_brooks/config.json`
 
 ```json
 {
@@ -174,7 +166,7 @@ Arquivo ativo consumido pelo backtest: `src/strategies/al_brooks_1m/reports/acti
 
 ```json
 {
-  "strategy": "al_brooks_1m",
+  "strategy": "al_brooks",
   "symbol": "BTCUSDT",
   "interval": "1m",
   "period": {"start": "2023-01-01", "end": "2023-12-31"},
@@ -184,8 +176,8 @@ Arquivo ativo consumido pelo backtest: `src/strategies/al_brooks_1m/reports/acti
   "profit_factor": 1.32,
   "avg_win": 5.8,
   "avg_loss": 4.2,
-  "chart_path": "src/strategies/al_brooks_1m/reports/charts/al_brooks_backtest_BTCUSDT.png",
-  "config_path": "src/strategies/al_brooks_1m/reports/active/ALBROOKS_BTCUSDT_1m.json",
+  "chart_path": "src/strategies/al_brooks/reports/charts/al_brooks_backtest_BTCUSDT.png",
+  "config_path": "src/strategies/al_brooks/config.json",
   "seed": 42,
   "run_env": {"python": "3.11", "poetry": "1.8.x", "lib_versions": {"pandas": "..."}}
 }
@@ -207,9 +199,9 @@ Você é um agente de backtesting de estratégias de trading **offline**. Siga e
 
 Ferramentas disponíveis (chamar em ordem quando necessário):
 - Atualizar cache: `poetry run python -m scripts.populate_cache <SYMBOL> <TF>`
-- Backtest al_brooks_1m (limpo): `poetry run python -m src.strategies.al_brooks_1m.backtest`
-- (Opcional) Sincronizar config ativa: copiar JSON para `src/strategies/al_brooks_1m/reports/active/ALBROOKS_<SYMBOL>_<TF>.json`
-- Otimização sem flags: `poetry run python -m src.strategies.al_brooks_1m.optimize_noflags`
+- Backtest al_brooks (limpo): `poetry run python -m src.strategies.al_brooks.backtest`
+- Configuração: editar `src/strategies/al_brooks/config.json`
+- Otimização sem flags: `poetry run python -m src.strategies.al_brooks.optimize`
 
 Workflow obrigatório por tarefa:
 A) Confirmar símbolos/TFs, janela de datas e estratégia.
@@ -235,19 +227,15 @@ Restrições:
 poetry run python -m scripts.populate_cache BTCUSDT 1m
 ```
 
-**Passo 1 — Sincronizar config ativa:**
-
-```bash
-cp config/strategies/al_brooks_1m/BTCUSDT_1m.json src/strategies/al_brooks_1m/reports/active/ALBROOKS_BTCUSDT_1m.json
-```
+**Passo 1 — Ajustar config (se necessário):** edite `src/strategies/al_brooks/config.json`.
 
 **Passo 2 — Backtest (limpo):**
 
 ```bash
-poetry run python -m src.strategies.al_brooks_1m.backtest
+poetry run python -m src.strategies.al_brooks.backtest
 ```
 
-**Saída esperada (resumo):** gráfico em `src/strategies/al_brooks_1m/reports/charts/al_brooks_backtest_BTCUSDT.png` e métricas no console. (Opcional: consolidar em Markdown.)
+**Saída esperada (resumo):** gráfico em `src/strategies/al_brooks/reports/charts/al_brooks_backtest_BTCUSDT.png` e métricas no console. (Opcional: consolidar em Markdown.)
 
 ### Exemplo 2 — Otimização simples (grade)
 

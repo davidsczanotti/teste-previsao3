@@ -81,23 +81,23 @@ poetry run python -m scripts.populate_cache BTCUSDT 1m
 
 ### Passo 2: Otimizar a Estratégia (Optuna, sem flags)
 
-Este passo executa o teste de treino/validação e salva a melhor configuração encontrada em `src/strategies/al_brooks_1m/reports/active/`.
+Este passo executa o teste de treino/validação e atualiza `src/strategies/al_brooks_1m/config.json` com os melhores parâmetros.
 
 ```bash
-poetry run python -m src.strategies.al_brooks_1m.optimize_noflags
+poetry run python -m src.strategies.al_brooks.optimize
 ```
 
-Os parâmetros (símbolo, timeframe, dias, trials etc.) são lidos do bloco `optimize` em `src/strategies/al_brooks_1m/config.json`.
+Os parâmetros (símbolo, timeframe, dias, trials etc.) são lidos do bloco `optimize` em `src/strategies/al_brooks/config.json` e o resultado também é salvo nesse arquivo.
 
 ### Passo 3: Executar o Backtest
 
 O script de backtest carrega automaticamente a configuração ativa e executa a simulação, gerando um relatório e um gráfico.
 
 ```bash
-poetry run python -m src.strategies.al_brooks_1m.backtest
+poetry run python -m src.strategies.al_brooks.backtest
 ```
 
-O gráfico com os trades será salvo em `src/strategies/al_brooks_1m/reports/charts/`.
+O gráfico com os trades será salvo em `src/strategies/al_brooks/reports/charts/`.
 
 ### Passo 4: Executar o Modo Live (Monitoramento)
 

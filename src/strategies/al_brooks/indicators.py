@@ -18,7 +18,11 @@ def add_indicators(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df["ema_medium"] = ta.ema(df["close"], length=ema_medium)
     df["ema_slow"] = ta.ema(df["close"], length=ema_slow)
 
-    df["is_inside_bar"] = (df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))
+    inclusive = bool(params.get("inside_bar_inclusive", False))
+    if inclusive:
+        df["is_inside_bar"] = (df["high"] <= df["high"].shift(1)) & (df["low"] >= df["low"].shift(1))
+    else:
+        df["is_inside_bar"] = (df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))
     df["avg_deviation_pct"] = abs((df["close"] - df["ema_slow"]) / df["ema_slow"]) * 100
 
     df["atr"] = ta.atr(high=df["high"], low=df["low"], close=df["close"], length=atr_period)

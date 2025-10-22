@@ -29,6 +29,8 @@ def backtest_al_brooks_inside_bar(
     atr_trail_multiplier: float = 0.5,
     htf_lookback: int = 20,
     use_htf_bias: bool = True,
+    use_inside_bar: bool = True,
+    inside_bar_inclusive: bool = False,
     min_atr: float = 0.0,
     pullback_lookback: int = 10,
     taker_fee_pct: float = 0.0004,
@@ -54,6 +56,7 @@ def backtest_al_brooks_inside_bar(
         "adx_period": adx_period,
         "atr_period": atr_period,
         "htf_lookback": htf_lookback,
+        "inside_bar_inclusive": inside_bar_inclusive,
     }
     df = add_indicators(df, params)
 
@@ -134,7 +137,7 @@ def backtest_al_brooks_inside_bar(
                 allow_long = bias >= 0
                 allow_short = bias <= 0
 
-        if not prev["is_inside_bar"]:
+        if use_inside_bar and not prev["is_inside_bar"]:
             continue
 
         uptrend = (
@@ -300,7 +303,7 @@ def main():
     active_cfg = load_active_config(args.ticker, args.interval)
 
     if active_cfg:
-        print(f"Usando configuração ativa para {args.ticker}@{args.interval}")
+        print(f"Usando configuração ativa para {active_cfg.ticker}@{active_cfg.interval}")
         # Usar model_dump() do Pydantic é mais limpo e seguro para obter todos os parâmetros.
         # Ele retorna um dicionário com todos os campos do modelo.
         params = asdict(active_cfg)
@@ -308,6 +311,8 @@ def main():
         for key in ["ticker", "interval", "days", "min_trades_per_window"]:
             params.pop(key, None)
         days_to_load = active_cfg.days  # Garante que o backtest use o mesmo período da otimização
+        run_ticker = active_cfg.ticker
+        run_interval = active_cfg.interval
     else:
         print("Nenhuma configuração ativa encontrada. Usando parâmetros padrão.")
         params = {
@@ -325,22 +330,30 @@ def main():
                 "atr_stop_multiplier": 1.5,
                 "atr_trail_multiplier": 0.5,
                 "htf_lookback": 20,
+                "use_inside_bar": True,
+                "inside_bar_inclusive": False,
                 "min_atr": 0.0,
             }
         )
         days_to_load = args.days
+        run_ticker = args.ticker
+        run_interval = args.interval
+
+    # Captura flags de inside bar para exibir no resumo
+    use_ib = bool(params.get("use_inside_bar", True))
+    ib_inclusive = bool(params.get("inside_bar_inclusive", False))
 
     # Carregar dados
-    print(f"Carregando dados do CACHE: {args.ticker} @ {args.interval} dos últimos {days_to_load} dias...")
+    print(f"Carregando dados do CACHE: {run_ticker} @ {run_interval} dos últimos {days_to_load} dias...")
     start_dt = datetime.now(UTC) - timedelta(days=days_to_load)
     start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
     # Consumo offline: somente dados do cache local. Se faltar, o backtest não roda.
-    df = get_cached_klines(args.ticker, args.interval, start_str)
+    df = get_cached_klines(run_ticker, run_interval, start_str)
 
     if df.empty:
         print("Nenhum dado encontrado no cache local para a janela solicitada.")
         print("Atualize o cache antes de rodar o backtest, por exemplo:")
-        print(f"  poetry run python -m scripts.populate_cache {args.ticker} {args.interval}")
+        print(f"  poetry run python -m scripts.populate_cache {run_ticker} {run_interval}")
         return
     print(f"Total de {len(df)} candles carregados.")
 
@@ -350,6 +363,7 @@ def main():
 
     # Exibir resultados
     print("\n--- Resultados do Backtest ---")
+    print(f"Inside Bar: ativo={use_ib} | inclusivo={ib_inclusive}")
     print(f"Período Analisado: {df['Date'].iloc[0]} a {df['Date'].iloc[-1]}")
 
     closed_trades = [t for t in trades if "pnl" in t]
@@ -395,7 +409,7 @@ def main():
     # print("\nTrades salvos em 'al_brooks_trades.csv'")
 
     # Plotar o resultado
-    plot_backtest(df_with_indicators, trades, args.ticker)
+    plot_backtest(df_with_indicators, trades, run_ticker)
 
 
 if __name__ == "__main__":
