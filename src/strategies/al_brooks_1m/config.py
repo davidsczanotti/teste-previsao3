@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from pathlib import Path
 from typing import Optional
 
-REPORTS_DIR = Path("reports")
+# Relatórios por estratégia: pasta local à estratégia
+REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 ACTIVE_CONFIG_DIR = REPORTS_DIR / "active"
 
 
@@ -29,6 +30,7 @@ class AlBrooksConfig:
     atr_trail_multiplier: float = 0.5
     htf_lookback: int = 20
     use_htf_bias: bool = True
+    pullback_lookback: int = 10
     min_trades_per_window: int = 15
     min_atr: float = 0.0
     # Custos de execução
@@ -37,7 +39,19 @@ class AlBrooksConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> AlBrooksConfig:
-        return cls(**data)
+        """Cria uma configuração tolerante a chaves extras.
+
+        - Ignora chaves desconhecidas com aviso simples (stdout).
+        - Mantém compatibilidade com JSONs antigos/novos.
+        """
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        unknown = sorted(k for k in data.keys() if k not in valid_keys)
+        if unknown:
+            print(
+                f"[al_brooks_1m.config] Aviso: chaves desconhecidas ignoradas na config ativa: {unknown}"
+            )
+        return cls(**filtered)
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -45,7 +45,7 @@ A chance de todas essas condições se alinharem é estatisticamente baixa, e é
 ## 2. O Que Foi Feito por Nós
 
 1.  **Implementação do Backtest**: O arquivo `backtest.py` foi criado para simular a estratégia, incluindo as lógicas de compra e venda, o filtro de afastamento médio e o gerenciamento de risco.
-2.  **Otimização com Optuna**: O script `optimize.py` foi desenvolvido para encontrar os melhores parâmetros (períodos das EMAs, relação Risco/Recompensa e o valor do filtro de afastamento) usando um processo de otimização robusto.
+2.  **Otimização com Optuna**: O runner sem flags `optimize_noflags.py` encontra os melhores parâmetros (períodos das EMAs, relação Risco/Recompensa e filtros) usando um processo de otimização robusto.
 3.  **Validação Fora da Amostra (Out-of-Sample)**: Implementamos um teste rigoroso onde a estratégia foi otimizada em um longo período de dados de treino (~4 anos) e validada em um período mais recente que o otimizador nunca viu (~1 ano). Isso garante que a estratégia é robusta e não apenas "decorou" o passado (*overfitting*).
 4.  **Monitoramento ao Vivo**: O script `live.py` foi criado para monitorar o mercado em tempo real, aplicando os parâmetros otimizados e imprimindo os sinais no console **(sem executar ordens reais)**.
 
@@ -76,29 +76,28 @@ O fluxo de trabalho é simples: atualizar a base de dados, otimizar a estratégi
 Garanta que seu cache local de dados (`data/klines_cache.db`) esteja atualizado com os dados mais recentes da Binance.
 
 ```bash
-poetry run python -m scripts.populate_cache BTCUSDT 15m
+poetry run python -m scripts.populate_cache BTCUSDT 1m
 ```
 
-### Passo 2: Otimizar a Estratégia (Optuna)
+### Passo 2: Otimizar a Estratégia (Optuna, sem flags)
 
-Este passo é crucial. Ele executa o teste *out-of-sample* e salva a melhor configuração encontrada em `reports/active/`.
+Este passo executa o teste de treino/validação e salva a melhor configuração encontrada em `src/strategies/al_brooks_1m/reports/active/`.
 
 ```bash
-# Exemplo com 5 anos de dados e 300 tentativas de otimização
-poetry run python -m src.strategies.al_brooks.optimize --days 1825 --trials 300
+poetry run python -m src.strategies.al_brooks_1m.optimize_noflags
 ```
 
-Ao final, um arquivo como `reports/active/ALBROOKS_BTCUSDT_15m.json` será criado.
+Os parâmetros (símbolo, timeframe, dias, trials etc.) são lidos do bloco `optimize` em `src/strategies/al_brooks_1m/config.json`.
 
 ### Passo 3: Executar o Backtest
 
-O script de backtest carrega automaticamente a configuração ativa gerada no passo anterior e executa a simulação, gerando um relatório e um gráfico.
+O script de backtest carrega automaticamente a configuração ativa e executa a simulação, gerando um relatório e um gráfico.
 
 ```bash
-poetry run python -m src.strategies.al_brooks.backtest
+poetry run python -m src.strategies.al_brooks_1m.backtest
 ```
 
-O gráfico com os trades será salvo em `reports/charts/`.
+O gráfico com os trades será salvo em `src/strategies/al_brooks_1m/reports/charts/`.
 
 ### Passo 4: Executar o Modo Live (Monitoramento)
 

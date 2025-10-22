@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime, timedelta, UTC
 
 import mplfinance as mpf
 import numpy as np
 import pandas as pd
-from ...binance_client import get_historical_klines
+from ...binance_client import get_cached_klines
 from .config import AlBrooksConfig, load_active_config
 from .indicators import add_indicators
 
@@ -271,9 +272,10 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
         addplots.append(mpf.make_addplot(sell_markers, type="scatter", marker="v", color="red", markersize=100))
 
     # Gera o gráfico
-    chart_dir = "reports/charts"
+    base_dir = Path(__file__).resolve().parent
+    chart_dir = base_dir / "reports" / "charts"
     os.makedirs(chart_dir, exist_ok=True)
-    filename = f"{chart_dir}/al_brooks_backtest_{ticker}.png"
+    filename = chart_dir / f"al_brooks_backtest_{ticker}.png"
 
     mpf.plot(
         df_plot,
@@ -281,7 +283,7 @@ def plot_backtest(df: pd.DataFrame, trades: list, ticker: str):
         style="yahoo",
         title=f"Al Brooks Inside Bar Backtest - {ticker}",
         addplot=addplots,
-        savefig=filename,
+        savefig=str(filename),
     )
     print(f"\nGráfico do backtest salvo em: {filename}")
 
@@ -329,13 +331,16 @@ def main():
         days_to_load = args.days
 
     # Carregar dados
-    print(f"Carregando dados: {args.ticker} @ {args.interval} dos últimos {days_to_load} dias...")
+    print(f"Carregando dados do CACHE: {args.ticker} @ {args.interval} dos últimos {days_to_load} dias...")
     start_dt = datetime.now(UTC) - timedelta(days=days_to_load)
     start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
-    df = get_historical_klines(args.ticker, args.interval, start_str)
+    # Consumo offline: somente dados do cache local. Se faltar, o backtest não roda.
+    df = get_cached_klines(args.ticker, args.interval, start_str)
 
     if df.empty:
-        print("Nenhum dado foi retornado. Verifique o ticker, intervalo e a conexão.")
+        print("Nenhum dado encontrado no cache local para a janela solicitada.")
+        print("Atualize o cache antes de rodar o backtest, por exemplo:")
+        print(f"  poetry run python -m scripts.populate_cache {args.ticker} {args.interval}")
         return
     print(f"Total de {len(df)} candles carregados.")
 
