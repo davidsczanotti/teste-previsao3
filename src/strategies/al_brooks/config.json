@@ -34,11 +34,11 @@
     "cache_only": true
   },
   "walk_forward": {
-    "opt_window": 180,
-    "val_window": 45,
-    "step_size": 30,
-    "min_trades": 6,
-    "trials": 120,
+    "opt_window": 720,
+    "val_window": 180,
+    "step_size": 90,
+    "min_trades": 8,
+    "trials": 200,
     "cache_only": true
   }
 }

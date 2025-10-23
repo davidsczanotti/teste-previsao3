@@ -1,0 +1,276 @@
+técnica 
+decodificador
+mixture of experts, varia redes neurais pequenas em vez de uma grande
+codificador
+vai dar um peso para cada saída deles
+
+# tactiq.io free youtube transcript
+# No title found
+# https://www.youtube.com/watch/leehJmA7_e8
+
+
+00:04:49.880 implementar o decodificador, eles usaram
+00:04:51.840 uma técnica chamada Makeure of Experts.
+00:04:54.240 A ideia dessa técnica é usar várias
+00:04:56.240 redes neurais pequenas em vez de uma só
+00:04:58.600 grande. Daí durante o treinamento, cada
+00:05:01.080 uma dessas redes vai aprender a reagir a
+00:05:03.479 situações específicas do problema. Ou
+00:05:05.919 seja, durante o treinamento, elas se
+00:05:07.520 tornam especialistas em determinadas
+00:05:09.800 situações. Acaba sendo muito parecido
+00:05:11.919 com a dinâmica do filme divertidamente.
+00:05:14.160 Quê?
+00:05:16.120 E o mais interessante de tudo é que a
+00:05:18.240 responsabilidade de cada rede não é
+00:05:20.199 definida pelo programador. O programador
+00:05:22.240 apenas define quantas redes vão ter,
+00:05:24.520 quais delas vão responder, a quais
+00:05:26.800 situações é um fator que emerge durante
+00:05:29.440 o treinamento. É uma organização que se
+00:05:31.800 autodefine. Já o codificador é quem vai
+00:05:34.240 dizer o quanto a saída de cada
+00:05:35.800 especialista vai impactar pra ação final
+00:05:38.280 que o personagem vai executar. O
+00:05:40.080 codificador vai dar um peso paraa saída
+00:05:42.360 de cada um deles. Daí, compondo essas
+00:05:45.160 saídas ponderadas, nós vamos ter a ação
+00:05:47.759 final que o personagem realmente vai
+00:05:49.759 executar. Para ficar mais fácil de
+00:05:51.360 entender, imagine esse esquema como se
+00:05:53.440 fosse uma orquestra. O codificador é o
+00:05:55.800 maestro e o decodificador são os
+00:05:57.800 instrumentistas. Cada rede especialista
+00:06:00.080 do decodificador é um músico com seu
+00:06:02.319 instrumento. Agora imagina que a única
+00:06:04.280 coisa que o maestro pode fazer é
+00:06:06.000 aumentar ou diminuir o volume de cada
+00:06:08.840 instrumento que tá sendo tocado. O
+00:06:10.800 maestro só consegue regular a
+00:06:13.120 intensidade de cada um deles. Daí
+00:06:15.560 regulando a intensidade, o maestro acaba
+00:06:18.360 definindo o som final que a orquestra
+00:06:20.680 vai fazer. Repara que nessa analogia o
+00:06:23.000 maestro não sabe tocar nenhum dos
+00:06:25.160 instrumentos. Ele nem sequer dá ordens
+00:06:27.639 pros instrumentistas. Ele só pega o som
+00:06:30.120 que eles já tão fazendo e aumenta ou
+00:06:32.680 diminui o volume conforme a necessidade.
+00:06:35.199 A única coisa que o maestro sabe fazer é
+00:06:37.880 dosar a contribuição de cada
+00:06:40.000 instrumentista na música para que no
+00:06:42.440 final ela fique do jeito certo. Ou seja,
+00:06:45.240 o decodificador é responsável por
+00:06:47.440 aprender a parte física da luta. Ele é
+00:06:49.800 responsável por aprender a literalmente
+00:06:52.000 movimentar o corpo do personagem.
+00:06:54.160 Enquanto o codificador é responsável
+00:06:56.199 pela parte estratégica. Ele vai aprender
+00:06:58.440 quais movimentos tem que ser executados
+00:07:00.400 em cada momento para que o agente vença
+00:07:02.639 a luta. De uma forma ainda mais
+00:07:04.400 resumida, o codificador aprende o que
+00:07:06.879 deve ser feito, enquanto o decodificador
+00:07:09.560 aprende como deve ser feito. E pra
+00:07:12.240 surpresa de zero pessoas, o treinamento
+00:07:14.720 dessa brincadeira toda também foi
+00:07:16.479 dividido em duas partes. Eles chamaram
+00:07:18.599 de aprendizado por imitação e
+00:07:20.599 aprendizado competitivo. Na primeira
+00:07:22.759 parte, eles usaram dados de movimentos
+00:07:25.000 reais capturados de um humano e
+00:07:27.280 colocaram o agente para imitar ele. Os
+00:07:29.879 dados foram produzidos por uma
+00:07:31.199 universidade da Pennsylvânia. Eu entrei
+00:07:33.240 no site que eles deixaram as referências
+00:07:35.440 e tem aqui a categoria Sports. Daí
+00:07:37.879 quando você entra tem aqui boxing e
+00:07:40.199 quando você abre tem várias capturas
+00:07:42.240 diferentes. Se a gente abrir uma delas
+00:07:44.479 vai ter os dados em vários formatos. A
+00:07:47.240 gente pode ver um vídeo do rapaz fazendo
+00:07:49.360 os movimentos.
+00:07:51.280 A gente pode ver os dados transformados
+00:07:53.400 numa animação
+00:07:55.159 e a gente pode ver os dados em formato
+00:07:57.159 bruto, numérico. A ideia desse tipo de
+00:07:59.680 pré-treinamento é dar uma direção
+00:08:01.759 inicial pro agente, para ele não começar
+00:08:04.080 do mais absoluto zero. Essa direção
+00:08:06.440 inicial consegue diminuir o espaço de
+00:08:09.199 buscas do treinamento e com o espaço de
+00:08:11.520 buscas reduzido, fica mais fácil de
+00:08:13.840 encontrar os valores dos pesos que fazem
+00:08:16.080 a rede neural lutar com naturalidade.
+00:08:18.960 Imagine que nós estamos procurando por
+00:08:20.960 um tipo específico de pedra, só que o
+00:08:23.240 nosso espaço de buscas é o universo
+00:08:25.440 inteiro. Primeiro a gente tem que
+00:08:27.240 descobrir quais galáxias podem ter a
+00:08:29.199 pedra, depois quais sistemas solares,
+00:08:32.000 depois quais planetas e assim por diante
+00:08:34.640 até chegar no local da pedra. Além de
+00:08:36.880 muito demorado, existe o risco da gente
+00:08:39.200 travar na galáxia errada e ficar preso
+00:08:41.599 lá, eternamente procurando algo que não
+00:08:44.279 existe. Os dados humanos, nesse caso,
+00:08:46.720 são como um filtro. Um filtro que joga
+00:08:49.080 fora todos os valores que não funcionam.
+00:08:51.519 Eles são como dicas de onde a pedra tá.
+00:08:54.360 É como se a gente tivesse cortando um
+00:08:56.680 baita de um caminho e já dizendo pro
+00:08:58.880 algoritmo que a pedra tá no planeta
+00:09:00.839 Terra. Daí ele não vai mais precisar
+00:09:02.800 ficar olhando o universo inteiro, ele
+00:09:04.959 vai direto no local certo, o que acaba
+00:09:07.279 deixando bem mais rápido e possível de
+00:09:10.079 encontrar a pedra. Daí depois desse
+00:09:12.399 treinamento inicial, o agente foi
+00:09:14.000 colocado para competir contra ele mesmo
+00:09:16.200 e é agora que a brincadeira começa.
+00:09:19.880 As regras são as seguintes: o jogador só
+00:09:22.120 pode acertar a parte superior do corpo
+00:09:24.399 do outro. Não vale golpe basto.
+00:09:26.880 Ai.
+00:09:28.200 A arena tem 5 m² e a partida dura 60
+00:09:31.800 segundos. Quem der mais dano no
+00:09:33.680 adversário vence a partida. O dano é
+00:09:36.200 calculado baseado na quantidade de força
+00:09:38.440 que o agente aplicou no adversário. Na
+00:09:40.880 primeira fase desse treinamento, os
+00:09:42.560 personagens apenas aprenderam a ficar em
+00:09:44.480 pé. Nada demais. Mas ué, pera aí. Ah,
+00:09:47.920 não
+00:09:49.720 para tudo aí. Se o agente aprendeu a se
+00:09:52.320 comportar como um humano lá na etapa de
+00:09:54.720 imitação, já não era para ele saber
+00:09:56.959 ficar em pé e talvez até executar alguns
+00:09:59.600 golpes básicos. E a resposta é sim, só
+00:10:02.399 que tem um detalhe. O nome codificador
+00:10:04.839 de tarefas não é à toa. Ele é o
+00:10:07.079 responsável por codificar a tarefa que o
+00:10:09.440 agente vai realizar.
+00:10:10.839 Ava, é mesmo? É ele quem controla o
+00:10:13.560 objetivo do agente. Na primeira etapa do
+00:10:16.040 treinamento, o objetivo era imitar o
+00:10:18.360 humano, mas agora é competir com o outro
+00:10:20.959 agente. São tarefas bem diferentes e que
+00:10:23.920 tem dados de entrada diferentes, ou
+00:10:26.279 seja, o codificador vai ter que mudar e
+00:10:28.959 quando ele muda, ele começa do zero,
+00:10:31.240 completamente destreinado. Isso
+00:10:33.480 significa que no início do treinamento
+00:10:35.760 competitivo, metade do algoritmo que
+00:10:38.399 controla o agente tá destreinado e isso
+00:10:41.040 acaba atrapalhando as decisões dele,
+00:10:43.320 fazendo o personagem cair no chão. Por
+00:10:45.560 mais que o decodificador já esteja
+00:10:47.240 treinado e já saiba como movimentar o
+00:10:49.720 personagem, o novo codificador não sabe
+00:10:52.360 usar esse conhecimento. Ele não sabe
+00:10:54.440 como usar os movimentos do decodificador
+00:10:56.680 para manter o personagem em pé. Então
+00:10:58.880 essa primeira etapa do treinamento
+00:11:00.440 competitivo serve apenas pro novo
+00:11:02.720 codificador se situar. Serve apenas para
+00:11:05.200 ele conseguir entrar em harmonia com o
+00:11:07.399 decodificador. E se a gente prestar
+00:11:09.440 atenção no gráfico das recompensas, dá
+00:11:12.000 para notar que a performance do
+00:11:13.519 algoritmo sobe muito rápido nessa
+00:11:15.639 primeira fase. Isso acontece porque o
+00:11:17.680 decodificador já sabe ficar em pé, ele
+00:11:19.880 já tá treinado. Foi só uma questão de
+00:11:21.959 esperar o novo codificador se ajustar.
+00:11:24.680 Daí, algumas milhares de partidas
+00:11:26.800 depois, já na segunda etapa do
+00:11:28.800 treinamento, eles aprenderam a ficar
+00:11:30.720 rodando e encarando um a outro.
+00:11:33.200 Bate,
+00:11:34.320 é só bater.
+00:11:35.639 E repara nesse círculo aqui em cima. Ele
+00:11:38.440 é uma representação visual dos
+00:11:40.320 especialistas que fazem parte do
+00:11:42.200 decodificador. Cada uma dessas bolinhas
+00:11:44.600 coloridas representam uma das redes
+00:11:46.639 neurais especialistas que controlam o
+00:11:48.800 corpo do personagem. No total, cada
+00:11:51.000 agente tem oito especialistas. A bolinha
+00:11:53.480 preta no centro representa a ação que
+00:11:55.920 realmente vai ser executada. Quanto mais
+00:11:58.240 próximo a bolinha preta tiver da bolinha
+00:12:00.399 do especialista, mais aquele
+00:12:02.200 especialista tá impactando a decisão
+00:12:04.200 final, mais a saída dele tá contribuindo
+00:12:07.200 pra ação final. Essa foi a forma que os
+00:12:09.800 autores escolheram para mostrar os
+00:12:11.680 especialistas e o codificador em ação.
+00:12:14.680 Daí, na terceira fase do treinamento,
+00:12:16.639 eles já começaram a tentar acertar um ao
+00:12:19.199 outro. Aqui já dá para perceber que a
+00:12:21.279 raiva tá nascendo. Os caras já tão putos
+00:12:24.000 aqui. O vermelho quase foi. Como diz o
+00:12:26.199 ditado, todo mundo tem um plano até
+00:12:28.639 levar um totozinho no queixo. Já na fase
+00:12:31.199 quatro, eles aprenderam a desviar e a
+00:12:33.480 bloquear os ataques.
+00:12:34.639 Fala assim, não. Vem tranquilo, vem
+00:12:35.880 tranquilo.
+00:12:37.240 Aqui a malolência já começou a surgir,
+00:12:39.720 os caras já estão gingando. Daí na
+00:12:42.399 última fase, depois de mais de 500.000
+00:12:45.360 partidas, eles começaram a aprender as
+00:12:47.760 estratégias. Eles aprenderam a dar socos
+00:12:50.120 longos e recuar o mais rápido possível
+00:12:52.560 para não levar. Eles pegaram a maldade
+00:12:54.959 do negócio. Maldade caral
+00:13:00.279 é o ancião.
+00:13:01.360 Aqui o azul conseguiu encaixar um que
+00:13:03.560 quase deitou o mano vermelho. Repara
+00:13:06.000 como eles aprenderam a ficar curvados
+00:13:07.800 para trás para dificultar com que o
+00:13:09.760 oponente acerte um soco na parte que
+00:13:11.839 mais pontua. Olhando pro gráfico, parece
+00:13:14.320 que eles pioraram com o passar do tempo,
+00:13:16.560 mas na verdade não, porque essa
+00:13:18.519 simulação é um jogo de soma zero. Isso
+00:13:21.079 significa que quando um agente ganha
+00:13:23.320 ponto, o outro obrigatoriamente perde.
+00:13:26.320 Então, nesse caso, a recompensa diminuir
+00:13:29.199 não significa que eles pioraram,
+00:13:30.959 significa que eles estão conseguindo
+00:13:32.279 acertar um a outro. O treino só termina
+00:13:34.839 quando o algoritmo converge. E o
+00:13:36.680 algoritmo só converge quando a
+00:13:38.360 recompensa fica estagnada próximo do
+00:13:40.560 zero. A ideia de dividir o algoritmo que
+00:13:43.160 controla o agente em duas partes é muito
+00:13:45.639 vantajosa, porque você pode colocar ele
+00:13:47.920 para realizar outras tarefas sem ter que
+00:13:50.519 treinar tudo do zero de novo. Você pode
+00:13:53.160 reaproveitar o decodificador de
+00:13:55.240 movimentos. Mas como sempre, o algoritmo
+00:13:57.759 também tem limitações. Primeiro que,
+00:14:00.440 como tudo na área de A, ele precisa de
+00:14:02.759 muita computação para funcionar direito.
+00:14:05.079 Para conseguir esses resultados, os
+00:14:06.720 pesquisadores usaram 12 máquinas com
+00:14:08.920 dois processadores cada, ou seja, 24
+00:14:12.519 processadores trabalhando dia e noite
+00:14:14.959 para conseguir aprender esses
+00:14:16.639 comportamentos. A etapa de imitação
+00:14:18.920 levou um dia e a etapa de competição
+00:14:21.240 levou 5 dias. Segundo, os autores
+00:14:24.160 falaram que a qualidade dos movimentos e
+00:14:26.279 dos golpes do agente depende muito da
+00:14:29.160 qualidade dos dados capturados do ser
+00:14:31.519 humano. Se o humano não gerar bons
+00:14:33.720 dados, o decodificador não vai ficar tão
+00:14:35.959 bom e isso vai dificultar a vida do
+00:14:38.199 codificador. E se os dados forem muito
+00:14:40.440 diversos, como por exemplo, um ser
+00:14:42.440 humano correndo, dançando e pulando, até
+00:14:45.399 o treino do decodificador fica
+00:14:47.279 complicado. Existem outros trabalhos que
+00:14:49.519 também abordam esse tema de colocar
+00:14:51.360 gentes flexíveis para realizar tarefas.
