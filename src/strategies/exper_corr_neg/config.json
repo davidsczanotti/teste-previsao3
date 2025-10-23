@@ -10,7 +10,7 @@
     "expert_hidden": [64, 32],
     "gating_hidden": [64, 32],
     "num_experts": 5,
-    "temperature": 0.7,
+    "temperature": 1.0,
     "top_k": 2
   },
   "ppo": {
@@ -18,23 +18,25 @@
     "gae_lambda": 0.95,
     "clip_ratio": 0.2,
     "learning_rate": 0.0003,
-    "entropy_coef": 0.01,
+    "entropy_coef": 0.005,
     "value_coef": 0.5,
     "max_grad_norm": 0.5,
     "train_iters": 4,
     "batch_size": 512
   },
   "train": {
-    "episodes": 5,
+    "episodes": 5000,
     "rollout_steps": 2048,
     "device": "cpu",
-    "outdir": "src/strategies/exper_corr_neg/reports/train"
+    "outdir": "src/strategies/exper_corr_neg/reports/train",
+    "resume": true,
+    "resume_path": "src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt"
   },
   "walk_forward": {
     "train_days": 720,
     "val_days": 180,
     "step_days": 90,
-    "episodes": 5,
+    "episodes": 500,
     "rollout_steps": 2048,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/walk_forward"

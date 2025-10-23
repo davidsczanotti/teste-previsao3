@@ -58,6 +58,21 @@ def main() -> None:
     outdir = Path(train_cfg.get("outdir", "reports/exper_corr_neg/train"))
     outdir.mkdir(parents=True, exist_ok=True)
 
+    # Resume logic: if enabled and checkpoint exists, warm-start the policy
+    resume = bool(train_cfg.get("resume", False))
+    resume_path_str = train_cfg.get("resume_path")
+    resume_path = Path(resume_path_str) if resume_path_str else (outdir / "moe_policy_final.pt")
+    if resume:
+        try:
+            if resume_path.exists():
+                state = torch.load(resume_path, map_location="cpu")
+                policy.load_state_dict(state)
+                print(f"[resume] Carregado checkpoint de {resume_path}")
+            else:
+                print(f"[resume] Arquivo não encontrado em {resume_path}; iniciando do zero.")
+        except Exception as e:
+            print(f"[resume] Falha ao carregar {resume_path}: {e}. Iniciando do zero.")
+
     episodes = int(train_cfg.get("episodes", 500))
     rollout_steps = int(train_cfg.get("rollout_steps", 2048))
 
