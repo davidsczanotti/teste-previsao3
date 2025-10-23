@@ -2,6 +2,7 @@ import time
 from typing import Optional
 
 import pandas as pd
+import os
 from binance.client import Client
 import urllib3
 
@@ -19,7 +20,13 @@ Tune timeouts to reduce read timeouts and allow per-call retries from wrappers.
 Using a (connect, read) tuple keeps the connection snappy while allowing
 slightly longer reads when Binance is slower.
 """
-client = Client("", "", requests_params={"timeout": (5, 30), "verify": False})
+
+_OFFLINE = os.environ.get("BINANCE_OFFLINE", "0") == "1"
+
+if _OFFLINE:
+    client = None
+else:
+    client = Client("", "", requests_params={"timeout": (5, 30), "verify": False})
 
 
 def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> float:
@@ -47,7 +54,7 @@ def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> fl
 
 
 def _download_klines(symbol: str, interval: str, start_ms: int, end_ms: int):
-    if start_ms > end_ms:
+    if start_ms > end_ms or client is None:
         return []
     raw = client.get_historical_klines(symbol, interval, start_ms, end_ms)
     rows = []

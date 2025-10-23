@@ -1,0 +1,25 @@
+Pares com correlação POSITIVA (confirmação)
+
+Trend técnico + modelo ML de direção
+
+Trend: EMA cross / breakout.
+
+ML: LightGBM com lags, RSI, ATR, ranges, hora do dia.
+
+Uso: só entra quando ambos concordam; exige menos trades e melhora precision.
+
+Sinais multiframe
+
+Higher TF (ex.: 1h): filtro de tendência (EMA slow).
+
+Lower TF (ex.: 5m): gatilho (pullback/RSI).
+
+Uso: concordância de timeframes costuma aumentar o hit rate.
+
+Cointegração (VECM) + técnico de spread
+
+VECM: indica desvio do equilíbrio entre dois ativos.
+
+Técnico: Bollinger no spread para gatilho.
+
+Uso: quando ambos sinalizam convergência, reforça o trade de pairs.

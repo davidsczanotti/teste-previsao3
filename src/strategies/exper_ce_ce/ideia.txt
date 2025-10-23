@@ -1,0 +1,7 @@
+3) Classificador “evento de compressão → expansão”
+
+Ideia: detectar squeezes (ATR/BB muito baixos) e classificar se a próxima expansão rompe pra cima ou pra baixo.
+Por que pode funcionar: a direção após compressão costuma ter sinal; é um regime específico.
+Features: percentil do ATR, BB width, kurtosis de retornos recentes, OBV inclinação.
+Alvo: {up, down, none} em janelas com BB_width < p10.
+Risco: poucos exemplos → precisa upsampling e custos bem modelados.

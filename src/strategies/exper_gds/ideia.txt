@@ -1,0 +1,13 @@
+“Trio” muito útil (gating + direção + sizing)
+
+HMM/Markov-Switching (regimes: tendência, lateral, stress) → gate.
+
+Direcional adequado ao regime:
+
+regime “trend”: TCN/LSTM ou EMA breakout;
+
+regime “chop”: mean reversion curta (RSI 2–5, Bollinger).
+
+GARCH/Realized vol para tamanho de posição e stops dinâmicos.
+
+Isso costuma reduzir drawdown e suavizar PnL (baixa correlação entre blocos).

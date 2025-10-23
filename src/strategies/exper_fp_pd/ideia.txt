@@ -1,0 +1,8 @@
+1) Modelo de “faixa primeiro, preço depois”
+
+Ideia: prever só o range do próximo candle (hi–lo) e a posição do fechamento dentro dessa faixa, em vez de prever o preço direto.
+Por que pode funcionar: a incerteza direcional é alta, mas a geometria do candle é mais estável.
+Alvo: (a) range_{t+1} (regressão), (b) close_pos_{t+1} = (close - low)/(high - low) ∈ [0,1].
+Modelo: duas heads (LightGBM ou TCN).
+Uso no trade: direcional só quando close_pos previsto > 0.65 (compra) ou < 0.35 (venda); sizing ∝ range previsto.
+Risco: mode collapse quando range é muito pequeno (slippage domina).

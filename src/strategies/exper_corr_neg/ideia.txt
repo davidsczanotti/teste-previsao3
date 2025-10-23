@@ -1,0 +1,25 @@
+Pares com correlação NEGATIVA (diversificação)
+
+Tendência vs. Reversão à média
+
+Trend: EMA cross / breakout de Donchian / ARIMA c/ drift.
+
+Mean reversion: RSI (2–5), Bollinger reversion, z-score do retorno.
+
+Uso: opere sempre, mas reduza posição quando ambos discordam; a MR costuma ganhar em chop, a trend ganha em “run”.
+
+Direção vs. Volatilidade
+
+Direção: LightGBM/XGBoost prevendo sign(r_{t→t+h}).
+
+Vol: GARCH/EGARCH prevendo σ²(t+1) (não direcional).
+
+Uso: quando o modelo direcional sugere compra, mas a vol prevista ↑ muito, diminua tamanho (hedge natural contra “whipsaw”).
+
+Momentum de preço vs. Reversão de volume
+
+Preço: MACD/EMA trend.
+
+Volume: OBV/Chaikin + “volume spike” → sinal de exaustão (reversão).
+
+Uso: se trend=compra mas há spike de volume com candle de exaustão, reduza/espere; costuma ser anticorrelacionado no curto prazo.

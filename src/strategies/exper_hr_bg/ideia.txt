@@ -1,0 +1,6 @@
+4) “Híbrido Range-Vol + Boosting” (GARCH→features→GBM)
+
+Ideia: treinar GARCH/Realized-Vol só para produzir features (σ̂, vol of vol, news impact curve), e jogar tudo num LightGBM direcional.
+Por que pode funcionar: mistura estrutura econométrica (vol) com árvore não-linear.
+Alvo: sinal da variação do VWAP ou do close em h passos.
+Risco: drift de parâmetros do GARCH; re-treinar online com janela rolante.

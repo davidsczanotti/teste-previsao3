@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 from ...utils.walk_forward import WalkForwardValidator
-from .optimize import make_objective
 from .backtest import backtest_al_brooks_inside_bar
 from .config import load_active_config
 from ...utils.data_loader import load_data
+from ...utils.metrics import calculate_metrics
+from datetime import datetime, UTC
 
 
 def main() -> None:
@@ -42,9 +43,71 @@ def main() -> None:
     except Exception:
         wf_cfg = wf_defaults
 
-    # Objective creator aligned with WF min_trades
+    # Decide locks for Inside Bar from config
+    use_ib = bool(getattr(cfg, "use_inside_bar", True))
+    ib_inclusive = bool(getattr(cfg, "inside_bar_inclusive", False))
+    lock = wf_cfg.get("lock") or {}
+    if isinstance(lock, dict):
+        if "use_inside_bar" in lock:
+            use_ib = bool(lock["use_inside_bar"])
+        if "inside_bar_inclusive" in lock:
+            ib_inclusive = bool(lock["inside_bar_inclusive"])
+
+    # Objective creator aligned with WF min_trades and IB lock (no IB search)
     def obj_creator(df, lot_size):
-        return make_objective(df, lot_size, min_trade_threshold=int(wf_cfg["min_trades"]))
+        threshold = int(wf_cfg["min_trades"]) if "min_trades" in wf_cfg else 10
+
+        def objective(trial):
+            # Parameter search space (excluding IB toggles; locked by config)
+            ema_fast = trial.suggest_int("ema_fast_period", 5, 20)
+            ema_medium = trial.suggest_int("ema_medium_period", ema_fast + 3, ema_fast + 25)
+            ema_slow = trial.suggest_int("ema_slow_period", ema_medium + 5, ema_medium + 80)
+
+            risk_reward_ratio = trial.suggest_float("risk_reward_ratio", 1.2, 2.0, step=0.1)
+            max_avg_deviation_pct = trial.suggest_float("max_avg_deviation_pct", 0.2, 1.0, step=0.05)
+            adx_threshold = trial.suggest_float("adx_threshold", 18.0, 28.0, step=1.0)
+            atr_stop_multiplier = trial.suggest_float("atr_stop_multiplier", 1.0, 3.0, step=0.1)
+            atr_trail_multiplier = trial.suggest_float("atr_trail_multiplier", 0.0, 1.0, step=0.1)
+            htf_lookback = trial.suggest_int("htf_lookback", 10, 40)
+            min_atr = trial.suggest_float("min_atr", 5.0, 25.0, step=0.5)
+            pullback_lookback = trial.suggest_int("pullback_lookback", 6, 15)
+
+            try:
+                trades, pnl, _ = backtest_al_brooks_inside_bar(
+                    df.copy(),
+                    ema_fast_period=ema_fast,
+                    ema_medium_period=ema_medium,
+                    ema_slow_period=ema_slow,
+                    risk_reward_ratio=risk_reward_ratio,
+                    max_avg_deviation_pct=max_avg_deviation_pct,
+                    lot_size=lot_size,
+                    adx_threshold=adx_threshold,
+                    atr_stop_multiplier=atr_stop_multiplier,
+                    atr_trail_multiplier=atr_trail_multiplier,
+                    htf_lookback=htf_lookback,
+                    use_inside_bar=use_ib,
+                    inside_bar_inclusive=ib_inclusive,
+                    min_atr=min_atr,
+                    pullback_lookback=pullback_lookback,
+                )
+            except Exception:
+                return -1e9
+
+            m = calculate_metrics(trades)
+            trade_count = m.get("total_trades", 0)
+            total_pnl = m.get("total_pnl", 0.0)
+            pf = m.get("profit_factor", 0.0)
+
+            if trade_count < max(1, threshold):
+                return -1e9
+            if total_pnl <= 0:
+                return -1e9
+
+            if pf == float("inf") or pf == float("nan"):
+                pf = 10.0
+            return float(pf) + (total_pnl / 200.0)
+
+        return objective
 
     validator = WalkForwardValidator(
         strategy_name="ALBROOKS",
@@ -80,7 +143,7 @@ def main() -> None:
             pass
 
     # Save JSON summary locally
-    ts = __import__("datetime").datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     summary_path = Path(__file__).resolve().parent / "reports" / "snapshots" / f"wf_summary_{ts}.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(validator.summary_stats, indent=2), encoding="utf-8")
