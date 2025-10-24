@@ -40,6 +40,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.DataFrame(index=df.index)
 
+    open_ = df["open"]
     close = df["close"]
     high = df["high"]
     low = df["low"]
@@ -89,5 +90,55 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     out["hour_sin"] = np.sin(2 * np.pi * df.index.hour / 24)
     out["hour_cos"] = np.cos(2 * np.pi * df.index.hour / 24)
 
-    return out.dropna()
+    # Candle-shape features (Pattern expert)
+    candle_range = (high - low).replace(0.0, np.nan)
+    body = close - open_
+    upper_wick = high - np.maximum(open_, close)
+    lower_wick = np.minimum(open_, close) - low
 
+    out["body"] = body
+    out["body_abs"] = body.abs()
+    out["body_range_pct"] = body / (candle_range + 1e-9)
+    out["upper_wick"] = upper_wick
+    out["lower_wick"] = lower_wick
+
+    atr = out["atr_14"]
+    out["body_atr"] = body / (atr + 1e-9)
+    out["upper_wick_atr"] = upper_wick / (atr + 1e-9)
+    out["lower_wick_atr"] = lower_wick / (atr + 1e-9)
+
+    body_ratio = body.abs() / (candle_range + 1e-9)
+    out["doji_flag"] = (body_ratio < 0.1).astype(float)
+    out["hammer_flag"] = (
+        (lower_wick >= 2 * body.abs()) & (upper_wick <= 0.5 * body.abs())
+    ).astype(float)
+    out["shooting_star_flag"] = (
+        (upper_wick >= 2 * body.abs()) & (lower_wick <= 0.5 * body.abs())
+    ).astype(float)
+
+    prev_body = body.shift()
+    prev_open = open_.shift()
+    prev_close = close.shift()
+
+    bullish_engulf = (
+        (close > open_)
+        & (prev_close < prev_open)
+        & (close >= prev_open)
+        & (open_ <= prev_close)
+    )
+    bearish_engulf = (
+        (close < open_)
+        & (prev_close > prev_open)
+        & (close <= prev_open)
+        & (open_ >= prev_close)
+    )
+    out["bullish_engulf_flag"] = bullish_engulf.astype(float)
+    out["bearish_engulf_flag"] = bearish_engulf.astype(float)
+
+    out["hammer_roll3"] = out["hammer_flag"].rolling(3, min_periods=1).mean()
+    out["shooting_star_roll3"] = out["shooting_star_flag"].rolling(3, min_periods=1).mean()
+    out["engulf_diff_roll5"] = (
+        out["bullish_engulf_flag"] - out["bearish_engulf_flag"]
+    ).rolling(5, min_periods=1).mean()
+
+    return out.dropna()

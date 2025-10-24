@@ -42,6 +42,23 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
     return policy
 
 
+def _expert_names(cfg: dict, num_experts: int) -> list[str]:
+    names = cfg.get("model", {}).get("expert_names")
+    if isinstance(names, list) and len(names) == num_experts:
+        return [str(n) for n in names]
+    defaults = [
+        "Trend",
+        "MeanRev",
+        "Volatility",
+        "VolumeFlow",
+        "SqueezeBreakout",
+        "Pattern",
+    ]
+    if num_experts <= len(defaults):
+        return defaults[:num_experts]
+    return [f"e{i}" for i in range(num_experts)]
+
+
 def _run_policy(env: BTCMixtureEnv, policy: MoEPolicy) -> Tuple[np.ndarray, np.ndarray]:
     """Executa a política greedy e retorna ações (−1/0/+1) e equity."""
     obs = torch.tensor(env.reset(), dtype=torch.float32).unsqueeze(0)
@@ -98,6 +115,10 @@ def main() -> None:
     ax_equity.legend(loc="upper right")
 
     fig.suptitle("Agente MoE — Visualização das ações (BTCUSDT 1h)")
+    # legenda didática com nomes dos experts
+    names = _expert_names(cfg, cfg.get("model", {}).get("num_experts", 5))
+    legend_text = " | ".join([f"e{i}:{n}" for i, n in enumerate(names)])
+    fig.text(0.01, 0.01, legend_text, fontsize=8, color="#bdbdbd")
     fig.tight_layout()
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)

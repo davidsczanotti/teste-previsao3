@@ -4,15 +4,16 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
 
 ## Decisões-chave
 - Ativo/timeframe: BTCUSDT 1h, desde ~2017 (cache local `data/klines_cache.db`).
-- Ambiente e ações: `{short, flat, long}` com tamanho fixo de 0.1 BTC; capital lógico de 1000; custos padrão (fee 0.1%, slippage 0.01%); stop móvel por ATR (trailing).
-- MoE (PyTorch): 5 especialistas pequenos + gating com top‑2 (sparsidade), softmax com temperatura e regularização de balanceamento de carga.
-  - Trend Expert — EMAs, Donchian, momentum
-  - Mean‑Reversion Expert — RSI, Bollinger, z‑score
-  - Volatility Expert — ATR, realized vol (range/rv)
-  - Volume/Flow Expert — OBV, Chaikin, “volume spike”
-  - Squeeze/Breakout Expert — BB width, ATR percentil
-- Treino RL: PPO adaptado ao MoE (laço custom). O gating escolhe os experts (top‑2) a cada passo; a política mistura suas saídas para decidir a ação.
-- Avaliação: Backtest, Monte Carlo e Walk‑Forward (WF) com relatórios reprodutíveis.
+- Ambiente e ações: `{short, flat, long}` com capital lógico inicial de 1000, alavancagem configurável, stops móveis por ATR, penalidade de turnover e encerramento antecipado por piso de equity ou drawdown máximo. As janelas de treino podem iniciar em pontos aleatórios (`random_start`) para evitar viés de começo de série.
+- MoE (PyTorch): 6 especialistas pequenos + gating com softmax (temperatura ajustável) e top‑k esparso. Regularização de balanceamento mantém o uso distribuído.
+  - Trend — EMAs, Donchian, momentum
+  - Mean‑Reversion — RSI, Bollinger, z‑score
+  - Volatility — ATR, realized vol (range/rv)
+  - Volume/Flow — OBV, Chaikin, spikes de volume
+  - Squeeze/Breakout — largura de Bollinger, percentil de ATR
+  - Pattern — forma de candles (corpo/pavio), padrões simples (doji, hammer, engulfing) e contagens rolling
+- Treino RL: PPO adaptado ao MoE. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
+- Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). Walk‑Forward e Monte Carlo podem ser habilitados conforme necessidade.
 
 ## Estrutura do projeto
 ```
@@ -42,10 +43,10 @@ src/strategies/exper_corr_neg/
 
 ## Configuração (sem flags)
 Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
-- `env`: custos, tamanho de posição, multiplicadores de ATR (stop/trailing)
-- `model`: camadas dos experts e do gating, número de experts, temperatura, top‑k
+- `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown e janela/aleatoriedade de início
+- `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
-- `train`: episódios, passos por rollout, device, diretório de saída
+- `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações
 - `walk_forward`: agenda (dias de treino/val/step), episódios por janela, device, diretório
 
 Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de flags.
@@ -57,6 +58,18 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
     poetry run python -m src.strategies.exper_corr_neg.train
   ```
   Artefatos: `src/strategies/exper_corr_neg/reports/train/`
+
+- Visualização do backtest (preço + ações + equity)
+  ```bash
+  BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize
+  ```
+  Gera `src/strategies/exper_corr_neg/reports/train/visual_backtest.png` com legenda dos experts.
+
+- Análise do gating (pesos/top‑k, drawdown/ruína)
+  ```bash
+  BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize_gating
+  ```
+  Artefatos: `gating_trace.csv`, `gating_heatmap.png` (com marcas de drawdown/ruína) e `gating_usage.png`.
 
 - Walk‑Forward (treina por janela e valida OOS)
   ```bash
@@ -82,8 +95,8 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
 
 ## Observações
 - O ambiente funciona sem a dependência `gym` (há um stub leve), mas se quiser os wrappers e compatibilidade plena, instale `gym`.
-- Para execuções longas, considere GPU (`device: "cuda"` no config) e aumente `episodes`/`rollout_steps` paulatinamente.
-- Sinais adicionais (ex.: modelos de direção/volatilidade como LightGBM/GARCH) podem ser integrados como novos experts.
+- Para execuções longas, considere GPU (`device: "cuda"`) e ajuste `episodes`/`rollout_steps` paulatinamente.
+- Monitorar risco: `metrics.csv/png` mostra entropia, drawdown (via ruína), equity greedy e uso dos experts. Acompanhe também `expert_usage.png` e `gating_heatmap.png`.
+- Para expandir o MoE, basta acrescentar novas features e atualizar `model.num_experts`/`model.expert_names`; o gating decidirá quando usar cada especialista.
 
 Qualquer alteração no comportamento deve ser feita editando o `config.json`. Os scripts já consomem esse arquivo e salvam os resultados dentro da pasta da estratégia para manter tudo organizado e reprodutível.
-

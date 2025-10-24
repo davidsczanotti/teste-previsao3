@@ -18,9 +18,17 @@
   "model": {
     "expert_hidden": [64, 32],
     "gating_hidden": [64, 32],
-    "num_experts": 5,
+    "num_experts": 6,
     "temperature": 1.0,
-    "top_k": 1
+    "top_k": 1,
+    "expert_names": [
+      "Trend",
+      "MeanRev",
+      "Volatility",
+      "VolumeFlow",
+      "SqueezeBreakout",
+      "Pattern"
+    ]
   },
   "ppo": {
     "gamma": 0.99,
