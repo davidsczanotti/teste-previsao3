@@ -15,7 +15,23 @@ from .models import MoEPolicy
 CFG_PATH = Path("src/strategies/exper_corr_neg/config.json")
 FINAL_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt")
 BEST_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_best_eval.pt")
+TRAIN_DIR = Path("src/strategies/exper_corr_neg/reports/train")
 OUT_PATH = Path("src/strategies/exper_corr_neg/reports/train/visual_backtest.png")
+
+
+def _find_checkpoint() -> Path:
+    if BEST_MODEL_PATH.exists():
+        return BEST_MODEL_PATH
+    if FINAL_MODEL_PATH.exists():
+        return FINAL_MODEL_PATH
+    # fallback: último checkpoint epXX
+    if TRAIN_DIR.exists():
+        eps = sorted(TRAIN_DIR.glob("moe_policy_ep*.pt"))
+        if eps:
+            return eps[-1]
+    raise FileNotFoundError(
+        f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH} ou 'moe_policy_ep*.pt'. Aguarde salvar um checkpoint (10,20,...) ou reduza 'episodes'."
+    )
 
 
 def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
@@ -29,12 +45,8 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
         temperature=model_cfg.get("temperature", 0.7),
         top_k=model_cfg.get("top_k", 2),
     )
-    # Preferir o melhor modelo salvo; se não existir, usar o final
-    chosen_path = BEST_MODEL_PATH if BEST_MODEL_PATH.exists() else FINAL_MODEL_PATH
-    if not chosen_path.exists():
-        raise FileNotFoundError(
-            f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH}. Rode o treino antes."
-        )
+    # Preferir best_eval, depois final; fallback para último epXX
+    chosen_path = _find_checkpoint()
     # Carregamento tolerante: se o checkpoint for de outra arquitetura, faz load parcial
     state_dict = torch.load(chosen_path, map_location="cpu")
     model_state = policy.state_dict()

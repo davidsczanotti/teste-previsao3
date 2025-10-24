@@ -15,6 +15,7 @@ from .models import MoEPolicy
 CFG_PATH = Path("src/strategies/exper_corr_neg/config.json")
 FINAL_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt")
 BEST_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_best_eval.pt")
+TRAIN_DIR = Path("src/strategies/exper_corr_neg/reports/train")
 OUTDIR = Path("src/strategies/exper_corr_neg/reports/train")
 
 
@@ -36,6 +37,20 @@ def _expert_names(cfg: dict, num_experts: int) -> list[str]:
     return [f"e{i}" for i in range(num_experts)]
 
 
+def _find_checkpoint() -> Path:
+    if BEST_MODEL_PATH.exists():
+        return BEST_MODEL_PATH
+    if FINAL_MODEL_PATH.exists():
+        return FINAL_MODEL_PATH
+    if TRAIN_DIR.exists():
+        eps = sorted(TRAIN_DIR.glob("moe_policy_ep*.pt"))
+        if eps:
+            return eps[-1]
+    raise FileNotFoundError(
+        f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH} ou 'moe_policy_ep*.pt'. Aguarde salvar um checkpoint (10,20,...) ou reduza 'episodes'."
+    )
+
+
 def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
     model_cfg = cfg.get("model", {})
     policy = MoEPolicy(
@@ -47,11 +62,7 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
         temperature=model_cfg.get("temperature", 0.7),
         top_k=model_cfg.get("top_k", 2),
     )
-    chosen_path = BEST_MODEL_PATH if BEST_MODEL_PATH.exists() else FINAL_MODEL_PATH
-    if not chosen_path.exists():
-        raise FileNotFoundError(
-            f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH}. Rode o treino antes."
-        )
+    chosen_path = _find_checkpoint()
     # load parcial tolerante a mudanças de arquitetura
     state_dict = torch.load(chosen_path, map_location="cpu")
     model_state = policy.state_dict()
