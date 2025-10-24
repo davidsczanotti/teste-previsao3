@@ -11,7 +11,7 @@
     "gating_hidden": [64, 32],
     "num_experts": 5,
     "temperature": 1.0,
-    "top_k": 2
+    "top_k": 1
   },
   "ppo": {
     "gamma": 0.99,
@@ -30,7 +30,15 @@
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/train",
     "resume": true,
-    "resume_path": "src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt"
+    "resume_path": "src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt",
+    "log_every": 5,
+    "plot_every": 50,
+    "eval_every": 50,
+    "eval_days": 90,
+    "usage_window": 100,
+    "entropy_coef_start": 0.01,
+    "entropy_coef_end": 0.002,
+    "entropy_decay_episodes": 5000
   },
   "walk_forward": {
     "train_days": 720,
