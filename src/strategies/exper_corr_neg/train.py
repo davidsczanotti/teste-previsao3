@@ -88,7 +88,11 @@ def main() -> None:
         try:
             with metrics_path.open("r") as f:
                 header = f.readline()
-            if ("entropy_coef" not in header) or (usage_cols and usage_cols[0] not in header):
+            if (
+                "entropy_coef" not in header
+                or (usage_cols and usage_cols[0] not in header)
+                or "greedy_ruined" not in header
+            ):
                 legacy_path = outdir / "metrics_legacy.csv"
                 metrics_path.rename(legacy_path)
                 print(f"[metrics] CSV antigo movido para {legacy_path} e um novo será criado.")
@@ -109,9 +113,16 @@ def main() -> None:
                 "sum_reward",
                 *usage_cols,
                 "greedy_equity",
+                "greedy_ruined",
             ])
 
-    def _append_metrics(ep: int, m: dict, greedy_equity: float | None = None, entropy_coef_val: float | None = None) -> None:
+    def _append_metrics(
+        ep: int,
+        m: dict,
+        greedy_equity: float | None = None,
+        greedy_ruined: bool | None = None,
+        entropy_coef_val: float | None = None,
+    ) -> None:
         with metrics_path.open("a", newline="") as f:
             writer = csv.writer(f)
             row = [
@@ -129,6 +140,7 @@ def main() -> None:
             usage = list(usage) + [""] * max(0, len(usage_cols) - len(usage))
             row.extend(usage[: len(usage_cols)])
             row.append(greedy_equity if greedy_equity is not None else "")
+            row.append(int(greedy_ruined) if greedy_ruined is not None else "")
             writer.writerow(row)
 
     def _plot_metrics() -> None:
@@ -165,6 +177,18 @@ def main() -> None:
                     y_min, y_max = float(ge[mask].min()), float(ge[mask].max())
                     margin = max(1.0, (y_max - y_min) * 0.1)
                     ax.set_ylim(y_min - margin, y_max + margin)
+                    if "greedy_ruined" in dfm.columns:
+                        ruined_mask = pd.to_numeric(dfm["greedy_ruined"], errors="coerce").fillna(0).astype(bool)
+                        ruined_mask &= mask
+                        if ruined_mask.any():
+                            ax.scatter(
+                                dfm["episode"][ruined_mask],
+                                ge[ruined_mask],
+                                color="#ff6666",
+                                label="ruína",
+                                marker="x",
+                                s=30,
+                            )
                 else:
                     ax.text(0.5, 0.5, "sem avaliações ainda", transform=ax.transAxes, ha="center", va="center")
             ax.legend(); ax.set_title("Greedy equity (eval)")
@@ -201,7 +225,7 @@ def main() -> None:
         except Exception as e:
             print(f"[plot] Falha ao gerar expert_usage.png: {e}")
 
-    def _greedy_eval() -> float:
+    def _greedy_eval() -> tuple[float, bool]:
         try:
             # pequena avaliação em uma janela do fim dos dados
             hours = eval_days * 24
@@ -210,17 +234,20 @@ def main() -> None:
             eval_env = BTCMixtureEnv(tail_prices, tail_feats, env_cfg)
             obs = torch.tensor(eval_env.reset(), dtype=torch.float32)
             done = False
-            info = {"equity": 0.0}
+            info = {"equity": float(env_cfg.init_equity)}
+            ruined = False
             while not done:
                 with torch.no_grad():
                     dist, _, _ = policy(obs.unsqueeze(0))
                     action = torch.argmax(dist.probs, dim=-1).item()
                 next_obs, _, done, info = eval_env.step(action)
+                if info.get("ruined"):
+                    ruined = True
                 obs = torch.tensor(next_obs, dtype=torch.float32)
-            return float(info.get("equity", 0.0))
+            return float(info.get("equity", 0.0)), ruined
         except Exception as e:
             print(f"[eval] Falha na avaliação greedy: {e}")
-            return float("nan")
+            return float("nan"), True
 
     best_greedy = float("-inf")
     best_path = outdir / "moe_policy_best_eval.pt"
@@ -241,14 +268,25 @@ def main() -> None:
         metrics = trainer.train_step(env, rollout_steps)
 
         greedy_equity = None
+        greedy_ruined = None
         if eval_every > 0 and episode % eval_every == 0:
-            greedy_equity = _greedy_eval()
-            if greedy_equity == greedy_equity and greedy_equity > best_greedy:  # not NaN
+            greedy_equity, greedy_ruined = _greedy_eval()
+            if (
+                greedy_equity == greedy_equity
+                and not greedy_ruined
+                and greedy_equity > best_greedy
+            ):
                 best_greedy = greedy_equity
                 torch.save(policy.state_dict(), best_path)
                 print(f"[eval] Novo melhor greedy_equity={best_greedy:.2f} salvo em {best_path}")
 
-        _append_metrics(episode, metrics, greedy_equity, entropy_coef_val=current_entropy_coef)
+        _append_metrics(
+            episode,
+            metrics,
+            greedy_equity,
+            greedy_ruined,
+            entropy_coef_val=current_entropy_coef,
+        )
 
         if plot_every > 0 and episode % plot_every == 0:
             _plot_metrics()

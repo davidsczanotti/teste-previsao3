@@ -4,7 +4,16 @@
     "slippage_pct": 0.0001,
     "position_size": 0.1,
     "stop_atr_mult": 2.0,
-    "trail_atr_mult": 1.0
+    "trail_atr_mult": 1.0,
+    "init_equity": 1000.0,
+    "leverage": 5.0,
+    "equity_floor_pct": 0.2,
+    "max_drawdown_pct": 0.6,
+    "drawdown_kill_bars": 24,
+    "turnover_penalty": 1.0,
+    "dynamic_position": true,
+    "random_start": true,
+    "window_bars": 8760
   },
   "model": {
     "expert_hidden": [64, 32],
