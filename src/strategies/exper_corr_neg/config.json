@@ -19,8 +19,8 @@
     "expert_hidden": [64, 32],
     "gating_hidden": [64, 32],
     "num_experts": 6,
-    "temperature": 1.0,
-    "top_k": 1,
+    "temperature": 1.5,
+    "top_k": 3,
     "expert_names": [
       "Trend",
       "MeanRev",
@@ -53,6 +53,7 @@
     "eval_every": 50,
     "eval_days": 90,
     "usage_window": 100,
+    "lb_coef": 0.02,
     "entropy_coef_start": 0.01,
     "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 5000

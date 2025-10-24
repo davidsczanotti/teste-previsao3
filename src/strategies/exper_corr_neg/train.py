@@ -54,7 +54,12 @@ def main() -> None:
     )
     ppo_cfg = PPOConfig(**config.get("ppo", {}))
     train_cfg = config.get("train", {})
-    trainer = PPOTrainer(policy, ppo_cfg, device=torch.device(train_cfg.get("device", "cpu")))
+    trainer = PPOTrainer(
+        policy,
+        ppo_cfg,
+        device=torch.device(train_cfg.get("device", "cpu")),
+        lb_coef=float(train_cfg.get("lb_coef", 0.01)),
+    )
 
     outdir = Path(train_cfg.get("outdir", "reports/exper_corr_neg/train"))
     outdir.mkdir(parents=True, exist_ok=True)
@@ -252,7 +257,24 @@ def main() -> None:
             print(f"[eval] Falha na avaliação greedy: {e}")
             return float("nan"), True
 
+    episode_offset = 0
     best_greedy = float("-inf")
+    if metrics_path.exists():
+        try:
+            import pandas as pd
+
+            df_prev = pd.read_csv(metrics_path)
+            if not df_prev.empty:
+                if "episode" in df_prev.columns:
+                    episode_offset = int(pd.to_numeric(df_prev["episode"], errors="coerce").max())
+                if "greedy_equity" in df_prev.columns:
+                    prev_greedy = pd.to_numeric(df_prev["greedy_equity"], errors="coerce")
+                    if pd.notna(prev_greedy).any():
+                        best_greedy = float(prev_greedy.max())
+        except Exception as e:
+            print(f"[metrics] Não foi possível ler métricas anteriores: {e}")
+
+    best_greedy = float(best_greedy)
     best_path = outdir / "moe_policy_best_eval.pt"
 
     # Entropy schedule (opcional): linear start->end em 'entropy_decay_episodes'
@@ -269,6 +291,7 @@ def main() -> None:
         else:
             current_entropy_coef = trainer.cfg.entropy_coef
         metrics = trainer.train_step(env, rollout_steps)
+        actual_episode = episode_offset + episode
 
         greedy_equity = None
         greedy_ruined = None
@@ -284,7 +307,7 @@ def main() -> None:
                 print(f"[eval] Novo melhor greedy_equity={best_greedy:.2f} salvo em {best_path}")
 
         _append_metrics(
-            episode,
+            actual_episode,
             metrics,
             greedy_equity,
             greedy_ruined,
@@ -299,7 +322,7 @@ def main() -> None:
             ckpt_path = outdir / f"moe_policy_ep{episode}.pt"
             torch.save(policy.state_dict(), ckpt_path)
         if episode % log_every == 0:
-            print(f"Episode {episode}: {metrics}")
+            print(f"Episode {actual_episode} (run {episode}): {metrics}")
 
     final_path = outdir / "moe_policy_final.pt"
     torch.save(policy.state_dict(), final_path)

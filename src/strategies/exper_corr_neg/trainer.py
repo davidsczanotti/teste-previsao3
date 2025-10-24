@@ -22,10 +22,17 @@ class RolloutBatch:
 
 
 class PPOTrainer:
-    def __init__(self, policy: MoEPolicy, config: PPOConfig, device: torch.device = torch.device("cpu")) -> None:
+    def __init__(
+        self,
+        policy: MoEPolicy,
+        config: PPOConfig,
+        device: torch.device = torch.device("cpu"),
+        lb_coef: float = 0.01,
+    ) -> None:
         self.policy = policy.to(device)
         self.cfg = config
         self.device = device
+        self.lb_coef = float(lb_coef)
         self.optim = Adam(self.policy.parameters(), lr=config.learning_rate)
 
     def collect_rollout(self, env, steps: int) -> Dict[str, torch.Tensor]:
@@ -124,8 +131,9 @@ class PPOTrainer:
                 entropy = dist.entropy().mean()
 
                 loss = policy_loss + self.cfg.value_coef * value_loss - self.cfg.entropy_coef * entropy
-                # load balance regularizer
-                loss += 0.01 * lb_loss
+                # load balance regularizer (configurável)
+                if self.lb_coef != 0.0:
+                    loss += self.lb_coef * lb_loss
 
                 self.optim.zero_grad()
                 loss.backward()
