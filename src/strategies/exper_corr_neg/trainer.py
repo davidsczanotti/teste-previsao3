@@ -30,11 +30,17 @@ class PPOTrainer:
 
     def collect_rollout(self, env, steps: int) -> Dict[str, torch.Tensor]:
         obs_list, act_list, logp_list, rew_list, val_list, done_list, lb_list = [], [], [], [], [], [], []
+        # histograma de uso dos experts (top-k) ao longo do rollout
+        gate_hist = np.zeros(self.policy.num_experts, dtype=np.float32)
         obs = torch.tensor(env.reset(), dtype=torch.float32, device=self.device)
         for _ in range(steps):
             dist, value, lb_loss = self.policy(obs.unsqueeze(0))
             action = dist.sample()
             log_prob = dist.log_prob(action)
+            # coleta do gating (executa novamente só o cabeamento do gate; custo pequeno)
+            with torch.no_grad():
+                _, mask = self.policy.gating(obs.unsqueeze(0), top_k=self.policy.top_k)
+                gate_hist += mask.squeeze(0).detach().cpu().numpy().astype(np.float32)
             next_obs, reward, done, _ = env.step(int(action.item()))
             obs_list.append(obs.cpu().numpy())
             act_list.append(action.cpu().numpy())
@@ -55,6 +61,7 @@ class PPOTrainer:
             "values": torch.tensor(np.array(val_list), dtype=torch.float32, device=self.device),
             "dones": torch.tensor(np.array(done_list), dtype=torch.float32, device=self.device),
             "load_balance": torch.tensor(np.array(lb_list), dtype=torch.float32, device=self.device),
+            "gate_hist": torch.tensor(gate_hist, dtype=torch.float32, device=self.device),
         }
 
     def compute_returns(self, rewards, values, dones, gamma, lam):
@@ -130,9 +137,17 @@ class PPOTrainer:
                 entropy_total += entropy.item()
 
         mean_steps = len(batch["rewards"])
+        avg_reward = batch["rewards"].mean().item()
+        sum_reward = batch["rewards"].sum().item()
+        expert_hist = batch["gate_hist"].detach().cpu().numpy()
+        expert_hist_sum = float(expert_hist.sum()) if float(expert_hist.sum()) > 0 else 1.0
+        expert_usage = (expert_hist / expert_hist_sum).tolist()
         return {
             "policy_loss": policy_loss_total / (self.cfg.train_iters * max(1, mean_steps // self.cfg.batch_size + 1)),
             "value_loss": value_loss_total / (self.cfg.train_iters * max(1, mean_steps // self.cfg.batch_size + 1)),
             "entropy": entropy_total / (self.cfg.train_iters * max(1, mean_steps // self.cfg.batch_size + 1)),
             "load_balance": lb_mean,
+            "avg_reward": avg_reward,
+            "sum_reward": sum_reward,
+            "expert_usage": expert_usage,
         }

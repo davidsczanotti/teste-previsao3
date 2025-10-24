@@ -77,6 +77,68 @@ data/
 
 - Sincronização de configuração: não é necessária. Edite `src/strategies/al_brooks/config.json` diretamente.
 
+### 2.3 Padrão genérico de experimentos (todas as estratégias)
+
+Este repositório padroniza como criar/rodar experimentos para qualquer estratégia em `src/strategies/<nome>`.
+
+- Estrutura por experimento (sempre dentro da pasta da estratégia):
+
+  ```
+  src/strategies/<nome>/
+    config.json                 # único ponto de parâmetros (sem flags no CLI)
+    reports/                    # artefatos do experimento (sempre dentro da estratégia)
+      train/                    # checkpoints, métricas e gráficos de treino
+      walk_forward/             # resultados de walk‑forward
+      charts/                   # figuras gerais (backtests/visualizações)
+  ```
+
+- Comandos padrão (reprodutíveis e “limpos”):
+
+  1) Atualizar cache (Passo 0 obrigatório)
+     ```bash
+     poetry run python -m scripts.populate_cache <SYMBOL> <TF> --start "2017-01-01 00:00:00"
+     # Ex.: poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+     ```
+
+  2) Treino (se a estratégia expuser `train.py`)
+     ```bash
+     BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+       poetry run python -m src.strategies.<nome>.train
+     ```
+
+  3) Walk‑Forward (se exposto por `walk_forward.py`)
+     ```bash
+     BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+       poetry run python -m src.strategies.<nome>.walk_forward
+     ```
+
+  4) Visualização simples (se existir `visualize.py`)
+     ```bash
+     BINANCE_OFFLINE=1 poetry run python -m src.strategies.<nome>.visualize
+     ```
+
+- Convenções de configuração (arquivo `config.json` em cada estratégia):
+
+  - Campos comuns recomendados (podem variar por estratégia):
+    - `env`: custos, tamanho de posição e parâmetros de execução.
+    - `model`: arquitetura/hiperparâmetros do modelo.
+    - `ppo` ou `optimize`: hiperparâmetros de treino/otimização.
+    - `train`: `episodes`, `rollout_steps`, `device`, `outdir`, `resume`, `resume_path`, `log_every`, `plot_every`, `eval_every`, `eval_days`.
+    - `walk_forward`: janelas (`train_days`, `val_days`, `step_days`), episódios/rollout por janela, `device`, `outdir`.
+
+  - Regra de ouro: alterações de parâmetros sempre neste JSON; comandos CLI permanecem sem flags específicas da estratégia.
+
+- Artefatos mínimos esperados por experimento (tudo em `src/strategies/<nome>/reports/`):
+  - `train/metrics.csv`, `train/metrics.png` — métrica por episódio e gráfico agregado.
+  - `train/<checkpoint>.pt`, `train/*_final.pt`, `train/*_best_eval.pt` — pesos do modelo.
+  - `walk_forward/wf_summary.json` — resumo das janelas.
+  - `charts/visual_backtest.png` — visualização didática de ações vs preço (quando aplicável).
+
+- Determinismo e rastreabilidade:
+  - Registrar `seed`, versões de libs e janela temporal (log no console e/ou `reports/train/run.md`).
+  - Execução offline por padrão (`BINANCE_OFFLINE=1`) e leitura exclusiva do cache local (`data/klines_cache.db`).
+  - Se faltar dado: falhar pedindo atualização do cache.
+
 ### 2.2 Acesso ao Python
 
 * O agente pode propor *snippets* Python para:

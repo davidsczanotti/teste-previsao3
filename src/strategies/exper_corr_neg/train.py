@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import csv
 
 import torch
 
@@ -75,13 +76,188 @@ def main() -> None:
 
     episodes = int(train_cfg.get("episodes", 500))
     rollout_steps = int(train_cfg.get("rollout_steps", 2048))
+    log_every = int(train_cfg.get("log_every", 5))
+    plot_every = int(train_cfg.get("plot_every", 50))
+    eval_every = int(train_cfg.get("eval_every", 50))
+    eval_days = int(train_cfg.get("eval_days", 90))
+
+    metrics_path = outdir / "metrics.csv"
+    usage_cols = [f"usage_e{i}" for i in range(policy.num_experts)]
+    # Se já existir um CSV antigo sem as colunas novas, rotaciona para *_legacy.csv
+    if metrics_path.exists():
+        try:
+            with metrics_path.open("r") as f:
+                header = f.readline()
+            if ("entropy_coef" not in header) or (usage_cols and usage_cols[0] not in header):
+                legacy_path = outdir / "metrics_legacy.csv"
+                metrics_path.rename(legacy_path)
+                print(f"[metrics] CSV antigo movido para {legacy_path} e um novo será criado.")
+        except Exception as e:
+            print(f"[metrics] Falha ao inspecionar CSV existente: {e}")
+
+    if not metrics_path.exists():
+        with metrics_path.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "episode",
+                "policy_loss",
+                "value_loss",
+                "entropy",
+                "entropy_coef",
+                "load_balance",
+                "avg_reward",
+                "sum_reward",
+                *usage_cols,
+                "greedy_equity",
+            ])
+
+    def _append_metrics(ep: int, m: dict, greedy_equity: float | None = None, entropy_coef_val: float | None = None) -> None:
+        with metrics_path.open("a", newline="") as f:
+            writer = csv.writer(f)
+            row = [
+                ep,
+                m.get("policy_loss"),
+                m.get("value_loss"),
+                m.get("entropy"),
+                entropy_coef_val if entropy_coef_val is not None else ppo_cfg.entropy_coef,
+                m.get("load_balance"),
+                m.get("avg_reward"),
+                m.get("sum_reward"),
+            ]
+            usage = m.get("expert_usage") or []
+            # garante número fixo de colunas
+            usage = list(usage) + [""] * max(0, len(usage_cols) - len(usage))
+            row.extend(usage[: len(usage_cols)])
+            row.append(greedy_equity if greedy_equity is not None else "")
+            writer.writerow(row)
+
+    def _plot_metrics() -> None:
+        try:
+            import pandas as pd
+            import matplotlib.pyplot as plt
+
+            dfm = pd.read_csv(metrics_path)
+            plt.style.use("dark_background")
+            fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+            ax = axes[0, 0]
+            ax.plot(dfm["episode"], dfm["policy_loss"], label="policy_loss")
+            ax.plot(dfm["episode"], dfm["value_loss"], label="value_loss")
+            ax.legend(); ax.set_title("Losses")
+
+            ax = axes[0, 1]
+            ax.plot(dfm["episode"], dfm["entropy"], label="entropy")
+            if "entropy_coef" in dfm.columns:
+                ax.plot(dfm["episode"], dfm["entropy_coef"], label="entropy_coef")
+            ax.plot(dfm["episode"], dfm["load_balance"], label="load_balance")
+            ax.legend(); ax.set_title("Entropy / Balance")
+
+            ax = axes[1, 0]
+            ax.plot(dfm["episode"], dfm["avg_reward"], label="avg_reward")
+            ax.plot(dfm["episode"], dfm["sum_reward"], label="sum_reward")
+            ax.legend(); ax.set_title("Rewards")
+
+            ax = axes[1, 1]
+            if "greedy_equity" in dfm.columns:
+                ge = pd.to_numeric(dfm["greedy_equity"], errors="coerce")
+                mask = ge.notna()
+                if mask.any():
+                    ax.plot(dfm["episode"][mask], ge[mask], label="greedy_equity", marker="o", markersize=3)
+                    y_min, y_max = float(ge[mask].min()), float(ge[mask].max())
+                    margin = max(1.0, (y_max - y_min) * 0.1)
+                    ax.set_ylim(y_min - margin, y_max + margin)
+                else:
+                    ax.text(0.5, 0.5, "sem avaliações ainda", transform=ax.transAxes, ha="center", va="center")
+            ax.legend(); ax.set_title("Greedy equity (eval)")
+
+            fig.tight_layout()
+            fig.savefig(outdir / "metrics.png", dpi=120)
+            plt.close(fig)
+        except Exception as e:
+            print(f"[plot] Falha ao gerar metrics.png: {e}")
+
+    def _plot_usage(window: int = 100) -> None:
+        try:
+            import pandas as pd
+            import matplotlib.pyplot as plt
+
+            if not usage_cols:
+                return
+            dfm = pd.read_csv(metrics_path)
+            cols = [c for c in usage_cols if c in dfm.columns]
+            if not cols:
+                return
+            tail = dfm.tail(window)
+            means = tail[cols].mean(numeric_only=True)
+            plt.style.use("dark_background")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.bar(range(len(cols)), means.values, color="#4da6ff")
+            ax.set_xticks(range(len(cols)))
+            ax.set_xticklabels(cols, rotation=45)
+            ax.set_ylim(0, 1)
+            ax.set_title(f"Expert usage (média das últimas {len(tail)} execuções)")
+            fig.tight_layout()
+            fig.savefig(outdir / "expert_usage.png", dpi=120)
+            plt.close(fig)
+        except Exception as e:
+            print(f"[plot] Falha ao gerar expert_usage.png: {e}")
+
+    def _greedy_eval() -> float:
+        try:
+            # pequena avaliação em uma janela do fim dos dados
+            hours = eval_days * 24
+            tail_prices = price_df.tail(hours).reset_index(drop=True)
+            tail_feats = feat_df.tail(hours).reset_index(drop=True)
+            eval_env = BTCMixtureEnv(tail_prices, tail_feats, env_cfg)
+            obs = torch.tensor(eval_env.reset(), dtype=torch.float32)
+            done = False
+            info = {"equity": 0.0}
+            while not done:
+                with torch.no_grad():
+                    dist, _, _ = policy(obs.unsqueeze(0))
+                    action = torch.argmax(dist.probs, dim=-1).item()
+                next_obs, _, done, info = eval_env.step(action)
+                obs = torch.tensor(next_obs, dtype=torch.float32)
+            return float(info.get("equity", 0.0))
+        except Exception as e:
+            print(f"[eval] Falha na avaliação greedy: {e}")
+            return float("nan")
+
+    best_greedy = float("-inf")
+    best_path = outdir / "moe_policy_best_eval.pt"
+
+    # Entropy schedule (opcional): linear start->end em 'entropy_decay_episodes'
+    ent_start = float(train_cfg.get("entropy_coef_start", ppo_cfg.entropy_coef))
+    ent_end = float(train_cfg.get("entropy_coef_end", ent_start))
+    ent_decay_episodes = int(train_cfg.get("entropy_decay_episodes", episodes))
 
     for episode in range(1, episodes + 1):
+        # atualiza coeficiente de entropia conforme agenda
+        if ent_decay_episodes > 0:
+            progress = min(1.0, episode / float(ent_decay_episodes))
+            current_entropy_coef = ent_start + (ent_end - ent_start) * progress
+            trainer.cfg.entropy_coef = float(current_entropy_coef)
+        else:
+            current_entropy_coef = trainer.cfg.entropy_coef
         metrics = trainer.train_step(env, rollout_steps)
+
+        greedy_equity = None
+        if eval_every > 0 and episode % eval_every == 0:
+            greedy_equity = _greedy_eval()
+            if greedy_equity == greedy_equity and greedy_equity > best_greedy:  # not NaN
+                best_greedy = greedy_equity
+                torch.save(policy.state_dict(), best_path)
+                print(f"[eval] Novo melhor greedy_equity={best_greedy:.2f} salvo em {best_path}")
+
+        _append_metrics(episode, metrics, greedy_equity, entropy_coef_val=current_entropy_coef)
+
+        if plot_every > 0 and episode % plot_every == 0:
+            _plot_metrics()
+            _plot_usage(window=int(train_cfg.get("usage_window", 100)))
+
         if episode % 10 == 0:
             ckpt_path = outdir / f"moe_policy_ep{episode}.pt"
             torch.save(policy.state_dict(), ckpt_path)
-        if episode % 5 == 0:
+        if episode % log_every == 0:
             print(f"Episode {episode}: {metrics}")
 
     final_path = outdir / "moe_policy_final.pt"
