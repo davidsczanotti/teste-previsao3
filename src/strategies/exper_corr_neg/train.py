@@ -218,7 +218,10 @@ def main() -> None:
             ax.set_xticks(range(len(cols)))
             ax.set_xticklabels(cols, rotation=45)
             ax.set_ylim(0, 1)
-            ax.set_title(f"Expert usage (média das últimas {len(tail)} execuções)")
+            last_episode = int(tail["episode"].iloc[-1]) if "episode" in tail.columns and not tail.empty else 0
+            ax.set_title(
+                f"Expert usage (média das últimas {len(tail)} execuções — até ep {last_episode})"
+            )
             fig.tight_layout()
             fig.savefig(outdir / "expert_usage.png", dpi=120)
             plt.close(fig)
@@ -290,7 +293,7 @@ def main() -> None:
 
         if plot_every > 0 and episode % plot_every == 0:
             _plot_metrics()
-            _plot_usage(window=int(train_cfg.get("usage_window", 100)))
+            _plot_usage(window=int(train_cfg.get("usage_window", train_cfg.get("plot_every", 100))))
 
         if episode % 10 == 0:
             ckpt_path = outdir / f"moe_policy_ep{episode}.pt"

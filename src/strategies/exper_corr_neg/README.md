@@ -59,6 +59,13 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   ```
   Artefatos: `src/strategies/exper_corr_neg/reports/train/`
 
+- Atualização automática de relatórios durante o treino
+  - A cada `train.plot_every` episódios o treino atualiza, em sincronia:
+    - `metrics.csv` e `metrics.png` (losses, entropy/balance, rewards, greedy equity)
+    - `expert_usage.png` (média dos últimos `train.usage_window` episódios)
+  - Se `train.usage_window` não estiver definido, ele usa o mesmo valor de `train.plot_every` por padrão.
+  - Sugestão simples: defina `plot_every` = `usage_window` (ex.: 25) no `config.json` para manter tudo sincronizado.
+
 - Visualização do backtest (preço + ações + equity)
   ```bash
   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize
@@ -70,6 +77,12 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize_gating
   ```
   Artefatos: `gating_trace.csv`, `gating_heatmap.png` (com marcas de drawdown/ruína) e `gating_usage.png`.
+
+- (Opcional) Regerar gráficos sem treinar
+  ```bash
+  BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.make_reports
+  ```
+  Lê o `metrics.csv` atual e atualiza `metrics.png` e `expert_usage.png` respeitando `train.plot_every` e `train.usage_window`.
 
 - Walk‑Forward (treina por janela e valida OOS)
   ```bash

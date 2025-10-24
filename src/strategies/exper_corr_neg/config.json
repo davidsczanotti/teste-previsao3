@@ -42,7 +42,7 @@
     "batch_size": 512
   },
   "train": {
-    "episodes": 500000,
+    "episodes": 5000,
     "rollout_steps": 2048,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/train",
