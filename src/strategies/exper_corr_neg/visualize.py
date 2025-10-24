@@ -13,7 +13,8 @@ from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
 
 CFG_PATH = Path("src/strategies/exper_corr_neg/config.json")
-MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt")
+FINAL_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt")
+BEST_MODEL_PATH = Path("src/strategies/exper_corr_neg/reports/train/moe_policy_best_eval.pt")
 OUT_PATH = Path("src/strategies/exper_corr_neg/reports/train/visual_backtest.png")
 
 
@@ -28,8 +29,15 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
         temperature=model_cfg.get("temperature", 0.7),
         top_k=model_cfg.get("top_k", 2),
     )
-    state_dict = torch.load(MODEL_PATH, map_location="cpu")
+    # Preferir o melhor modelo salvo; se não existir, usar o final
+    chosen_path = BEST_MODEL_PATH if BEST_MODEL_PATH.exists() else FINAL_MODEL_PATH
+    if not chosen_path.exists():
+        raise FileNotFoundError(
+            f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH}. Rode o treino antes."
+        )
+    state_dict = torch.load(chosen_path, map_location="cpu")
     policy.load_state_dict(state_dict)
+    print(f"[visualize] Carregado modelo: {chosen_path}")
     policy.eval()
     return policy
 
@@ -52,11 +60,6 @@ def _run_policy(env: BTCMixtureEnv, policy: MoEPolicy) -> Tuple[np.ndarray, np.n
 
 
 def main() -> None:
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"Modelo não encontrado em {MODEL_PATH}. Rode o treino antes de visualizar."
-        )
-
     cfg = json.loads(CFG_PATH.read_text())
 
     # usa janela curta por padrão para ficar didático/rápido
@@ -104,4 +107,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
