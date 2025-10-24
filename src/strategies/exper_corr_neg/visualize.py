@@ -35,9 +35,16 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
         raise FileNotFoundError(
             f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH}. Rode o treino antes."
         )
+    # Carregamento tolerante: se o checkpoint for de outra arquitetura, faz load parcial
     state_dict = torch.load(chosen_path, map_location="cpu")
-    policy.load_state_dict(state_dict)
-    print(f"[visualize] Carregado modelo: {chosen_path}")
+    model_state = policy.state_dict()
+    filtered = {k: v for k, v in state_dict.items() if k in model_state and model_state[k].shape == v.shape}
+    missing = [k for k in model_state.keys() if k not in filtered]
+    policy.load_state_dict(filtered, strict=False)
+    loaded_frac = f"{len(filtered)}/{len(model_state)}"
+    print(f"[visualize] Carregado (parcial={loaded_frac}) de {chosen_path}")
+    if missing:
+        print("[visualize] Aviso: pesos ignorados por incompatibilidade (arquitetura mudou). Recomenda-se treinar novamente.")
     policy.eval()
     return policy
 
