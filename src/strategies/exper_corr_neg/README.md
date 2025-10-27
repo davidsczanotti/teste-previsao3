@@ -49,6 +49,7 @@ Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)
 - `pbt`: parâmetros da população (tamanho, rounds, episódios por round, paralelismo, threads, checkpoint inicial e se o campeão deve ser promovido automaticamente para `moe_policy_final.pt`)
 - `walk_forward`: agenda (dias de treino/val/step), episódios por janela, device, diretório
+- `docs`: descrições em português para cada parâmetro (apenas leitura humana; o código ignora este bloco)
 
 Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de flags.
 
