@@ -4,7 +4,7 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
 
 ## Decisões-chave
 - Ativo/timeframe: BTCUSDT 1h, desde ~2017 (cache local `data/klines_cache.db`).
-- Ambiente e ações: `{short, flat, long}` com capital lógico inicial de 1000, alavancagem configurável, stops móveis por ATR, penalidade de turnover e encerramento antecipado por piso de equity ou drawdown máximo. As janelas de treino podem iniciar em pontos aleatórios (`random_start`) para evitar viés de começo de série.
+- Ambiente e ações: `{short, flat, long}` com capital lógico inicial de 1000, alavancagem configurável, stops móveis por ATR, trailing adicional por pico/vale de lucro e teto de notional por trade (1000 USD), penalidade de turnover e encerramento antecipado por piso de equity ou drawdown máximo. As janelas de treino podem iniciar em pontos aleatórios (`random_start`) para evitar viés de começo de série.
 - MoE (PyTorch): 6 especialistas pequenos + gating com softmax (temperatura ajustável) e top‑k esparso. Regularização de balanceamento mantém o uso distribuído.
   - Trend — EMAs, Donchian, momentum
   - Mean‑Reversion — RSI, Bollinger, z‑score
@@ -44,6 +44,7 @@ src/strategies/exper_corr_neg/
 ## Configuração (sem flags)
 Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
 - `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown, `accounting_mode` (`"mtm"` evita dupla contagem de PnL) e janela/aleatoriedade de início
+  - Novos: `max_trade_notional` (teto em USD por trade; default 1000), `profit_trail_pct` (percentual para trailing por lucro sobre pico/vale; ex. 0.02 = 2%). O trailing por lucro complementa o stop/trailing por ATR, mantendo stop loss ativo.
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)

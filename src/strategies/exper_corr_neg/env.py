@@ -59,6 +59,9 @@ class EnvConfig:
     dynamic_position: bool = False
     random_start: bool = False
     window_bars: int = 0
+    # Novos campos de controle de risco/execução
+    max_trade_notional: float = 1000.0  # teto em USD por trade
+    profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
 
 
 class BTCMixtureEnv(gym.Env):
@@ -71,6 +74,9 @@ class BTCMixtureEnv(gym.Env):
         df: pd.DataFrame,
         features: pd.DataFrame,
         config: EnvConfig,
+        *,
+        norm_mean: Optional[pd.Series] = None,
+        norm_std: Optional[pd.Series] = None,
     ) -> None:
         assert len(df) == len(features), "Price and feature data misaligned"
         self.df = df.reset_index(drop=True)
@@ -89,13 +95,18 @@ class BTCMixtureEnv(gym.Env):
         self._pos_size: float = 0.0
         self._entry_price: float = 0.0
         self._trailing: Optional[float] = None
+        self._peak_price: Optional[float] = None    # maior preço desde a entrada (long)
+        self._trough_price: Optional[float] = None  # menor preço desde a entrada (short)
         self._equity: float = self.cfg.init_equity
         self._cash: float = self.cfg.init_equity
         self._peak_equity: float = self.cfg.init_equity
         self._drawdown_counter: int = 0
         self._step = 0
-        self._norm_mean = features.mean()
-        self._norm_std = features.std().replace(0.0, 1.0)
+        # Normalização: permite injetar estatísticas pré-ajustadas (ex.: do treino)
+        self._norm_mean = features.mean() if norm_mean is None else norm_mean
+        std_series = features.std().replace(0.0, 1.0) if norm_std is None else norm_std
+        # evita divisões por zero
+        self._norm_std = std_series.replace(0.0, 1.0)
         self._start_idx: int = 0
         self._end_idx: int = len(self.df)
 
@@ -115,6 +126,8 @@ class BTCMixtureEnv(gym.Env):
         self._pos_size = 0.0
         self._entry_price = 0.0
         self._trailing = None
+        self._peak_price = None
+        self._trough_price = None
         self._equity = self.cfg.init_equity
         self._cash = self.cfg.init_equity
         self._peak_equity = self.cfg.init_equity
@@ -203,6 +216,8 @@ class BTCMixtureEnv(gym.Env):
         self._pos_size = 0.0
         self._entry_price = 0.0
         self._trailing = None
+        self._peak_price = None
+        self._trough_price = None
         mode = (self.cfg.accounting_mode or "mtm").lower()
         if mode == "legacy":
             return pnl - cost
@@ -214,8 +229,12 @@ class BTCMixtureEnv(gym.Env):
         self._pos_size = self._compute_position_size(price)
         if pos > 0:
             self._trailing = price - self.cfg.stop_atr_mult * atr
+            self._peak_price = price
+            self._trough_price = None
         else:
             self._trailing = price + self.cfg.stop_atr_mult * atr
+            self._trough_price = price
+            self._peak_price = None
         cost = self._transaction_cost(price, self._pos_size)
         return -cost
 
@@ -225,17 +244,37 @@ class BTCMixtureEnv(gym.Env):
         if self._pos == 0 or self._trailing is None:
             return 0.0
         reward_adj = 0.0
+        # Atualiza trailing combinando ATR e trailing por lucro (pico/vale)
+        ptp = max(0.0, float(self.cfg.profit_trail_pct))
         if self._pos > 0:
-            self._trailing = max(self._trailing, next_price - self.cfg.trail_atr_mult * next_atr)
+            # Long: stop é um piso; sobe com ATR e com o pico de preço
+            atr_floor = next_price - self.cfg.trail_atr_mult * next_atr
+            if self._peak_price is None:
+                self._peak_price = next_high
+            else:
+                self._peak_price = max(self._peak_price, next_high)
+            profit_floor = self._peak_price * (1.0 - ptp) if ptp > 0.0 else -np.inf
+            self._trailing = max(self._trailing, atr_floor, profit_floor)
+            # trailing não pode ultrapassar o preço atual para cima (piso < preço)
+            self._trailing = min(self._trailing, next_price)
             if next_low <= self._trailing:
-                stop_price = self._trailing
+                stop_price = float(self._trailing)
                 diff = self._pos_size * (stop_price - next_price)
-                reward_adj += diff  # adjust PnL to stop execution price
+                reward_adj += diff  # ajustar PnL para o preço de stop
                 reward_adj += self._close_position(stop_price)
         else:
-            self._trailing = min(self._trailing, next_price + self.cfg.trail_atr_mult * next_atr)
+            # Short: stop é um teto; desce com ATR e com o vale de preço
+            atr_ceiling = next_price + self.cfg.trail_atr_mult * next_atr
+            if self._trough_price is None:
+                self._trough_price = next_low
+            else:
+                self._trough_price = min(self._trough_price, next_low)
+            profit_ceiling = self._trough_price * (1.0 + ptp) if ptp > 0.0 else np.inf
+            self._trailing = min(self._trailing, atr_ceiling, profit_ceiling)
+            # trailing não pode ficar abaixo do preço atual para baixo (teto > preço)
+            self._trailing = max(self._trailing, next_price)
             if next_high >= self._trailing:
-                stop_price = self._trailing
+                stop_price = float(self._trailing)
                 diff = self._pos_size * (next_price - stop_price)
                 reward_adj += diff
                 reward_adj += self._close_position(stop_price)
@@ -246,8 +285,13 @@ class BTCMixtureEnv(gym.Env):
         return feats.values.astype(np.float32)
 
     def _compute_position_size(self, price: float) -> float:
+        max_notional = max(0.0, float(getattr(self.cfg, "max_trade_notional", 1000.0)))
+        px = max(price, 1e-9)
         if not self.cfg.dynamic_position:
-            return self.cfg.position_size
+            # cap por notional: min(position_size, max_notional/preço)
+            cap_size = max_notional / px if max_notional > 0 else float("inf")
+            return float(min(self.cfg.position_size, cap_size))
         equity = max(self._equity, 0.0)
         notional = equity * max(self.cfg.leverage, 0.0)
-        return notional / max(price, 1e-9)
+        capped = min(notional, max_notional) if max_notional > 0 else notional
+        return capped / px

@@ -83,7 +83,17 @@ def main() -> None:
         val_prices = price_df.iloc[window.val_start : window.val_end]
         val_feats = feat_df.iloc[window.val_start : window.val_end]
 
-        env = BTCMixtureEnv(train_prices, train_feats, env_cfg)
+        # Ajusta normalização com base APENAS no treino deste window
+        train_norm_mean = train_feats.mean()
+        train_norm_std = train_feats.std().replace(0.0, 1.0)
+
+        env = BTCMixtureEnv(
+            train_prices,
+            train_feats,
+            env_cfg,
+            norm_mean=train_norm_mean,
+            norm_std=train_norm_std,
+        )
         input_dim = train_feats.shape[1]
         policy = MoEPolicy(
             input_dim=input_dim,
@@ -101,22 +111,73 @@ def main() -> None:
         for episode in range(episodes):
             trainer.train_step(env, rollout_steps)
 
-        # Evaluate on validation
-        val_env = BTCMixtureEnv(val_prices, val_feats, env_cfg)
-        obs = torch.tensor(val_env.reset(), dtype=torch.float32, device=device)
-        rewards = []
-        done = False
-        while not done:
-            dist, _, _ = policy(obs.unsqueeze(0))
-            action = torch.argmax(dist.probs, dim=-1).item()
-            next_obs, reward, done, info = val_env.step(action)
-            rewards.append(reward)
-            obs = torch.tensor(next_obs, dtype=torch.float32, device=device)
+        # Evaluate on validation (sem vazamento): usa normalização do treino
+        def _eval_env(policy: MoEPolicy, env: BTCMixtureEnv) -> dict:
+            obs = torch.tensor(env.reset(), dtype=torch.float32, device=device)
+            rewards = []
+            done = False
+            trades = 0
+            prev_pos = 0
+            while not done:
+                dist, _, _ = policy(obs.unsqueeze(0))
+                action = torch.argmax(dist.probs, dim=-1).item()
+                desired_pos = action - 1
+                if desired_pos != prev_pos and desired_pos != 0:
+                    trades += 1
+                next_obs, reward, done, info = env.step(action)
+                rewards.append(reward)
+                obs = torch.tensor(next_obs, dtype=torch.float32, device=device)
+                prev_pos = desired_pos
+            return {
+                "pnl": float(np.sum(rewards)),
+                "equity_end": float(info.get("equity", 0.0)),
+                "trades": int(trades),
+            }
+
+        val_env_train_norm = BTCMixtureEnv(
+            val_prices,
+            val_feats,
+            env_cfg,
+            norm_mean=train_norm_mean,
+            norm_std=train_norm_std,
+        )
+        res_train_norm = _eval_env(policy, val_env_train_norm)
+
+        # Evaluate on validation com normalização por janelão de validação (pode vazar info)
+        val_env_val_norm = BTCMixtureEnv(val_prices, val_feats, env_cfg)
+        res_val_norm = _eval_env(policy, val_env_val_norm)
+
+        # Lag test: usa features defasadas em 1 barra para ver sensibilidade a timing
+        lag_feats = val_feats.shift(1).dropna()
+        if not lag_feats.empty:
+            lag_prices = val_prices.iloc[val_feats.shape[0] - lag_feats.shape[0] :]
+            val_env_lag = BTCMixtureEnv(
+                lag_prices,
+                lag_feats,
+                env_cfg,
+                norm_mean=train_norm_mean,
+                norm_std=train_norm_std,
+            )
+            res_lag = _eval_env(policy, val_env_lag)
+        else:
+            res_lag = {"pnl": 0.0, "equity_end": 0.0, "trades": 0}
+
+        # Heurísticas simples de alerta (não-fatais):
+        norm_delta = res_val_norm["equity_end"] - res_train_norm["equity_end"]
+        norm_leak_suspected = norm_delta > 0.05 * max(env_cfg.init_equity, 1e-6)
+        lag_drop = res_train_norm["equity_end"] - res_lag["equity_end"]
+        timing_suspected = lag_drop > 0.1 * max(env_cfg.init_equity, 1e-6)
+
         histories.append(
             {
                 "window": idx,
-                "pnl": float(np.sum(rewards)),
-                "equity_end": info.get("equity", 0.0),
+                "train_norm": res_train_norm,
+                "val_norm": res_val_norm,
+                "lag1": res_lag,
+                "norm_delta_equity": norm_delta,
+                "norm_leak_suspected": bool(norm_leak_suspected),
+                "lag_equity_drop": lag_drop,
+                "timing_suspected": bool(timing_suspected),
             }
         )
 

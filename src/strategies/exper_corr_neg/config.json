@@ -14,7 +14,9 @@
     "turnover_penalty": 1.0,
     "dynamic_position": true,
     "random_start": true,
-    "window_bars": 8760
+    "window_bars": 8760,
+    "max_trade_notional": 1000.0,
+    "profit_trail_pct": 0.02
   },
   "model": {
     "expert_hidden": [64, 32],
