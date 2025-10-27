@@ -60,6 +60,15 @@
     "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 5000
   },
+  "pbt": {
+    "pop": 2,
+    "rounds": 3,
+    "episodes": 1000,
+    "concurrency": 2,
+    "threads": 2,
+    "seed_checkpoint": "src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt",
+    "promote_to_root": true
+  },
   "walk_forward": {
     "train_days": 720,
     "val_days": 180,

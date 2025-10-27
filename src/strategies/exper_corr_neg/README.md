@@ -47,6 +47,7 @@ Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações
+- `pbt`: parâmetros da população (tamanho, rounds, episódios por round, paralelismo, threads, checkpoint inicial e se o campeão deve ser promovido automaticamente para `moe_policy_final.pt`)
 - `walk_forward`: agenda (dias de treino/val/step), episódios por janela, device, diretório
 
 Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de flags.
@@ -83,6 +84,63 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.make_reports
   ```
   Lê o `metrics.csv` atual e atualiza `metrics.png` e `expert_usage.png` respeitando `train.plot_every` e `train.usage_window`.
+
+## Treino em População (PBT‑lite)
+- Ideia: rodar 2–3 treinamentos em paralelo (seeds/hipers levemente mutados), medir `greedy_equity` e promover um campeão por rodada. Os demais retomam do campeão no próximo round.
+- Comando base (2 runs × 3 rounds × 400 episódios; WSL/CPU):
+  ```bash
+  BINANCE_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PYTORCH_NUM_THREADS=2 \
+    poetry run python -m src.strategies.exper_corr_neg.scripts.pop_runner \
+      --base src/strategies/exper_corr_neg/config.json \
+      --pop 2 --rounds 3 --episodes 400 --concurrency 2
+  ```
+- Para começar a população do seu “cérebro” atual (resume do checkpoint):
+  ```bash
+  BINANCE_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PYTORCH_NUM_THREADS=2 \
+    poetry run python -m src.strategies.exper_corr_neg.scripts.pop_runner \
+      --base src/strategies/exper_corr_neg/config.json \
+      --pop 2 --rounds 3 --episodes 400 --concurrency 2 \
+      --seed_checkpoint src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt \
+      --promote_to_root
+  ```
+- Com os parâmetros definidos em `pbt` dentro do `config.json`, dá para rodar sem flags adicionais:
+  ```bash
+  BINANCE_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PYTORCH_NUM_THREADS=2 \
+    poetry run python -m src.strategies.exper_corr_neg.scripts.pop_runner \
+      --base src/strategies/exper_corr_neg/config.json
+  ```
+- Se preferir, você ainda pode sobrescrever valores pela linha de comando (ex.: `--rounds 5`).
+- Com `--promote_to_root` (ou `"promote_to_root": true` em `pbt`), o checkpoint do campeão de cada round é copiado automaticamente para `src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt`, permitindo retomar o treino padrão diretamente do melhor modelo da população.
+- Para orquestrar tudo automaticamente (rodar PBT, promover campeão e continuar o treino principal), use o script abaixo:
+  ```bash
+  BINANCE_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PYTORCH_NUM_THREADS=2 \
+    poetry run python -m src.strategies.exper_corr_neg.scripts.auto_cycle \
+      --base src/strategies/exper_corr_neg/config.json
+  ```
+- O `auto_cycle` roda o `pop_runner` com os parâmetros definidos em `pbt`, verifica se o `scoreboard` ganhou um novo campeão, e — caso sim — promove o checkpoint (respeitando `promote_to_root`) e dispara `train.py` para continuar o “cérebro” oficial. Use `--skip-train` se quiser apenas promover o campeão e rodar o treino principal depois.
+- Artefatos da população:
+  - `src/strategies/exper_corr_neg/reports/train/pop/run_{i}/round_{r}/` — outdirs por run e round
+  - `src/strategies/exper_corr_neg/reports/train/pop/configs/` — configs geradas por round
+  - `src/strategies/exper_corr_neg/reports/train/pop/scoreboard.json` — histórico de campeões
+
+Observações
+- Limite `concurrency` e as variáveis de threads para evitar competição de CPU (2 é seguro nesta máquina).
+- O runner promove um campeão apenas quando a avaliação “sem ruína” bate o melhor `greedy_equity` do round.
+
+## Limpeza de `reports/train`
+- Script utilitário para enxugar a pasta de treino e manter somente o essencial (modelos finais/recordistas, últimas `epXX`, métricas e gráficos):
+  ```bash
+  poetry run python -m src.strategies.exper_corr_neg.scripts.clean_train_reports \
+    --dir src/strategies/exper_corr_neg/reports/train \
+    --keep-ep 3
+  ```
+- Mantém por padrão:
+  - `moe_policy_best_eval.pt` (se houver)
+  - `moe_policy_final.pt` (alias atualizado por `final_every`)
+  - as últimas `N` (`--keep-ep`) `moe_policy_ep*.pt`
+  - `metrics.csv`, `metrics.png`, `expert_usage.png`
+  - `gating_heatmap.png`, `gating_usage.png` (se existirem)
+- Use `--dry-run` para listar o que seria removido sem deletar.
 
 - Walk‑Forward (treina por janela e valida OOS)
   ```bash
