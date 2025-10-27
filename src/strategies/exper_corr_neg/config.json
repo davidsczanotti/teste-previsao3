@@ -42,7 +42,7 @@
     "batch_size": 512
   },
   "train": {
-    "episodes": 5000,
+    "episodes": 10000,
     "rollout_steps": 2048,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/train",
@@ -54,6 +54,8 @@
     "eval_days": 90,
     "usage_window": 100,
     "lb_coef": 0.02,
+    "ckpt_every": 10,
+    "final_every": 500,
     "entropy_coef_start": 0.01,
     "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 5000

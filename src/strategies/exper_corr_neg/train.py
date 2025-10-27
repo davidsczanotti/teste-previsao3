@@ -85,6 +85,8 @@ def main() -> None:
     plot_every = int(train_cfg.get("plot_every", 50))
     eval_every = int(train_cfg.get("eval_every", 50))
     eval_days = int(train_cfg.get("eval_days", 90))
+    ckpt_every = int(train_cfg.get("ckpt_every", 10))
+    final_every = int(train_cfg.get("final_every", 0))  # 0 = só no fim
 
     metrics_path = outdir / "metrics.csv"
     usage_cols = [f"usage_e{i}" for i in range(policy.num_experts)]
@@ -318,9 +320,12 @@ def main() -> None:
             _plot_metrics()
             _plot_usage(window=int(train_cfg.get("usage_window", train_cfg.get("plot_every", 100))))
 
-        if episode % 10 == 0:
+        if ckpt_every > 0 and episode % ckpt_every == 0:
             ckpt_path = outdir / f"moe_policy_ep{episode}.pt"
             torch.save(policy.state_dict(), ckpt_path)
+        if final_every > 0 and episode % final_every == 0:
+            # alias de conveniência para scripts que buscam 'final'
+            torch.save(policy.state_dict(), outdir / "moe_policy_final.pt")
         if episode % log_every == 0:
             print(f"Episode {actual_episode} (run {episode}): {metrics}")
 
