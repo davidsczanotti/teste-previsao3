@@ -43,10 +43,10 @@ src/strategies/exper_corr_neg/
 
 ## Configuração (sem flags)
 Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
-- `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown e janela/aleatoriedade de início
+- `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown, `accounting_mode` (`"mtm"` evita dupla contagem de PnL) e janela/aleatoriedade de início
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
-- `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações
+- `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)
 - `pbt`: parâmetros da população (tamanho, rounds, episódios por round, paralelismo, threads, checkpoint inicial e se o campeão deve ser promovido automaticamente para `moe_policy_final.pt`)
 - `walk_forward`: agenda (dias de treino/val/step), episódios por janela, device, diretório
 
@@ -118,6 +118,7 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
       --base src/strategies/exper_corr_neg/config.json
   ```
 - O `auto_cycle` roda o `pop_runner` com os parâmetros definidos em `pbt`, verifica se o `scoreboard` ganhou um novo campeão, e — caso sim — promove o checkpoint (respeitando `promote_to_root`) e dispara `train.py` para continuar o “cérebro” oficial. Use `--skip-train` se quiser apenas promover o campeão e rodar o treino principal depois.
+- Toda execução de `train.py` registra um manifesto em `src/strategies/exper_corr_neg/reports/train/run_manifest.json` com hash do config, seed e parâmetros de avaliação/risco (quando disponível, também o commit Git). Use esse manifesto como diário das séries.
 - Artefatos da população:
   - `src/strategies/exper_corr_neg/reports/train/pop/run_{i}/round_{r}/` — outdirs por run e round
   - `src/strategies/exper_corr_neg/reports/train/pop/configs/` — configs geradas por round

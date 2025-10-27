@@ -49,6 +49,7 @@ class EnvConfig:
     position_size: float = 0.1  # BTC
     stop_atr_mult: float = 2.0
     trail_atr_mult: float = 1.0
+    accounting_mode: str = "mtm"  # "mtm" or "legacy"
     init_equity: float = 1000.0
     leverage: float = 1.0
     equity_floor_pct: float = 0.0
@@ -75,6 +76,10 @@ class BTCMixtureEnv(gym.Env):
         self.df = df.reset_index(drop=True)
         self.features = features.reset_index(drop=True)
         self.cfg = config
+        mode = (self.cfg.accounting_mode or "mtm").lower()
+        if mode not in {"mtm", "legacy"}:
+            raise ValueError(f"accounting_mode inválido: {self.cfg.accounting_mode}")
+        self.cfg.accounting_mode = mode
         self.action_space = SpacesDiscrete(3)  # 0 short, 1 flat, 2 long
         self.observation_space = SpacesBox(
             low=-np.inf, high=np.inf, shape=(features.shape[1],), dtype=np.float32
@@ -198,7 +203,10 @@ class BTCMixtureEnv(gym.Env):
         self._pos_size = 0.0
         self._entry_price = 0.0
         self._trailing = None
-        return pnl - cost
+        mode = (self.cfg.accounting_mode or "mtm").lower()
+        if mode == "legacy":
+            return pnl - cost
+        return -cost
 
     def _open_position(self, pos: int, price: float, atr: float) -> float:
         self._pos = pos

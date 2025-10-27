@@ -4,7 +4,12 @@ import argparse
 import json
 from pathlib import Path
 import csv
+import hashlib
+import random
+import subprocess
+from datetime import datetime, timezone
 
+import numpy as np
 import torch
 
 from .data import load_btc_1h, prepare_dataset
@@ -14,6 +19,67 @@ from .trainer import PPOTrainer
 
 
 DEFAULT_CONFIG = Path("src/strategies/exper_corr_neg/config.json")
+MANIFEST_PATH = Path("src/strategies/exper_corr_neg/reports/train/run_manifest.json")
+
+
+def _set_seeds(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():  # pragma: no cover - depende de GPU
+        torch.cuda.manual_seed_all(seed)
+
+
+def _record_manifest(config: dict, cfg_path: Path, seed: int) -> None:
+    env_cfg = config.get("env", {})
+    train_cfg = config.get("train", {})
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "config_path": str(cfg_path),
+        "config_hash": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
+        "seed": seed,
+        "accounting_mode": env_cfg.get("accounting_mode", "mtm"),
+        "eval": {
+            "eval_every": train_cfg.get("eval_every"),
+            "eval_days": train_cfg.get("eval_days"),
+            "random_start": env_cfg.get("random_start"),
+            "window_bars": env_cfg.get("window_bars"),
+        },
+        "risk": {
+            "equity_floor_pct": env_cfg.get("equity_floor_pct"),
+            "max_drawdown_pct": env_cfg.get("max_drawdown_pct"),
+            "drawdown_kill_bars": env_cfg.get("drawdown_kill_bars"),
+            "leverage": env_cfg.get("leverage"),
+            "dynamic_position": env_cfg.get("dynamic_position"),
+            "stop_atr_mult": env_cfg.get("stop_atr_mult"),
+            "trail_atr_mult": env_cfg.get("trail_atr_mult"),
+        },
+    }
+
+    try:
+        commit = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            .decode()
+            .strip()
+        )
+        if commit:
+            entry["git_commit"] = commit
+    except Exception:  # pragma: no cover - git pode não estar disponível
+        pass
+
+    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if MANIFEST_PATH.exists():
+        try:
+            data = json.loads(MANIFEST_PATH.read_text())
+            if not isinstance(data, list):
+                data = [data]
+        except Exception:
+            data = []
+    else:
+        data = []
+
+    data.append(entry)
+    MANIFEST_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +96,11 @@ def main() -> None:
     args = parse_args()
     cfg_path = Path(args.config)
     config = json.loads(cfg_path.read_text())
+
+    train_cfg = config.get("train", {})
+    seed = int(train_cfg.get("seed", 42))
+    _set_seeds(seed)
+    _record_manifest(config, cfg_path, seed)
 
     df = load_btc_1h(days=3650)
     dataset = prepare_dataset(df)
@@ -53,7 +124,6 @@ def main() -> None:
         top_k=model_cfg.get("top_k", 2),
     )
     ppo_cfg = PPOConfig(**config.get("ppo", {}))
-    train_cfg = config.get("train", {})
     trainer = PPOTrainer(
         policy,
         ppo_cfg,
