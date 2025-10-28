@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -74,10 +75,30 @@ def main() -> None:
     outdir = Path(wf_cfg.get("outdir", "reports/exper_corr_neg/walk_forward"))
     outdir.mkdir(parents=True, exist_ok=True)
 
+    progress_path = outdir / "wf_progress.log"
+    progress_path.write_text("")
+
+    def _log(msg: str) -> None:
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        line = f"{timestamp} {msg}"
+        print(line, flush=True)
+        with progress_path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
     device = torch.device(wf_cfg.get("device", "cpu"))
     histories = []
+    total_windows = len(windows)
+
+    _log(
+        f"[WF] Iniciando walk-forward com {total_windows} janelas "
+        f"(episodes={wf_cfg.get('episodes', 200)}, rollout_steps={wf_cfg.get('rollout_steps', 2048)})"
+    )
 
     for idx, window in enumerate(windows, start=1):
+        _log(
+            f"[WF] Janela {idx}/{total_windows} — treino [{window.train_start}:{window.train_end}) "
+            f"val [{window.val_start}:{window.val_end})"
+        )
         train_prices = price_df.iloc[window.train_start : window.train_end]
         train_feats = feat_df.iloc[window.train_start : window.train_end]
         val_prices = price_df.iloc[window.val_start : window.val_end]
@@ -110,6 +131,8 @@ def main() -> None:
         rollout_steps = int(wf_cfg.get("rollout_steps", 2048))
         for episode in range(episodes):
             trainer.train_step(env, rollout_steps)
+            if (episode + 1) % 20 == 0 or episode + 1 == episodes:
+                _log(f"[WF] Janela {idx}/{total_windows} — episódio {episode + 1}/{episodes}")
 
         # Evaluate on validation (sem vazamento): usa normalização do treino
         def _eval_env(policy: MoEPolicy, env: BTCMixtureEnv) -> dict:
@@ -183,10 +206,15 @@ def main() -> None:
 
         ckpt = outdir / f"policy_window{idx}.pt"
         torch.save(policy.state_dict(), ckpt)
+        _log(
+            "[WF] Janela "
+            f"{idx}/{total_windows} concluída — eq_train={res_train_norm['equity_end']:.2f} "
+            f"eq_val={res_val_norm['equity_end']:.2f} trades_val={res_train_norm['trades']}"
+        )
 
     summary_path = outdir / "wf_summary.json"
     summary_path.write_text(json.dumps(histories, indent=2))
-    print(f"Walk-forward concluído. Resultados em {summary_path}")
+    _log(f"[WF] Concluído. Resultados em {summary_path}")
 
 
 if __name__ == "__main__":

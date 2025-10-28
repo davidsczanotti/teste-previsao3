@@ -152,6 +152,31 @@ Observações
   ```
   Artefatos: `src/strategies/exper_corr_neg/reports/walk_forward/`
 
+## Reinício completo (do zero)
+Use este fluxo quando quiser reiniciar totalmente o experimento.
+
+1. Limpe os artefatos anteriores:
+   ```bash
+   poetry run python -m scripts.reset_exper_corr_neg_reports --force
+   ```
+   (remova `--force` se preferir confirmar manualmente).
+2. Garanta que o cache tenha os dados necessários (apenas quando precisar reatualizar):
+   ```bash
+   poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+   ```
+3. Exporte o modo offline e rode o treino principal:
+   ```bash
+   BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+     poetry run python -m src.strategies.exper_corr_neg.train
+   ```
+4. Gere rapidamente métricas e gráficos:
+   ```bash
+   poetry run python -m src.strategies.exper_corr_neg.make_reports
+   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize
+   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.visualize_gating
+   ```
+5. (Opcional) Execute a população (`scripts.auto_cycle`) e o walk-forward para validar OOS.
+
 ## Avaliação e Relatórios (AGENTS.md)
 - Backtest com custos e stop móvel; export de trades (quando aplicável).
 - Monte Carlo: perturbação por blocos na sequência de trades para distribuição de P&L/PF/MDD.
