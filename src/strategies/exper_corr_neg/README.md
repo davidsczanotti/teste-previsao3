@@ -157,7 +157,7 @@ Use este fluxo quando quiser reiniciar totalmente o experimento.
 
 1. Limpe os artefatos anteriores:
    ```bash
-   poetry run python -m scripts.reset_exper_corr_neg_reports --force
+   poetry run python -m src.strategies.exper_corr_neg.scripts.clean_train_reports --keep-ep 0 --dry-run
    ```
    (remova `--force` se preferir confirmar manualmente).
 2. Garanta que o cache tenha os dados necessários (apenas quando precisar reatualizar):

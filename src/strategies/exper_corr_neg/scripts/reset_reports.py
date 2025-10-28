@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 """
-Limpa todos os artefatos da estratégia exper_corr_neg para começar do zero.
+Reset completo dos artefatos de exper_corr_neg.
 
 Uso:
-    poetry run python -m scripts.reset_exper_corr_neg_reports
+    poetry run python -m src.strategies.exper_corr_neg.scripts.reset_reports
+    poetry run python -m src.strategies.exper_corr_neg.scripts.reset_reports --force
 
-O script pergunta confirmação antes de apagar:
-- src/strategies/exper_corr_neg/reports/train/
-- src/strategies/exper_corr_neg/reports/walk_forward/
-- src/strategies/exper_corr_neg/reports/train/pop/
-
-Após a limpeza, executa:
-    poetry run python -m src.strategies.exper_corr_neg.scripts.clean_train_reports --keep-ep 0
-para recriar a estrutura básica e garantir consistência.
+O script remove:
+  - src/strategies/exper_corr_neg/reports/train/
+  - src/strategies/exper_corr_neg/reports/train/pop/
+  - src/strategies/exper_corr_neg/reports/walk_forward/
+Recria a pasta `reports/train` vazia e executa `clean_train_reports --keep-ep 0`
+para garantir consistência (mesmo sem arquivos).
 """
 
 import argparse
@@ -42,27 +41,23 @@ def prompt_yes_no(message: str) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Reset exper_corr_neg reports directory")
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="não pergunta confirmação (USE COM CUIDADO)",
-    )
+    parser = argparse.ArgumentParser(description="Reseta os artefatos da estratégia exper_corr_neg")
+    parser.add_argument("--force", action="store_true", help="não pede confirmação")
     args = parser.parse_args()
 
-    print("Este script vai apagar TODOS os artefatos em:")
+    print("Este script vai APAGAR todos os artefatos em:")
     print(f"  - {TRAIN_DIR}")
     print(f"  - {POP_DIR}")
     print(f"  - {WF_DIR}")
-    print("Use somente se quiser realmente começar do zero.")
+    print("Use apenas se quiser começar o experimento do zero.")
+
     if not args.force and not prompt_yes_no("Confirma (y/N)? "):
-        print("Abortado.")
+        print("[reset] Abortado pelo usuário.")
         return
 
     remove_path(TRAIN_DIR)
     remove_path(WF_DIR)
 
-    ROOT.mkdir(parents=True, exist_ok=True)
     TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 
     subprocess.run(
@@ -72,13 +67,17 @@ def main() -> None:
             "python",
             "-m",
             "src.strategies.exper_corr_neg.scripts.clean_train_reports",
+            "--dir",
+            str(TRAIN_DIR),
             "--keep-ep",
             "0",
         ],
         check=False,
     )
-    print("[reset] Concluído. Pasta limpa e pronta para novo treino.")
+
+    print("[reset] Concluído. Diretório pronto para novo treinamento.")
 
 
 if __name__ == "__main__":
     main()
+
