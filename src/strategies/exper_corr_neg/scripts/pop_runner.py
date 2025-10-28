@@ -56,6 +56,7 @@ def mutate_cfg(base: Dict[str, Any], seed: int) -> Dict[str, Any]:
     model = cfg.setdefault("model", {})
     train = cfg.setdefault("train", {})
     ppo = cfg.setdefault("ppo", {})
+    train["seed"] = int(seed)
 
     # temperature ±0.2 (limitando entre 0.8 e 2.0)
     temp = float(model.get("temperature", 1.2)) + rnd.uniform(-0.2, 0.2)
