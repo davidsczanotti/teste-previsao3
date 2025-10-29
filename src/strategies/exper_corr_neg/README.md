@@ -171,6 +171,38 @@ Observações
       --keep 2
     ```
 
+- Arquivar configurações e campeões (rastreabilidade)
+  - Automático (recomendado):
+    ```bash
+    poetry run python -m src.strategies.exper_corr_neg.scripts.archive_run --include-checkpoint
+    ```
+    - Gera uma pasta em `src/strategies/exper_corr_neg/reports/runs/<prefix>_<timestamp>` contendo:
+      * `config.json` usado no run
+      * `reports/train/pop/scoreboard.json`
+      * (opcional) `reports/train/moe_policy_final.pt` quando `--include-checkpoint` for usado
+    - Customize o prefixo/destino:
+      ```bash
+      poetry run python -m src.strategies.exper_corr_neg.scripts.archive_run \
+        --prefix campeao --dest /tmp/meu_run --include-checkpoint
+      ```
+  - Fluxo manual (caso precise arquivar em outro formato):
+  1. Crie uma pasta para registrar o run:
+     ```bash
+     mkdir -p src/strategies/exper_corr_neg/reports/runs/$(date +%Y%m%d_%H%M)
+     ```
+  2. Copie o `config.json` e o `scoreboard.json` do PBT:
+     ```bash
+     run_dir=src/strategies/exper_corr_neg/reports/runs/$(date +%Y%m%d_%H%M)
+     mkdir -p "$run_dir"
+     cp src/strategies/exper_corr_neg/config.json "$run_dir/config.json"
+     cp src/strategies/exper_corr_neg/reports/train/pop/scoreboard.json "$run_dir/scoreboard.json"
+     ```
+  3. Opcional: copie o checkpoint do campeão promovido (já está em `reports/train/moe_policy_final.pt`) e outros artefatos relevantes:
+     ```bash
+     cp src/strategies/exper_corr_neg/reports/train/moe_policy_final.pt "$run_dir/moe_policy_final.pt"
+     ```
+  Assim cada run fica registrado com os parâmetros usados e o histórico de campeões.
+
 ## Reinício completo (do zero)
 Use este fluxo quando quiser reiniciar totalmente o experimento.
 
