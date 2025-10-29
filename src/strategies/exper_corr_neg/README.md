@@ -152,6 +152,24 @@ Observações
   ```
   Artefatos: `src/strategies/exper_corr_neg/reports/walk_forward/`
 
+- Limpeza de checkpoints intermediários (`moe_policy_ep*.pt`)
+  ```bash
+  # visualiza o que seria removido (sem apagar nada)
+  poetry run python -m src.strategies.exper_corr_neg.scripts.prune_checkpoints --dry-run
+
+  # remove checkpoints antigos mantendo, por padrão, os 3 mais recentes em cada pasta
+  poetry run python -m src.strategies.exper_corr_neg.scripts.prune_checkpoints
+
+  # mantém somente 1 checkpoint em toda a árvore de train/ e train/pop/
+  poetry run python -m src.strategies.exper_corr_neg.scripts.prune_checkpoints --keep 1
+  ```
+  - Caso queira limpar apenas um diretório específico:
+    ```bash
+    poetry run python -m src.strategies.exper_corr_neg.scripts.prune_checkpoints \
+      --dir src/strategies/exper_corr_neg/reports/train/pop/run_0 \
+      --keep 2
+    ```
+
 ## Reinício completo (do zero)
 Use este fluxo quando quiser reiniciar totalmente o experimento.
 
