@@ -45,6 +45,7 @@ src/strategies/exper_corr_neg/
 Todos os parâmetros ficam em `src/strategies/exper_corr_neg/config.json`:
 - `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown, `accounting_mode` (`"mtm"` evita dupla contagem de PnL) e janela/aleatoriedade de início
   - Novos: `max_trade_notional` (teto em USD por trade; default 1000), `profit_trail_pct` (percentual para trailing por lucro sobre pico/vale; ex. 0.02 = 2%). O trailing por lucro complementa o stop/trailing por ATR, mantendo stop loss ativo.
+  - `idle_penalty_factor`: fator (0 a 1) para aplicar penalidade automática quando o agente fica em cash. A cada candle flat, o ambiente debita `init_equity × fator / window_bars` do reward; com `factor = 1.0` e `window_bars = 8760`, isso equivale a ~US$ 0.11 por hora parado.
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)

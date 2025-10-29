@@ -15,12 +15,19 @@
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 8760,
+    "idle_penalty_factor": 1.0,
     "max_trade_notional": 50.0,
     "profit_trail_pct": 0.0
   },
   "model": {
-    "expert_hidden": [64, 32],
-    "gating_hidden": [64, 32],
+    "expert_hidden": [
+      64,
+      32
+    ],
+    "gating_hidden": [
+      64,
+      32
+    ],
     "num_experts": 6,
     "temperature": 1.4,
     "top_k": 2,
@@ -45,7 +52,7 @@
     "batch_size": 512
   },
   "train": {
-    "episodes": 10000,
+    "episodes": 100000,
     "rollout_steps": 250,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/train",
@@ -98,7 +105,8 @@
       "turnover_penalty": "Penalidade fixa aplicada ao trocar de posição (gira).",
       "dynamic_position": "Se true, o tamanho da posição segue equity × leverage / preço.",
       "random_start": "Se true, cada episódio de treino inicia em um índice aleatório.",
-      "window_bars": "Número de barras usadas por episódio quando random_start=true (0 = série inteira)."
+      "window_bars": "Número de barras usadas por episódio quando random_start=true (0 = série inteira).",
+      "idle_penalty_factor": "Fator multiplicativo da penalidade por ficar em cash (penalidade por candle = init_equity × fator / window_bars)."
     },
     "model": {
       "expert_hidden": "Arquitetura das MLPs dos especialistas.",

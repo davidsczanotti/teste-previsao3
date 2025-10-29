@@ -59,6 +59,7 @@ class EnvConfig:
     dynamic_position: bool = False
     random_start: bool = False
     window_bars: int = 0
+    idle_penalty_factor: float = 0.0
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
@@ -109,6 +110,7 @@ class BTCMixtureEnv(gym.Env):
         self._norm_std = std_series.replace(0.0, 1.0)
         self._start_idx: int = 0
         self._end_idx: int = len(self.df)
+        self._idle_penalty_per_step: float = 0.0
 
     def reset(self) -> np.ndarray:
         total_len = len(self.df)
@@ -133,6 +135,13 @@ class BTCMixtureEnv(gym.Env):
         self._peak_equity = self.cfg.init_equity
         self._drawdown_counter = 0
         self._step = 0
+        self._episode_length = max(1, self._end_idx - self._start_idx)
+        if self.cfg.idle_penalty_factor > 0.0:
+            self._idle_penalty_per_step = (
+                (self.cfg.init_equity * self.cfg.idle_penalty_factor) / float(self._episode_length)
+            )
+        else:
+            self._idle_penalty_per_step = 0.0
         return self._get_obs()
 
     def step(self, action: Action) -> Tuple[np.ndarray, float, bool, dict]:
@@ -171,6 +180,10 @@ class BTCMixtureEnv(gym.Env):
 
         # Update trailing stop
         reward += self._maybe_apply_trailing(next_price, next_low, next_high, next_atr)
+
+        # Penalidade por ficar flat (sem posição)
+        if self._pos == 0 and self._idle_penalty_per_step > 0.0:
+            reward -= self._idle_penalty_per_step
 
         self._cash += reward
         self._equity = self._cash
