@@ -60,6 +60,7 @@ class EnvConfig:
     random_start: bool = False
     window_bars: int = 0
     idle_penalty_factor: float = 0.0
+    hold_bonus_alpha: float = 0.0
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
