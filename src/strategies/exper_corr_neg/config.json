@@ -30,7 +30,7 @@
     ],
     "num_experts": 6,
     "temperature": 1.4,
-    "top_k": 2,
+    "top_k": 3,
     "expert_names": [
       "Trend",
       "MeanRev",
