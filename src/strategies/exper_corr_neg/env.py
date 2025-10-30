@@ -127,6 +127,7 @@ class BTCMixtureEnv(gym.Env):
         self._pos = 0
         self._pos_size = 0.0
         self._entry_price = 0.0
+        self._entry_step = 0
         self._trailing = None
         self._peak_price = None
         self._trough_price = None
@@ -234,12 +235,17 @@ class BTCMixtureEnv(gym.Env):
         mode = (self.cfg.accounting_mode or "mtm").lower()
         if mode == "legacy":
             return pnl - cost
-        return -cost
+        bonus = 0.0
+        if self.cfg.hold_bonus_alpha > 0.0:
+            duration = max(1, self._step - self._entry_step)
+            bonus = self.cfg.hold_bonus_alpha * duration * pnl
+        return -cost + pnl + bonus
 
     def _open_position(self, pos: int, price: float, atr: float) -> float:
         self._pos = pos
         self._entry_price = price
         self._pos_size = self._compute_position_size(price)
+        self._entry_step = self._step
         if pos > 0:
             self._trailing = price - self.cfg.stop_atr_mult * atr
             self._peak_price = price

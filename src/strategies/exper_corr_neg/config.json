@@ -16,6 +16,7 @@
     "random_start": true,
     "window_bars": 8760,
     "idle_penalty_factor": 1.0,
+    "hold_bonus_alpha": 0.001,
     "max_trade_notional": 50.0,
     "profit_trail_pct": 0.0
   },
@@ -30,7 +31,7 @@
     ],
     "num_experts": 6,
     "temperature": 1.4,
-    "top_k": 3,
+    "top_k": 2,
     "expert_names": [
       "Trend",
       "MeanRev",
@@ -53,7 +54,7 @@
   },
   "train": {
     "episodes": 100000,
-    "rollout_steps": 250,
+    "rollout_steps": 1000,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/train",
     "resume": true,
@@ -106,7 +107,8 @@
       "dynamic_position": "Se true, o tamanho da posição segue equity × leverage / preço.",
       "random_start": "Se true, cada episódio de treino inicia em um índice aleatório.",
       "window_bars": "Número de barras usadas por episódio quando random_start=true (0 = série inteira).",
-      "idle_penalty_factor": "Fator multiplicativo da penalidade por ficar em cash (penalidade por candle = init_equity × fator / window_bars)."
+      "idle_penalty_factor": "Fator multiplicativo da penalidade por ficar em cash (penalidade por candle = init_equity × fator / window_bars).",
+      "hold_bonus_alpha": "Fator do bônus/malus ao fechar uma posição: reward extra = alpha × duração × PnL (positivo reforça trades longos lucrativos, negativo penaliza prejuízos prolongados)."
     },
     "model": {
       "expert_hidden": "Arquitetura das MLPs dos especialistas.",

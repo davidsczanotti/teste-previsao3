@@ -1,6 +1,6 @@
 Pares com correlação POSITIVA (confirmação)
 
-Trend técnico + modelo ML de direção
+e0 - Trend técnico + modelo ML de direção
 
 Trend: EMA cross / breakout.
 
@@ -8,7 +8,7 @@ ML: LightGBM com lags, RSI, ATR, ranges, hora do dia.
 
 Uso: só entra quando ambos concordam; exige menos trades e melhora precision.
 
-Sinais multiframe
+e1 - Sinais multiframe
 
 Higher TF (ex.: 1h): filtro de tendência (EMA slow).
 
@@ -16,10 +16,25 @@ Lower TF (ex.: 5m): gatilho (pullback/RSI).
 
 Uso: concordância de timeframes costuma aumentar o hit rate.
 
-Cointegração (VECM) + técnico de spread
+e2 - Cointegração (VECM) + técnico de spread
 
 VECM: indica desvio do equilíbrio entre dois ativos.
 
 Técnico: Bollinger no spread para gatilho.
 
 Uso: quando ambos sinalizam convergência, reforça o trade de pairs.
+
+e3 - forma de candles (corpo/pavio), padrões simples (doji, hammer, engulfing) e contagens rolling
+
+Uso: Esse especialista (“Pattern”) não é um algorítmo isolado, mas um conjunto de features que o MoE usa para detectar padrões de candle. Ele olha para a forma da vela e gera sinalizadores numéricos:
+Medidas básicas: corpo, sombras, proporções, tudo normalizado pelo ATR (body_atr, upper_wick_atr, etc.).
+Flags clássicas:
+doji_flag: corpo muito pequeno (|corpo| / range < 0.1).
+hammer_flag: sombra inferior ≥ 2× corpo e sombra superior ≤ 0.5× corpo.
+shooting_star_flag: espelho do hammer (sombra superior longa).
+bullish_engulf_flag / bearish_engulf_flag: corpo atual engolindo o anterior.
+Contagens rolling:
+hammer_roll3: média dos hammers nas últimas 3 velas.
+shooting_star_roll3: idem para shooting star.
+engulf_diff_roll5: diferença entre engolfos altistas e baixistas nos últimos 5 candles.
+O “expert Pattern” recebe justamente essas colunas do dataframe (doji_flag, hammer_flag, body_atr, engulf_diff_roll5) e, via MLP, decide se vale apostar em reversão/continuação. Ele não tem lógica if/else própria — aprende a usar essas features com o PPO, como se fosse um operador humano treinando olho para candles.
