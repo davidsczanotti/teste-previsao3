@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Any
 
 import numpy as np
 import torch
@@ -14,6 +14,7 @@ from .data import load_btc_1h, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy, PPOConfig
 from .trainer import PPOTrainer
+from ...utils.metrics import calculate_metrics
 
 
 @dataclass
@@ -94,6 +95,44 @@ def main() -> None:
         f"(episodes={wf_cfg.get('episodes', 200)}, rollout_steps={wf_cfg.get('rollout_steps', 2048)})"
     )
 
+    # Avaliador de um ambiente (executa política greedy e coleta métricas por trades)
+    def _eval_env(policy: MoEPolicy, env: BTCMixtureEnv) -> Dict[str, Any]:
+        obs = torch.tensor(env.reset(), dtype=torch.float32, device=device)
+        rewards = []
+        done = False
+        trades: List[Dict[str, Any]] = []
+        while not done:
+            dist, _, _ = policy(obs.unsqueeze(0))
+            action = torch.argmax(dist.probs, dim=-1).item()
+            next_obs, reward, done, info = env.step(action)
+            rewards.append(reward)
+            if info.get("trade_closed"):
+                trades.append(
+                    {
+                        "pnl": float(info.get("trade_pnl", 0.0)),
+                        "duration_bars": int(info.get("trade_bars", 0)),
+                    }
+                )
+            obs = torch.tensor(next_obs, dtype=torch.float32, device=device)
+
+        metrics = calculate_metrics(trades)
+        durs = [t.get("duration_bars", 0) for t in trades if t.get("duration_bars", 0) > 0]
+        avg_dur_bars = float(np.mean(durs)) if durs else 0.0
+        avg_dur_hours = avg_dur_bars  # timeframe 1h
+        return {
+            "pnl": float(np.sum(rewards)),
+            "equity_end": float(info.get("equity", 0.0)),
+            "trades": int(len(trades)),
+            "trade_list": trades,
+            "win_rate": float(metrics.get("win_rate", 0.0)),
+            "profit_factor": float(metrics.get("profit_factor", 0.0)),
+            "total_pnl_trades": float(metrics.get("total_pnl", 0.0)),
+            "avg_win": float(metrics.get("avg_win", 0.0)),
+            "avg_loss": float(metrics.get("avg_loss", 0.0)),
+            "avg_trade_duration_bars": avg_dur_bars,
+            "avg_trade_duration_hours": avg_dur_hours,
+        }
+
     for idx, window in enumerate(windows, start=1):
         _log(
             f"[WF] Janela {idx}/{total_windows} — treino [{window.train_start}:{window.train_end}) "
@@ -135,28 +174,6 @@ def main() -> None:
                 _log(f"[WF] Janela {idx}/{total_windows} — episódio {episode + 1}/{episodes}")
 
         # Evaluate on validation (sem vazamento): usa normalização do treino
-        def _eval_env(policy: MoEPolicy, env: BTCMixtureEnv) -> dict:
-            obs = torch.tensor(env.reset(), dtype=torch.float32, device=device)
-            rewards = []
-            done = False
-            trades = 0
-            prev_pos = 0
-            while not done:
-                dist, _, _ = policy(obs.unsqueeze(0))
-                action = torch.argmax(dist.probs, dim=-1).item()
-                desired_pos = action - 1
-                if desired_pos != prev_pos and desired_pos != 0:
-                    trades += 1
-                next_obs, reward, done, info = env.step(action)
-                rewards.append(reward)
-                obs = torch.tensor(next_obs, dtype=torch.float32, device=device)
-                prev_pos = desired_pos
-            return {
-                "pnl": float(np.sum(rewards)),
-                "equity_end": float(info.get("equity", 0.0)),
-                "trades": int(trades),
-            }
-
         val_env_train_norm = BTCMixtureEnv(
             val_prices,
             val_feats,
@@ -212,9 +229,50 @@ def main() -> None:
             f"eq_val={res_val_norm['equity_end']:.2f} trades_val={res_train_norm['trades']}"
         )
 
+    # Estatísticas agregadas no estilo do al_brooks
+    val_metrics = [h["val_norm"] for h in histories]
+    total_periods = len(val_metrics)
+    periods_with_profit = sum(1 for m in val_metrics if m.get("pnl", 0.0) > 0)
+    periods_with_loss = sum(1 for m in val_metrics if m.get("pnl", 0.0) <= 0)
+    success_rate = (periods_with_profit / total_periods) if total_periods > 0 else 0.0
+
+    total_pnl = float(sum(m.get("pnl", 0.0) for m in val_metrics))
+    avg_pnl = float(total_pnl / total_periods) if total_periods > 0 else 0.0
+    avg_win_rate = float(np.mean([m.get("win_rate", 0.0) for m in val_metrics])) if total_periods > 0 else 0.0
+    avg_profit_factor = float(
+        np.mean([m.get("profit_factor", 0.0) for m in val_metrics])
+    ) if total_periods > 0 else 0.0
+    total_trades = int(sum(m.get("trades", 0) for m in val_metrics))
+    avg_trade_duration_bars = float(
+        np.mean([m.get("avg_trade_duration_bars", 0.0) for m in val_metrics])
+    ) if total_periods > 0 else 0.0
+    avg_trade_duration_hours = float(
+        np.mean([m.get("avg_trade_duration_hours", 0.0) for m in val_metrics])
+    ) if total_periods > 0 else 0.0
+
+    summary = {
+        "total_periods": total_periods,
+        "successful_periods": periods_with_profit,
+        "success_rate": success_rate,
+        "total_pnl": total_pnl,
+        "avg_pnl": avg_pnl,
+        "avg_win_rate": avg_win_rate,
+        "avg_profit_factor": avg_profit_factor,
+        "total_trades": total_trades,
+        "avg_trade_duration_bars": avg_trade_duration_bars,
+        "avg_trade_duration_hours": avg_trade_duration_hours,
+        "periods_with_profit": periods_with_profit,
+        "periods_with_loss": periods_with_loss,
+    }
+
+    payload = {"summary": summary, "windows": histories}
     summary_path = outdir / "wf_summary.json"
-    summary_path.write_text(json.dumps(histories, indent=2))
-    _log(f"[WF] Concluído. Resultados em {summary_path}")
+    summary_path.write_text(json.dumps(payload, indent=2))
+    _log(
+        f"[WF] Concluído. Períodos={total_periods} trades={total_trades} "
+        f"P&L_total={total_pnl:.2f} win_rate_médio={avg_win_rate:.2%} PF_médio={avg_profit_factor:.2f}"
+    )
+    _log(f"[WF] Resumo salvo em {summary_path}")
 
 
 if __name__ == "__main__":

@@ -84,11 +84,15 @@
   "walk_forward": {
     "train_days": 720,
     "val_days": 180,
-    "step_days": 90,
-    "episodes": 250,
-    "rollout_steps": 1024,
+    "step_days": 360,
+    "episodes": 10,
+    "rollout_steps": 256,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_neg/reports/walk_forward"
+  },
+  "visualize": {
+    "days": 90,
+    "prefer": "latest"
   },
   "docs": {
     "env": {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Tuple
+from datetime import datetime, timezone
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,22 +20,40 @@ TRAIN_DIR = Path("src/strategies/exper_corr_neg/reports/train")
 OUT_PATH = Path("src/strategies/exper_corr_neg/reports/train/visual_backtest.png")
 
 
-def _find_checkpoint() -> Path:
+def _find_checkpoint(prefer: str = "latest") -> Path:
+    """Escolhe o checkpoint a carregar.
+
+    prefer:
+      - "best": sempre usa moe_policy_best_eval.pt se existir
+      - "final": sempre usa moe_policy_final.pt se existir
+      - "latest": escolhe o arquivo mais recente entre best/final/epXX
+    """
+    prefer = str(prefer or "latest").lower()
+
+    candidates = []
     if BEST_MODEL_PATH.exists():
-        return BEST_MODEL_PATH
+        candidates.append(BEST_MODEL_PATH)
     if FINAL_MODEL_PATH.exists():
-        return FINAL_MODEL_PATH
-    # fallback: último checkpoint epXX
+        candidates.append(FINAL_MODEL_PATH)
     if TRAIN_DIR.exists():
-        eps = sorted(TRAIN_DIR.glob("moe_policy_ep*.pt"))
-        if eps:
-            return eps[-1]
-    raise FileNotFoundError(
-        f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH} ou 'moe_policy_ep*.pt'. Aguarde salvar um checkpoint (10,20,...) ou reduza 'episodes'."
-    )
+        candidates.extend(sorted(TRAIN_DIR.glob("moe_policy_ep*.pt")))
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"Nenhum modelo encontrado. Esperado {BEST_MODEL_PATH} ou {FINAL_MODEL_PATH} ou 'moe_policy_ep*.pt'."
+        )
+
+    if prefer == "best" and BEST_MODEL_PATH.exists():
+        return BEST_MODEL_PATH
+    if prefer == "final" and FINAL_MODEL_PATH.exists():
+        return FINAL_MODEL_PATH
+
+    # latest por mtime
+    candidates.sort(key=lambda p: p.stat().st_mtime)
+    return candidates[-1]
 
 
-def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
+def _load_policy(input_dim: int, cfg: dict) -> Tuple[MoEPolicy, Path]:
     model_cfg = cfg.get("model", {})
     policy = MoEPolicy(
         input_dim=input_dim,
@@ -45,8 +64,9 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
         temperature=model_cfg.get("temperature", 0.7),
         top_k=model_cfg.get("top_k", 2),
     )
-    # Preferir best_eval, depois final; fallback para último epXX
-    chosen_path = _find_checkpoint()
+    # Preferência pode ser definida em config.visualize.prefer (best|final|latest)
+    prefer = str(cfg.get("visualize", {}).get("prefer", "latest")).lower()
+    chosen_path = _find_checkpoint(prefer)
     # Carregamento tolerante: se o checkpoint for de outra arquitetura, faz load parcial
     state_dict = torch.load(chosen_path, map_location="cpu")
     model_state = policy.state_dict()
@@ -54,11 +74,15 @@ def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
     missing = [k for k in model_state.keys() if k not in filtered]
     policy.load_state_dict(filtered, strict=False)
     loaded_frac = f"{len(filtered)}/{len(model_state)}"
-    print(f"[visualize] Carregado (parcial={loaded_frac}) de {chosen_path}")
+    try:
+        mtime = datetime.fromtimestamp(chosen_path.stat().st_mtime, tz=timezone.utc).isoformat().replace("+00:00","Z")
+    except Exception:
+        mtime = "?"
+    print(f"[visualize] Carregado (parcial={loaded_frac}) de {chosen_path} (mtime={mtime})")
     if missing:
         print("[visualize] Aviso: pesos ignorados por incompatibilidade (arquitetura mudou). Recomenda-se treinar novamente.")
     policy.eval()
-    return policy
+    return policy, chosen_path
 
 
 def _expert_names(cfg: dict, num_experts: int) -> list[str]:
@@ -98,17 +122,23 @@ def _run_policy(env: BTCMixtureEnv, policy: MoEPolicy) -> Tuple[np.ndarray, np.n
 def main() -> None:
     cfg = json.loads(CFG_PATH.read_text())
 
-    # usa janela curta por padrão para ficar didático/rápido
-    df = load_btc_1h(days=90)
+    # Janela de dados para visualização
+    vis_days = int(cfg.get("visualize", {}).get("days", 90))
+    df = load_btc_1h(days=vis_days)
     dataset = prepare_dataset(df)
     price_cols = ["open", "high", "low", "close", "volume"]
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
     env_cfg = EnvConfig(**cfg.get("env", {}))
+    # Garante que random_start funcione com janelas menores (window_bars < len)
+    if env_cfg.random_start:
+        total = len(price_df)
+        if env_cfg.window_bars <= 0 or env_cfg.window_bars >= total:
+            env_cfg.window_bars = max(1, total - 1)
     env = BTCMixtureEnv(price_df, feat_df, env_cfg)
 
-    policy = _load_policy(feat_df.shape[1], cfg)
+    policy, chosen_ckpt = _load_policy(feat_df.shape[1], cfg)
     actions, equity = _run_policy(env, policy)
 
     closes = price_df["close"].to_numpy()[: len(actions)]
@@ -141,8 +171,17 @@ def main() -> None:
     fig.tight_layout()
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Salva arquivo padrão e também um snapshot identificado pelo checkpoint
     fig.savefig(OUT_PATH, dpi=150)
+    ckpt_tag = chosen_ckpt.stem
+    snapshot_path = OUT_PATH.parent / f"visual_backtest-{ckpt_tag}.png"
+    try:
+        fig.savefig(snapshot_path, dpi=150)
+    except Exception:
+        snapshot_path = None
     print(f"Gráfico salvo em {OUT_PATH}")
+    if snapshot_path:
+        print(f"Snapshot salvo em {snapshot_path}")
 
 
 if __name__ == "__main__":

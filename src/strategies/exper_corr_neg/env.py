@@ -104,6 +104,11 @@ class BTCMixtureEnv(gym.Env):
         self._peak_equity: float = self.cfg.init_equity
         self._drawdown_counter: int = 0
         self._step = 0
+        # Controle de eventos de trade para relatórios/avaliações
+        self._just_closed: bool = False
+        self._last_trade_pnl: float = 0.0
+        self._last_trade_bars: int = 0
+        self._open_cost: float = 0.0
         # Normalização: permite injetar estatísticas pré-ajustadas (ex.: do treino)
         self._norm_mean = features.mean() if norm_mean is None else norm_mean
         std_series = features.std().replace(0.0, 1.0) if norm_std is None else norm_std
@@ -137,6 +142,10 @@ class BTCMixtureEnv(gym.Env):
         self._peak_equity = self.cfg.init_equity
         self._drawdown_counter = 0
         self._step = 0
+        self._just_closed = False
+        self._last_trade_pnl = 0.0
+        self._last_trade_bars = 0
+        self._open_cost = 0.0
         self._episode_length = max(1, self._end_idx - self._start_idx)
         if self.cfg.idle_penalty_factor > 0.0:
             self._idle_penalty_per_step = (
@@ -216,7 +225,14 @@ class BTCMixtureEnv(gym.Env):
             "ruined": ruined,
             "start_idx": self._start_idx,
             "end_idx": self._end_idx,
+            # informações adicionais para análise de trades
+            "position": self._pos,
+            "trade_closed": bool(self._just_closed),
+            "trade_pnl": float(self._last_trade_pnl) if self._just_closed else 0.0,
+            "trade_bars": int(self._last_trade_bars) if self._just_closed else 0,
         }
+        # reset do marcador de fechamento para o próximo passo
+        self._just_closed = False
         return obs, reward, done, info
 
     # ------------------------------------------------------------------
@@ -227,6 +243,8 @@ class BTCMixtureEnv(gym.Env):
     def _close_position(self, price: float) -> float:
         pnl = self._pos * self._pos_size * (price - self._entry_price)
         cost = self._transaction_cost(price, self._pos_size)
+        # duração do trade em barras desde a entrada
+        duration_bars = max(1, self._step - self._entry_step)
         self._pos = 0
         self._pos_size = 0.0
         self._entry_price = 0.0
@@ -234,12 +252,18 @@ class BTCMixtureEnv(gym.Env):
         self._peak_price = None
         self._trough_price = None
         mode = (self.cfg.accounting_mode or "mtm").lower()
-        if mode == "legacy":
-            return pnl - cost
+        # bônus/malus por duração do trade
         bonus = 0.0
         if self.cfg.hold_bonus_alpha > 0.0:
-            duration = max(1, self._step - self._entry_step)
-            bonus = self.cfg.hold_bonus_alpha * duration * pnl
+            bonus = self.cfg.hold_bonus_alpha * duration_bars * pnl
+        # PnL total realizado do trade (inclui custos de entrada e saída e bônus)
+        trade_pnl_total = pnl - self._open_cost - cost + bonus
+        # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
+        self._just_closed = True
+        self._last_trade_pnl = float(trade_pnl_total)
+        self._last_trade_bars = int(duration_bars)
+        if mode == "legacy":
+            return pnl - cost
         return -cost + pnl + bonus
 
     def _open_position(self, pos: int, price: float, atr: float) -> float:
@@ -256,6 +280,8 @@ class BTCMixtureEnv(gym.Env):
             self._trough_price = price
             self._peak_price = None
         cost = self._transaction_cost(price, self._pos_size)
+        # registra custo de entrada para contabilizar no PnL do trade no fechamento
+        self._open_cost = float(cost)
         return -cost
 
     def _maybe_apply_trailing(
