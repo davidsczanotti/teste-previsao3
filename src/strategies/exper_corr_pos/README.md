@@ -33,6 +33,7 @@ src/strategies/exper_corr_pos/
 - Atualização (opcional, com rede):
   ```bash
   poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+  poetry run python -m scripts.populate_cache ETHUSDT 1h --start "2017-01-01 00:00:00"
   ```
 - Execução offline (recomendado p/ reprodutibilidade): use a variável `BINANCE_OFFLINE=1` e um cache Numba local para acelerar funções do pandas_ta:
   ```bash
