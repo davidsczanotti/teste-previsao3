@@ -1,0 +1,197 @@
+{
+  "data": {
+    "base_symbol": "BTCUSDT",
+    "confirm_symbol": "ETHUSDT",
+    "timeframe": "1h",
+    "higher_timeframe": "4h",
+    "lookback_days": 3650,
+    "ml_horizon": 3,
+    "ml_decay": 0.995,
+    "ml_ridge": 0.001,
+    "spread_window": 240
+  },
+  "env": {
+    "fee_pct": 0.001,
+    "slippage_pct": 0.0001,
+    "position_size": 0.00043,
+    "stop_atr_mult": 2.6,
+    "trail_atr_mult": 1.1,
+    "accounting_mode": "mtm",
+    "init_equity": 1000.0,
+    "leverage": 1.0,
+    "equity_floor_pct": 0.25,
+    "max_drawdown_pct": 0.75,
+    "drawdown_kill_bars": 96,
+    "turnover_penalty": 0.2,
+    "dynamic_position": false,
+    "random_start": true,
+    "window_bars": 8760,
+    "idle_penalty_factor": 0.25,
+    "hold_bonus_alpha": 0.001,
+    "max_trade_notional": 50.0,
+    "profit_trail_pct": 0.02
+  },
+  "model": {
+    "expert_hidden": [
+      64,
+      32
+    ],
+    "gating_hidden": [
+      64,
+      32
+    ],
+    "num_experts": 4,
+    "temperature": 1.6,
+    "top_k": 3,
+    "expert_names": [
+      "TrendML",
+      "MultiFrame",
+      "Spread",
+      "Pattern"
+    ]
+  },
+  "ppo": {
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_ratio": 0.2,
+    "learning_rate": 0.00012,
+    "entropy_coef": 0.006,
+    "value_coef": 0.3,
+    "max_grad_norm": 0.5,
+    "train_iters": 6,
+    "batch_size": 512
+  },
+  "train": {
+    "episodes": 100000,
+    "rollout_steps": 1500,
+    "device": "cpu",
+    "outdir": "src/strategies/exper_corr_pos/reports/train",
+    "resume": false,
+    "resume_path": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
+    "log_every": 5,
+    "plot_every": 50,
+    "eval_every": 50,
+    "eval_days": 90,
+    "seed": 42,
+    "usage_window": 100,
+    "lb_coef": 0.03,
+    "ckpt_every": 10,
+    "final_every": 100,
+    "entropy_coef_start": 0.018,
+    "entropy_coef_end": 0.004,
+    "entropy_decay_episodes": 2000
+  },
+  "pbt": {
+    "pop": 2,
+    "rounds": 3,
+    "episodes": 5000,
+    "concurrency": 2,
+    "threads": 2,
+    "seed_checkpoint": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
+    "promote_to_root": true
+  },
+  "walk_forward": {
+    "train_days": 720,
+    "val_days": 180,
+    "step_days": 360,
+    "episodes": 10,
+    "rollout_steps": 256,
+    "device": "cpu",
+    "outdir": "src/strategies/exper_corr_pos/reports/walk_forward"
+  },
+  "visualize": {
+    "days": 90,
+    "prefer": "latest"
+  },
+  "docs": {
+    "data": {
+      "base_symbol": "Símbolo principal operado pelo agente (ex.: BTCUSDT).",
+      "confirm_symbol": "Símbolo usado como par com correlação positiva para cálculo do spread e filtros de cointegração (ex.: ETHUSDT).",
+      "timeframe": "Timeframe base das entradas (string compatível com pandas, ex.: 1h).",
+      "higher_timeframe": "Timeframe superior usado para o filtro de tendência multiframe (ex.: 4h).",
+      "lookback_days": "Dias carregados do cache local para montar o dataset.",
+      "ml_horizon": "Número de barras à frente que o modelo pseudo-LightGBM tenta prever.",
+      "ml_decay": "Fator de esquecimento do filtro RLS usado no preditor direcional.",
+      "ml_ridge": "Termo de regularização (ridge) usado pelo preditor direcional em modo online.",
+      "spread_window": "Janela (em barras) usada para estimar beta, média e desvio do spread BTC-ETH."
+    },
+    "env": {
+      "fee_pct": "Taxa de corretagem (decimal). 0.001 = 0.1% por lado.",
+      "slippage_pct": "Slippage adicional aplicado em cada execução (decimal).",
+      "position_size": "Tamanho fixo da posição em BTC quando dynamic_position=false.",
+      "stop_atr_mult": "Multiplicador de ATR para o stop inicial.",
+      "trail_atr_mult": "Multiplicador de ATR para o trailing stop.",
+      "accounting_mode": "'mtm' evita dupla contagem de PnL ao fechar; 'legacy' mantém o comportamento antigo.",
+      "init_equity": "Capital lógico inicial do agente.",
+      "leverage": "Alavancagem usada quando dynamic_position=true.",
+      "equity_floor_pct": "Ruína se equity ≤ init_equity × este valor.",
+      "max_drawdown_pct": "Ruína se drawdown ≥ este valor (decimal).",
+      "drawdown_kill_bars": "Número de barras consecutivas acima do limite de drawdown antes de ruir (0 desliga).",
+      "turnover_penalty": "Penalidade fixa aplicada ao trocar de posição.",
+      "dynamic_position": "Se true, o tamanho da posição segue equity × leverage / preço.",
+      "random_start": "Se true, cada episódio de treino inicia em um índice aleatório.",
+      "window_bars": "Número de barras usadas por episódio quando random_start=true (0 = série inteira).",
+      "idle_penalty_factor": "Fator multiplicativo da penalidade por ficar em cash (penalidade por candle = init_equity × fator / window_bars).",
+      "hold_bonus_alpha": "Fator do bônus/malus ao fechar uma posição (reward extra = alpha × duração × PnL).",
+      "max_trade_notional": "Teto (USD) por trade quando dynamic_position=true.",
+      "profit_trail_pct": "Trailing adicional disparado quando o lucro acumula X%."
+    },
+    "model": {
+      "expert_hidden": "Arquitetura das MLPs dos especialistas.",
+      "gating_hidden": "Arquitetura da MLP do gating.",
+      "num_experts": "Quantidade de especialistas independentes (TrendML, MultiFrame, Spread, Pattern).",
+      "temperature": "Temperatura do softmax do gating (mais alto = distribuição mais suave).",
+      "top_k": "Quantidade de especialistas escolhidos por passo (sparsidade).",
+      "expert_names": "Rótulos usados nas visualizações para cada especialista."
+    },
+    "ppo": {
+      "gamma": "Fator de desconto das rewards.",
+      "gae_lambda": "Lambda da Generalized Advantage Estimation.",
+      "clip_ratio": "Intervalo de clipping das razões PPO.",
+      "learning_rate": "Taxa de aprendizado do otimizador Adam.",
+      "entropy_coef": "Peso da entropia na loss da política.",
+      "value_coef": "Peso da loss do crítico.",
+      "max_grad_norm": "Clipping de norma de gradiente.",
+      "train_iters": "Número de épocas por batch de PPO.",
+      "batch_size": "Tamanho do batch para otimização."
+    },
+    "train": {
+      "episodes": "Quantidade de episódios nesta execução.",
+      "rollout_steps": "Passos coletados antes de atualizar a política.",
+      "device": "Dispositivo ('cpu' ou 'cuda').",
+      "outdir": "Diretório onde os artefatos de treino são salvos.",
+      "resume": "Retoma do checkpoint indicado em resume_path se existir.",
+      "resume_path": "Caminho do checkpoint usado quando resume=true.",
+      "log_every": "Frequência (episódios) de logs no console.",
+      "plot_every": "Frequência para atualizar metrics.png e expert_usage.png.",
+      "eval_every": "Frequência de avaliações greedy.",
+      "eval_days": "Janela (em dias) usada na avaliação greedy.",
+      "seed": "Seed global para reprodutibilidade.",
+      "usage_window": "Quantidade de episódios usada para média do expert_usage.",
+      "lb_coef": "Peso da regularização de load balance no gating.",
+      "ckpt_every": "Salva moe_policy_epN.pt a cada N episódios.",
+      "final_every": "Atualiza moe_policy_final.pt a cada N episódios (0 = somente no fim).",
+      "entropy_coef_start": "Entropia inicial usada no schedule.",
+      "entropy_coef_end": "Entropia final do schedule.",
+      "entropy_decay_episodes": "Episódios para decair de start para end."
+    },
+    "pbt": {
+      "pop": "Número de runs paralelos (população).",
+      "rounds": "Quantidade de rodadas do PBT.",
+      "episodes": "Episódios por rodada para cada run.",
+      "concurrency": "Máximo de processos simultâneos.",
+      "threads": "Threads usadas em cada processo (OMP/MKL/PyTorch).",
+      "seed_checkpoint": "Checkpoint inicial para todos os runs (resume=True no round 0).",
+      "promote_to_root": "Se true, copia o campeão para moe_policy_final.pt ao final de cada round."
+    },
+    "walk_forward": {
+      "train_days": "Janela de dados (dias) usada para treino em cada etapa.",
+      "val_days": "Janela de validação (dias) após cada treino.",
+      "step_days": "Passo (dias) para deslocar a janela no WF.",
+      "episodes": "Episódios de PPO por janela no WF.",
+      "rollout_steps": "Passos de coleta por episódio no WF.",
+      "device": "Dispositivo usado no WF.",
+      "outdir": "Pasta onde os artefatos do WF são salvos."
+    }
+  }
+}
