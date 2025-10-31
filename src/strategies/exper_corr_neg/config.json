@@ -18,7 +18,7 @@
     "idle_penalty_factor": 0.25,
     "hold_bonus_alpha": 0.001,
     "max_trade_notional": 50.0,
-    "profit_trail_pct": 0.02
+    "profit_trail_pct": 0.04
   },
   "model": {
     "expert_hidden": [
@@ -30,7 +30,7 @@
       32
     ],
     "num_experts": 6,
-    "temperature": 1.8,
+    "temperature": 2.0,
     "top_k": 4,
     "expert_names": [
       "Trend",
@@ -65,7 +65,7 @@
     "eval_days": 90,
     "seed": 42,
     "usage_window": 100,
-    "lb_coef": 0.03,
+    "lb_coef": 0.02,
     "ckpt_every": 10,
     "final_every": 100,
     "entropy_coef_start": 0.02,
