@@ -23,3 +23,18 @@ Preço: MACD/EMA trend.
 Volume: OBV/Chaikin + “volume spike” → sinal de exaustão (reversão).
 
 Uso: se trend=compra mas há spike de volume com candle de exaustão, reduza/espere; costuma ser anticorrelacionado no curto prazo.
+
+
+
+
+//////////////////////////
+a intenção não é vc fazer alterações, estou te mandando estas imagens para vc me ajudar a analizar algum comportamento tendencioso
+
+algumas alterações passadas que fizemos, vou usar a analogia do fliperama
+
+entramos com  1000 dolares no local e compramos 20 fichas a 50 dolares, escolhemos o jogo BTC dificuldade 1h, colocamos a ficha e a fase começa e o nosso agente recebe a espada "Trend — EMAs, Donchian, momentum", armadura "Mean‑Reversion — RSI, Bollinger, z‑score", escudo "Volatility — ATR, realized vol (range/rv)", vai para frente "Volume/Flow — OBV, Chaikin, spikes de volume", pula "Squeeze/Breakout — largura de Bollinger, percentil de ATR" e volta para tras "Pattern — forma de candles (corpo/pavio), padrões simples (doji, hammer, engulfing) e contagens rolling", e o jogo começa de varios cenarios diferentes e em checkpoints diferentes, para treinar o nosso campeão, depois de treinado e saber usar todos os comandos no momento centro, vamos colocalo na fase final.
+
+o que eu percebi nas ultimas rodadas é que nosso heroi estava dando 3 passos ganhava os pontos e saia do jogo, depois ele entrava de novo, matava um inimigo e saia do jogo, porque havia ganhado a pontuação então criamos uma recompensa  maior caso ele permanece-se jogando porem se ele perdese o prejuizo seria maior e se ele continua-se ganhandoa  recompesa seria maior, 
+
+este exemplo acima demontra que agora chegou a hora de olharmos o comportamento distorcido e aprender a ajustar, então precisamos caso não tenha sido criado, criara dados para poder auditar possiveis comportamentos tendenciosos, vc me ajuda a tentar identificar?
+/////////////////////////
