@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -79,11 +79,20 @@ class BTCMixtureEnv(gym.Env):
         *,
         norm_mean: Optional[pd.Series] = None,
         norm_std: Optional[pd.Series] = None,
+        timestamps: Optional[Union[pd.Index, np.ndarray]] = None,
     ) -> None:
         assert len(df) == len(features), "Price and feature data misaligned"
         self.df = df.reset_index(drop=True)
         self.features = features.reset_index(drop=True)
         self.cfg = config
+        if timestamps is not None:
+            self._timestamps = pd.Index(timestamps)
+        else:
+            idx = getattr(df, "index", None)
+            if isinstance(idx, pd.RangeIndex) or idx is None:
+                self._timestamps = None
+            else:
+                self._timestamps = pd.Index(idx)
         mode = (self.cfg.accounting_mode or "mtm").lower()
         if mode not in {"mtm", "legacy"}:
             raise ValueError(f"accounting_mode inválido: {self.cfg.accounting_mode}")
@@ -108,7 +117,21 @@ class BTCMixtureEnv(gym.Env):
         self._just_closed: bool = False
         self._last_trade_pnl: float = 0.0
         self._last_trade_bars: int = 0
+        self._last_trade_reason: str = ""
+        self._last_trade_cost: float = 0.0
+        self._last_trade_bonus: float = 0.0
+        self._last_trade_gross: float = 0.0
+        self._last_trade_entry_price: float = 0.0
+        self._last_trade_exit_price: float = 0.0
+        self._last_trade_entry_idx: int = -1
+        self._last_trade_exit_idx: int = -1
+        self._last_trade_entry_ts: Optional[pd.Timestamp] = None
+        self._last_trade_exit_ts: Optional[pd.Timestamp] = None
+        self._last_trade_side: int = 0
+        self._last_trade_size: float = 0.0
         self._open_cost: float = 0.0
+        self._entry_idx: int = -1
+        self._entry_timestamp: Optional[pd.Timestamp] = None
         # Normalização: permite injetar estatísticas pré-ajustadas (ex.: do treino)
         self._norm_mean = features.mean() if norm_mean is None else norm_mean
         std_series = features.std().replace(0.0, 1.0) if norm_std is None else norm_std
@@ -145,7 +168,21 @@ class BTCMixtureEnv(gym.Env):
         self._just_closed = False
         self._last_trade_pnl = 0.0
         self._last_trade_bars = 0
+        self._last_trade_reason = ""
+        self._last_trade_cost = 0.0
+        self._last_trade_bonus = 0.0
+        self._last_trade_gross = 0.0
+        self._last_trade_entry_price = 0.0
+        self._last_trade_exit_price = 0.0
+        self._last_trade_entry_idx = -1
+        self._last_trade_exit_idx = -1
+        self._last_trade_entry_ts = None
+        self._last_trade_exit_ts = None
+        self._last_trade_side = 0
+        self._last_trade_size = 0.0
         self._open_cost = 0.0
+        self._entry_idx = -1
+        self._entry_timestamp = None
         self._episode_length = max(1, self._end_idx - self._start_idx)
         if self.cfg.idle_penalty_factor > 0.0:
             self._idle_penalty_per_step = (
@@ -171,7 +208,7 @@ class BTCMixtureEnv(gym.Env):
                 reward -= self.cfg.turnover_penalty
             # close current position first
             if self._pos != 0:
-                reward += self._close_position(price)
+                reward += self._close_position(price, reason="flip")
             # open new position
             if desired_pos != 0:
                 reward += self._open_position(desired_pos, price, atr)
@@ -230,6 +267,19 @@ class BTCMixtureEnv(gym.Env):
             "trade_closed": bool(self._just_closed),
             "trade_pnl": float(self._last_trade_pnl) if self._just_closed else 0.0,
             "trade_bars": int(self._last_trade_bars) if self._just_closed else 0,
+            "trade_reason": self._last_trade_reason if self._just_closed else "",
+            "trade_cost": float(self._last_trade_cost) if self._just_closed else 0.0,
+            "trade_bonus": float(self._last_trade_bonus) if self._just_closed else 0.0,
+            "trade_gross": float(self._last_trade_gross) if self._just_closed else 0.0,
+            "trade_entry_price": float(self._last_trade_entry_price) if self._just_closed else 0.0,
+            "trade_exit_price": float(self._last_trade_exit_price) if self._just_closed else 0.0,
+            "trade_entry_idx": int(self._last_trade_entry_idx) if self._just_closed else -1,
+            "trade_exit_idx": int(self._last_trade_exit_idx) if self._just_closed else -1,
+            "trade_entry_ts": self._format_timestamp(self._last_trade_entry_ts) if self._just_closed else "",
+            "trade_exit_ts": self._format_timestamp(self._last_trade_exit_ts) if self._just_closed else "",
+            "trade_side": int(self._last_trade_side) if self._just_closed else 0,
+            "trade_size": float(self._last_trade_size) if self._just_closed else 0.0,
+            "timestamp": self._format_timestamp(self._resolve_timestamp(self._start_idx + self._step)),
         }
         # reset do marcador de fechamento para o próximo passo
         self._just_closed = False
@@ -240,11 +290,17 @@ class BTCMixtureEnv(gym.Env):
         notional = price * size
         return notional * (self.cfg.fee_pct + self.cfg.slippage_pct)
 
-    def _close_position(self, price: float) -> float:
-        pnl = self._pos * self._pos_size * (price - self._entry_price)
-        cost = self._transaction_cost(price, self._pos_size)
+    def _close_position(self, price: float, reason: str = "close") -> float:
+        entry_price = self._entry_price
+        pnl = self._pos * self._pos_size * (price - entry_price)
+        side = self._pos
+        size = self._pos_size
+        cost = self._transaction_cost(price, size)
         # duração do trade em barras desde a entrada
         duration_bars = max(1, self._step - self._entry_step)
+        exit_idx = self._start_idx + self._step
+        entry_idx = self._entry_idx
+        entry_ts = self._entry_timestamp
         self._pos = 0
         self._pos_size = 0.0
         self._entry_price = 0.0
@@ -262,6 +318,20 @@ class BTCMixtureEnv(gym.Env):
         self._just_closed = True
         self._last_trade_pnl = float(trade_pnl_total)
         self._last_trade_bars = int(duration_bars)
+        self._last_trade_reason = reason
+        self._last_trade_cost = float(self._open_cost + cost)
+        self._last_trade_bonus = float(bonus)
+        self._last_trade_gross = float(pnl)
+        self._last_trade_entry_price = float(entry_price)
+        self._last_trade_exit_price = float(price)
+        self._last_trade_entry_idx = int(entry_idx)
+        self._last_trade_exit_idx = int(exit_idx)
+        self._last_trade_entry_ts = entry_ts
+        self._last_trade_exit_ts = self._resolve_timestamp(exit_idx)
+        self._last_trade_side = int(side)
+        self._last_trade_size = float(size)
+        self._entry_idx = -1
+        self._entry_timestamp = None
         if mode == "legacy":
             return pnl - cost
         return -cost + pnl + bonus
@@ -271,6 +341,8 @@ class BTCMixtureEnv(gym.Env):
         self._entry_price = price
         self._pos_size = self._compute_position_size(price)
         self._entry_step = self._step
+        self._entry_idx = self._start_idx + self._step
+        self._entry_timestamp = self._resolve_timestamp(self._entry_idx)
         if pos > 0:
             self._trailing = price - self.cfg.stop_atr_mult * atr
             self._peak_price = price
@@ -307,7 +379,8 @@ class BTCMixtureEnv(gym.Env):
                 stop_price = float(self._trailing)
                 diff = self._pos_size * (stop_price - next_price)
                 reward_adj += diff  # ajustar PnL para o preço de stop
-                reward_adj += self._close_position(stop_price)
+                reason = "trail_profit" if ptp > 0.0 and stop_price >= profit_floor else "trail_atr"
+                reward_adj += self._close_position(stop_price, reason=reason)
         else:
             # Short: stop é um teto; desce com ATR e com o vale de preço
             atr_ceiling = next_price + self.cfg.trail_atr_mult * next_atr
@@ -323,7 +396,8 @@ class BTCMixtureEnv(gym.Env):
                 stop_price = float(self._trailing)
                 diff = self._pos_size * (next_price - stop_price)
                 reward_adj += diff
-                reward_adj += self._close_position(stop_price)
+                reason = "trail_profit" if ptp > 0.0 and stop_price <= profit_ceiling else "trail_atr"
+                reward_adj += self._close_position(stop_price, reason=reason)
         return reward_adj
 
     def _get_obs(self) -> np.ndarray:
@@ -341,3 +415,26 @@ class BTCMixtureEnv(gym.Env):
         notional = equity * max(self.cfg.leverage, 0.0)
         capped = min(notional, max_notional) if max_notional > 0 else notional
         return capped / px
+
+    def _resolve_timestamp(self, idx: int) -> Optional[pd.Timestamp]:
+        if self._timestamps is None or len(self._timestamps) == 0:
+            return None
+        if idx < 0 or idx >= len(self._timestamps):
+            return None
+        ts = self._timestamps[idx]
+        if isinstance(ts, pd.Timestamp):
+            return ts
+        try:
+            return pd.Timestamp(ts)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _format_timestamp(ts: Optional[pd.Timestamp]) -> str:
+        if ts is None:
+            return ""
+        if isinstance(ts, pd.Timestamp):
+            if ts.tzinfo is None:
+                return ts.isoformat()
+            return ts.tz_convert("UTC").isoformat()
+        return str(ts)

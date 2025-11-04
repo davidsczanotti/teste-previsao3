@@ -22,7 +22,7 @@
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
     "drawdown_kill_bars": 96,
-    "turnover_penalty": 0.3,
+    "turnover_penalty": 0.35,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 8760,
@@ -41,8 +41,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 1.2,
-    "top_k": 2,
+    "temperature": 1.0,
+    "top_k": 1,
     "expert_names": [
       "TrendML",
       "MultiFrame",
@@ -102,6 +102,21 @@
   "visualize": {
     "days": 90,
     "prefer": "best"
+  },
+  "reports": {
+    "trade_ledger": {
+      "enabled": true,
+      "path": "src/strategies/exper_corr_pos/reports/train/trade_ledger.csv"
+    },
+    "gating_attribution": {
+      "enabled": true,
+      "path": "src/strategies/exper_corr_pos/reports/train/gating_attribution.csv",
+      "plot_path": "src/strategies/exper_corr_pos/reports/train/gating_attribution.png"
+    },
+    "regime_summary": {
+      "enabled": true,
+      "path": "src/strategies/exper_corr_pos/reports/train/regime_summary.json"
+    }
   },
   "docs": {
     "data": {
@@ -192,6 +207,11 @@
       "rollout_steps": "Passos de coleta por episódio no WF.",
       "device": "Dispositivo usado no WF.",
       "outdir": "Pasta onde os artefatos do WF são salvos."
+    },
+    "reports": {
+      "trade_ledger": "Configura geração da planilha de trades (enabled/path).",
+      "gating_attribution": "Liga o CSV/png de atribuição de experts por trade (enabled/path/plot_path).",
+      "regime_summary": "Resumo em JSON com métricas por regime de mercado (enabled/path)."
     }
   }
 }

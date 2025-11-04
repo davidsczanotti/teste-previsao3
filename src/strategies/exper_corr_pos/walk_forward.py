@@ -66,6 +66,7 @@ def main() -> None:
     confirm_df = load_confirm_series(cfg)
     dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
+    timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
@@ -148,12 +149,14 @@ def main() -> None:
         train_norm_mean = train_feats.mean()
         train_norm_std = train_feats.std().replace(0.0, 1.0)
 
+        train_ts = timestamps[window.train_start : window.train_end]
         env = BTCMixtureEnv(
             train_prices,
             train_feats,
             env_cfg,
             norm_mean=train_norm_mean,
             norm_std=train_norm_std,
+            timestamps=train_ts,
         )
         input_dim = train_feats.shape[1]
         policy = MoEPolicy(
@@ -175,29 +178,33 @@ def main() -> None:
                 _log(f"[WF] Janela {idx}/{total_windows} — episódio {episode + 1}/{episodes}")
 
         # Evaluate on validation (sem vazamento): usa normalização do treino
+        val_ts = timestamps[window.val_start : window.val_end]
         val_env_train_norm = BTCMixtureEnv(
             val_prices,
             val_feats,
             env_cfg,
             norm_mean=train_norm_mean,
             norm_std=train_norm_std,
+            timestamps=val_ts,
         )
         res_train_norm = _eval_env(policy, val_env_train_norm)
 
         # Evaluate on validation com normalização por janelão de validação (pode vazar info)
-        val_env_val_norm = BTCMixtureEnv(val_prices, val_feats, env_cfg)
+        val_env_val_norm = BTCMixtureEnv(val_prices, val_feats, env_cfg, timestamps=val_ts)
         res_val_norm = _eval_env(policy, val_env_val_norm)
 
         # Lag test: usa features defasadas em 1 barra para ver sensibilidade a timing
         lag_feats = val_feats.shift(1).dropna()
         if not lag_feats.empty:
             lag_prices = val_prices.iloc[val_feats.shape[0] - lag_feats.shape[0] :]
+            lag_ts = val_ts[len(val_ts) - len(lag_feats) :]
             val_env_lag = BTCMixtureEnv(
                 lag_prices,
                 lag_feats,
                 env_cfg,
                 norm_mean=train_norm_mean,
                 norm_std=train_norm_std,
+                timestamps=lag_ts,
             )
             res_lag = _eval_env(policy, val_env_lag)
         else:

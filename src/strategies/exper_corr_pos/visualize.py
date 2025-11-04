@@ -124,6 +124,7 @@ def main() -> None:
         primary_df = primary_df.tail(limit)
     dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
+    timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
@@ -133,7 +134,7 @@ def main() -> None:
         total = len(price_df)
         if env_cfg.window_bars <= 0 or env_cfg.window_bars >= total:
             env_cfg.window_bars = max(1, total - 1)
-    env = BTCMixtureEnv(price_df, feat_df, env_cfg)
+    env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     policy, chosen_ckpt = _load_policy(feat_df.shape[1], cfg)
     actions, equity = _run_policy(env, policy)

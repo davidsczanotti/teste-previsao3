@@ -107,11 +107,12 @@ def main() -> None:
     dataset = prepare_dataset(primary_df, config=config, confirm_df=confirm_df)
 
     price_cols = ["open", "high", "low", "close", "volume"]
+    timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
     env_cfg = EnvConfig(**config.get("env", {}))
-    env = BTCMixtureEnv(price_df, feat_df, env_cfg)
+    env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     input_dim = feat_df.shape[1]
     model_cfg = config.get("model", {})
@@ -312,7 +313,12 @@ def main() -> None:
             hours = eval_days * 24
             tail_prices = price_df.tail(hours).reset_index(drop=True)
             tail_feats = feat_df.tail(hours).reset_index(drop=True)
-            eval_env = BTCMixtureEnv(tail_prices, tail_feats, env_cfg)
+            # Avaliação determinística: força random_start=False e janela completa
+            eval_cfg = EnvConfig(**env_cfg.__dict__)
+            eval_cfg.random_start = False
+            eval_cfg.window_bars = 0
+            tail_ts = timestamps[-len(tail_prices) :] if len(tail_prices) > 0 else []
+            eval_env = BTCMixtureEnv(tail_prices, tail_feats, eval_cfg, timestamps=tail_ts)
             obs = torch.tensor(eval_env.reset(), dtype=torch.float32)
             done = False
             info = {"equity": float(env_cfg.init_equity)}

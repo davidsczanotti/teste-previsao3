@@ -79,6 +79,7 @@ def main() -> None:
     primary_df = primary_df.tail(lookback_bars)
     dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
+    timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
@@ -88,7 +89,8 @@ def main() -> None:
     hours = eval_days * 24
     prices = price_df.tail(hours).reset_index(drop=True)
     feats = feat_df.tail(hours).reset_index(drop=True)
-    env = BTCMixtureEnv(prices, feats, env_cfg)
+    tail_ts = timestamps[-len(prices) :] if len(prices) > 0 else []
+    env = BTCMixtureEnv(prices, feats, env_cfg, timestamps=tail_ts)
 
     obs = torch.tensor(env.reset(), dtype=torch.float32).unsqueeze(0)
 
@@ -96,6 +98,7 @@ def main() -> None:
     masks_trace: List[np.ndarray] = []
     actions: List[int] = []
     equities: List[float] = []
+    timestamps_step: List[str] = []
 
     done = False
     drawdowns: List[float] = []
@@ -111,6 +114,7 @@ def main() -> None:
         masks_trace.append(mask.squeeze(0).cpu().numpy())
         actions.append(action)
         equities.append(float(info.get("equity", 0.0)))
+        timestamps_step.append(str(info.get("timestamp", "")))
         dd = float(info.get("drawdown", 0.0))
         drawdowns.append(dd)
         if info.get("ruined") and ruined_step is None:
@@ -124,14 +128,15 @@ def main() -> None:
 
     # CSV de traço
     trace_path = OUTDIR / "gating_trace.csv"
-    header = [f"w_e{i}" for i in range(weights_arr.shape[1])] + [f"m_e{i}" for i in range(masks_arr.shape[1])] + ["action", "equity"]
+    header = ["timestamp"] + [f"w_e{i}" for i in range(weights_arr.shape[1])] + [f"m_e{i}" for i in range(masks_arr.shape[1])] + ["action", "equity"]
     import csv
 
     with trace_path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(header)
         for t in range(weights_arr.shape[0]):
-            writer.writerow([*weights_arr[t].tolist(), *masks_arr[t].tolist(), actions[t], equities[t]])
+            stamp = timestamps_step[t] if t < len(timestamps_step) else ""
+            writer.writerow([stamp, *weights_arr[t].tolist(), *masks_arr[t].tolist(), actions[t], equities[t]])
     print(f"[gating] Traço salvo em {trace_path}")
 
     # Heatmap de pesos
