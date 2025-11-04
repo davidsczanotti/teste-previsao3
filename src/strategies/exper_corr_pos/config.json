@@ -66,7 +66,7 @@
     "rollout_steps": 1500,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/train",
-    "resume": false,
+    "resume": true,
     "resume_path": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
     "log_every": 5,
     "plot_every": 50,

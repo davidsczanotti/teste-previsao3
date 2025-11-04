@@ -140,7 +140,8 @@ def compute_features(
     ml_features["range_rel"] = (high - low) / (close + 1e-9)
     ml_features["hour_sin"] = np.sin(2 * math.pi * base.index.hour / 24.0)
     ml_features["hour_cos"] = np.cos(2 * math.pi * base.index.hour / 24.0)
-    ml_features = ml_features.fillna(method="ffill").fillna(0.0)
+    # Use modern forward-fill API to avoid FutureWarning
+    ml_features = ml_features.ffill().fillna(0.0)
 
     feature_cols = ml_features.columns.tolist()
     X = ml_features.to_numpy(dtype=np.float64)
@@ -194,7 +195,8 @@ def compute_features(
         cov = log_base.rolling(window, min_periods=window).cov(log_ref)
         var = log_ref.rolling(window, min_periods=window).var()
         beta = cov / (var + 1e-9)
-        beta = beta.replace([np.inf, -np.inf], np.nan).fillna(method="ffill")
+        # Replace infs and forward-fill using the dedicated method (FutureWarning-safe)
+        beta = beta.replace([np.inf, -np.inf], np.nan).ffill()
         spread = log_base - beta * log_ref
         spread_mean = spread.rolling(window, min_periods=window).mean()
         spread_std = spread.rolling(window, min_periods=window).std()

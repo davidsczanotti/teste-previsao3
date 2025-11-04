@@ -24,6 +24,19 @@ poetry add black djlint --group dev
 wsl->git push -u origin main
 server->git pull origin main
 
+
+docker compose down
+docker compose up -d --build
+
+docker compose exec -w /app -e BINANCE_OFFLINE=0 app \
+  python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+
+docker compose exec -w /app -e BINANCE_OFFLINE=1 \
+  -e NUMBA_CACHE_DIR=/app/.numba_cache app \
+  python -m src.strategies.exper_corr_neg.train
+
+
+
 # 0. docker build --no-cache -t teste-previsao3 . && (docker rm -f teste-previsao3-container || true) && docker run -d --name teste-previsao3-container teste-previsao3 && docker system prune -f 
 
 # --- FLUXO DE DESENVOLVIMENTO (RECOMENDADO) ---
@@ -172,3 +185,52 @@ Flag (Parâmetro)	Conceito no Jogo do Mario	Explicação na Analogia
 --batch-size 32	Quantos Sonhos por Noite	A cada passo, o Mario para e "sonha" com 32 de suas memórias passadas aleatoriamente. Aprender com um lote de experiências variadas (em vez de apenas a última) torna o aprendizado muito mais estável e eficaz.
 --hidden-size 32	O Número de "Neurônios"	Define o quão complexo é o cérebro do Mario. Poucos neurônios (ex: 8) e ele só aprende regras simples. Muitos neurônios (ex: 128) e ele pode aprender padrões muito complexos, mas corre o risco de "pensar demais" e se confundir.
 --target-update-freq 10	A "Memória de Referência"	Para não ficar confuso, o cérebro do Mario tem duas partes: uma que aprende a cada segundo (a policy_net) e outra que é uma "foto" de como ele pensava há 10 vidas (a target_net). Ele usa essa "foto" antiga como uma referência estável para julgar suas novas ações. Isso evita que ele mude de ideia drasticamente a todo momento.
+
+////////////////////////////////////////////////
+
+
+No servidor, garanta que você está em /home/zanotti/projetos/teste-previsao3.
+Pare e suba o serviço de novo:
+docker compose down
+docker compose up -d --build
+(Os volumes app-data, app-reports, etc., preservam cache e relatórios — nada é perdido.)
+Agora os comandos funcionam direto com docker compose exec:
+docker compose exec -w /app -e BINANCE_OFFLINE=0 app \
+  python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+
+docker compose exec -w /app -e BINANCE_OFFLINE=1 \
+  -e NUMBA_CACHE_DIR=/app/.numba_cache app \
+  python -m src.strategies.exper_corr_neg.train
+Se preferir conferir antes de derrubar o container, execute:
+
+docker exec teste-previsao3-container ls /app
+Se não aparecer scripts/, src/, etc., é porque ele realmente aponta para outro lugar. Nesse caso, só o down + up -d --build garante que /app reflita este projeto.
+
+estou acessando o servidor atravez do moba , quando fechar a janela e abrir amanha como sei que ainda estara rodando como resgatar os dados?
+
+
+User attachment
+Para deixar o treino rodando mesmo após fechar o MobaXterm, inicie-o desacoplado do seu terminal. Exemplo:
+docker exec -d teste-previsao3-container sh -lc 'cd /app && export BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=/app/.numba_cache && nohup python -m src.strategies.exper_corr_neg.train > src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log 2>&1'. O -d desacopla o comando do seu SSH e o nohup … > …log & grava tudo em um arquivo dentro do repo.
+Para conferir amanhã se o treino segue ativo:
+docker compose ps (deve mostrar o container UP)
+docker exec teste-previsao3-container pgrep -af exper_corr_neg.train (retorna o PID se o script ainda estiver rodando).
+Para ver o log em tempo real: docker exec teste-previsao3-container tail -f src/strategies/exper_corr_neg/reports/train/train_YYYYMMDD_HHMM.log.
+Todos os artefatos são salvos no próprio repositório por causa do bind .:/app e também nos volumes nomeados definidos no docker-compose.yml. Depois de reconectar, basta olhar em:
+src/strategies/exper_corr_neg/reports/train/metrics.csv
+src/strategies/exper_corr_neg/reports/train/run_manifest.json
+src/strategies/exper_corr_neg/reports/train/*.pt (checkpoints)
+src/strategies/exper_corr_neg/reports/train/*.png (gráficos)
+Se precisar do caminho físico dos volumes, rode docker volume inspect app-data etc. (fica em /var/lib/docker/volumes/app-data/_data).
+Para interromper com segurança depois: docker exec teste-previsao3-container pkill -f exper_corr_neg.train. Para retomar, garanta que train.resume=true e train.resume_path apontam para o checkpoint desejado em src/strategies/exper_corr_neg/config.json.
+Próximos passos naturais: 1) mantenha um log por execução e rode tail para acompanhar; 2) considere scriptar o start/stop em bash para evitar digitar tudo de novo; 3) se quiser monitoramento remoto, use watch com docker exec … tail metrics.csv ou configure tmux no servidor para sessões persistentes.
+docker exec -d teste-previsao3-container sh -lc 'cd /app && export BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=/app/.numba_cache && nohup python -m src.strategies.exper_corr_neg.train > src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log 2>&1'
+
+
+O treino está rodando em background no container. Para acompanhar, rode:
+
+docker exec teste-previsao3-container tail -f src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log (troque pelo timestamp que saiu no nohup, ex. train_20241103_1649.log).
+Se quiser conferir logs mais antigos: ls src/strategies/exper_corr_neg/reports/train/train_*.log.
+Quando quiser interromper: docker exec teste-previsao3-container pkill -f exper_corr_neg.train.
+
+Artefatos novos continuam em src/strategies/exper_corr_neg/reports/train/.

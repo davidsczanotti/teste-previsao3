@@ -251,3 +251,6 @@ Use este fluxo quando quiser reiniciar totalmente o experimento.
 - Para expandir o MoE, basta acrescentar novas features e atualizar `model.num_experts`/`model.expert_names`; o gating decidirá quando usar cada especialista.
 
 Qualquer alteração no comportamento deve ser feita editando o `config.json`. Os scripts já consomem esse arquivo e salvam os resultados dentro da pasta da estratégia para manter tudo organizado e reprodutível.
+
+
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_neg.scripts.audit_policy
