@@ -15,21 +15,21 @@
     "slippage_pct": 0.0001,
     "position_size": 0.00043,
     "stop_atr_mult": 2.6,
-    "trail_atr_mult": 1.1,
+    "trail_atr_mult": 1.8,
     "accounting_mode": "mtm",
     "init_equity": 1000.0,
     "leverage": 1.0,
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
     "drawdown_kill_bars": 96,
-    "turnover_penalty": 0.2,
+    "turnover_penalty": 0.3,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 8760,
-    "idle_penalty_factor": 0.25,
-    "hold_bonus_alpha": 0.001,
+    "idle_penalty_factor": 0.0,
+    "hold_bonus_alpha": 0.0025,
     "max_trade_notional": 50.0,
-    "profit_trail_pct": 0.02
+    "profit_trail_pct": 0.06
   },
   "model": {
     "expert_hidden": [
@@ -41,8 +41,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 1.6,
-    "top_k": 3,
+    "temperature": 1.2,
+    "top_k": 2,
     "expert_names": [
       "TrendML",
       "MultiFrame",
@@ -54,12 +54,12 @@
     "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_ratio": 0.2,
-    "learning_rate": 0.00012,
+    "learning_rate": 0.00008,
     "entropy_coef": 0.006,
     "value_coef": 0.3,
     "max_grad_norm": 0.5,
     "train_iters": 6,
-    "batch_size": 512
+    "batch_size": 768
   },
   "train": {
     "episodes": 100000,
@@ -74,7 +74,7 @@
     "eval_days": 90,
     "seed": 42,
     "usage_window": 100,
-    "lb_coef": 0.03,
+    "lb_coef": 0.015,
     "ckpt_every": 10,
     "final_every": 100,
     "entropy_coef_start": 0.018,
@@ -101,7 +101,7 @@
   },
   "visualize": {
     "days": 90,
-    "prefer": "latest"
+    "prefer": "best"
   },
   "docs": {
     "data": {
