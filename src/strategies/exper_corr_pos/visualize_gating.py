@@ -11,6 +11,8 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
+from .utils_cfg import build_policy
+from .utils_cfg import enabled_expert_names
 
 CFG_PATH = Path("src/strategies/exper_corr_pos/config.json")
 FINAL_MODEL_PATH = Path("src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt")
@@ -20,14 +22,11 @@ OUTDIR = Path("src/strategies/exper_corr_pos/reports/train")
 
 
 def _expert_names(cfg: dict, num_experts: int) -> list[str]:
-    names = cfg.get("model", {}).get("expert_names")
-    if isinstance(names, list) and len(names) == num_experts:
-        return [str(n) for n in names]
-    # defaults (curto e didático)
+    names = enabled_expert_names(cfg)
+    if len(names) == num_experts:
+        return names
     defaults = ["TrendML", "MultiFrame", "Spread", "Pattern"]
-    if num_experts <= len(defaults):
-        return defaults[:num_experts]
-    return [f"e{i}" for i in range(num_experts)]
+    return (names or defaults)[:num_experts]
 
 
 def _find_checkpoint() -> Path:
@@ -45,16 +44,7 @@ def _find_checkpoint() -> Path:
 
 
 def _load_policy(input_dim: int, cfg: dict) -> MoEPolicy:
-    model_cfg = cfg.get("model", {})
-    policy = MoEPolicy(
-        input_dim=input_dim,
-        num_actions=3,
-        expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
-        gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
-        num_experts=model_cfg.get("num_experts", 4),
-        temperature=model_cfg.get("temperature", 1.6),
-        top_k=model_cfg.get("top_k", 3),
-    )
+    policy = build_policy(input_dim, cfg)
     chosen_path = _find_checkpoint()
     # load parcial tolerante a mudanças de arquitetura
     state_dict = torch.load(chosen_path, map_location="cpu")

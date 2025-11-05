@@ -27,6 +27,7 @@ from ..data import load_primary_series, load_confirm_series, prepare_dataset
 from ..env import BTCMixtureEnv, EnvConfig
 from ..models import MoEPolicy
 from ..visualize import _find_checkpoint
+from ..utils_cfg import enabled_expert_names
 
 
 plt.switch_backend("Agg")
@@ -36,9 +37,9 @@ CFG_PATH = Path("src/strategies/exper_corr_pos/config.json")
 
 
 def _expert_labels(cfg: dict, count: int) -> List[str]:
-    names = cfg.get("model", {}).get("expert_names")
-    if isinstance(names, list) and len(names) == count:
-        return [str(n) for n in names]
+    names = enabled_expert_names(cfg)
+    if len(names) == count:
+        return names
     return [f"e{i}" for i in range(count)]
 
 

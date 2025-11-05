@@ -14,15 +14,15 @@
     "fee_pct": 0.001,
     "slippage_pct": 0.0001,
     "position_size": 0.00043,
-    "stop_atr_mult": 2.6,
-    "trail_atr_mult": 1.8,
+    "stop_atr_mult": 3.0,
+    "trail_atr_mult": 2.1,
     "accounting_mode": "mtm",
     "init_equity": 1000.0,
     "leverage": 1.0,
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
     "drawdown_kill_bars": 96,
-    "turnover_penalty": 0.35,
+    "turnover_penalty": 0.45,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 8760,
@@ -40,7 +40,7 @@
       64,
       32
     ],
-    "num_experts": 4,
+    "num_experts": 2,
     "temperature": 1.0,
     "top_k": 1,
     "expert_names": [
@@ -48,7 +48,13 @@
       "MultiFrame",
       "Spread",
       "Pattern"
-    ]
+    ],
+    "especialistas": {
+      "TrendML": true,
+      "MultiFrame": true,
+      "Spread": false,
+      "Pattern": false
+    }
   },
   "ppo": {
     "gamma": 0.99,

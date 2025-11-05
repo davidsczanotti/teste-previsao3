@@ -14,7 +14,8 @@ import torch
 
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
-from .models import MoEPolicy, PPOConfig
+from .models import PPOConfig
+from .utils_cfg import build_policy
 from .trainer import PPOTrainer
 
 
@@ -115,16 +116,7 @@ def main() -> None:
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     input_dim = feat_df.shape[1]
-    model_cfg = config.get("model", {})
-    policy = MoEPolicy(
-        input_dim=input_dim,
-        num_actions=3,
-        expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
-        gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
-        num_experts=model_cfg.get("num_experts", 4),
-        temperature=model_cfg.get("temperature", 1.6),
-        top_k=model_cfg.get("top_k", 3),
-    )
+    policy = build_policy(input_dim, config)
     ppo_cfg = PPOConfig(**config.get("ppo", {}))
     trainer = PPOTrainer(
         policy,

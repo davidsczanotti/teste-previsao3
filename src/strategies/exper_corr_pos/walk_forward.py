@@ -13,6 +13,7 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy, PPOConfig
+from .utils_cfg import build_policy
 from .trainer import PPOTrainer
 from ...utils.metrics import calculate_metrics
 
@@ -159,15 +160,7 @@ def main() -> None:
             timestamps=train_ts,
         )
         input_dim = train_feats.shape[1]
-        policy = MoEPolicy(
-            input_dim=input_dim,
-            num_actions=3,
-            expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
-            gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
-            num_experts=model_cfg.get("num_experts", 4),
-            temperature=model_cfg.get("temperature", 1.6),
-            top_k=model_cfg.get("top_k", 3),
-        )
+        policy = build_policy(input_dim, cfg)
         trainer = PPOTrainer(policy, ppo_cfg, device=device)
 
         episodes = int(wf_cfg.get("episodes", 200))

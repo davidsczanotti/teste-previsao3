@@ -13,6 +13,8 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
 - Treino RL: PPO adaptado ao MoE. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
 - Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). Walk‑Forward e Monte Carlo podem ser habilitados conforme necessidade.
 
+Observação de avaliação: a avaliação greedy durante o treino é determinística (sem `random_start` e usando a janela fixa do fim dos dados). Isso deixa o `moe_policy_best_eval.pt` reprodutível e coerente com a auditoria.
+
 ## Estrutura do projeto
 ```
 src/strategies/exper_corr_pos/
@@ -28,12 +30,38 @@ src/strategies/exper_corr_pos/
   reports/                    # artefatos (checkpoints, resumos, etc.)
 ```
 
+## Relatórios e auditoria
+- Os relatórios adicionais são controlados por `config.json` (bloco `reports`) e gerados pelo auditor:
+  - `reports.trade_ledger.enabled/path`
+  - `reports.gating_attribution.enabled/path/plot_path`
+  - `reports.regime_summary.enabled/path`
+
+### Auditoria (sem flags específicos de estratégia)
+```bash
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.scripts.audit_policy
+```
+Artefatos (por padrão):
+- `src/strategies/exper_corr_pos/reports/train/trade_ledger.csv`
+  - colunas principais: `entry_ts`, `exit_ts`, `side`, `size`, `entry_price`, `exit_price`, `duration_bars`, `duration_hours`, `pnl_net`, `pnl_gross`, `cost`, `bonus`, `reason` (ex.: `trail_atr`, `trail_profit`, `flip`), além de pesos do gate por expert no momento de entrada (`entry_weight_*`) e média no trade (`avg_weight_*`).
+- `src/strategies/exper_corr_pos/reports/train/gating_attribution.csv` e `gating_attribution.png`
+  - visão de contribuição média dos experts em `win/loss/flat`.
+- `src/strategies/exper_corr_pos/reports/train/regime_summary.json`
+  - métricas agregadas por regime: `htf_trend_state` (−1/0/+1), `vol_bucket` (low/medium/high) e combinações.
+
+O auditor lê `visualize.days` para a janela (padrão 90) e força avaliação determinística (sem `random_start`).
+
 ## Dados e modo offline
 - Leitura: sempre do cache local (`data/klines_cache.db`) via `utils.data_loader`.
-- Atualização (opcional, com rede):
+- Atualização (opcional, com rede): parâmetros vem do `config.json` (`data.*`). Exemplos:
   ```bash
-  poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
-  poetry run python -m scripts.populate_cache ETHUSDT 1h --start "2017-01-01 00:00:00"
+  # apenas o par base (usa data.base_symbol/timeframe/start/lookback_days)
+  poetry run python -m scripts.populate_cache BTCUSDT
+
+  # popular todos os símbolos declarados (base, confirm e extras)
+  poetry run python -m scripts.populate_cache
+
+  # sobrescrever intervalo ou datas
+  poetry run python -m scripts.populate_cache BTCUSDT 4h --start "2020-01-01 00:00:00"
   ```
 - Execução offline (recomendado p/ reprodutibilidade): use a variável `BINANCE_OFFLINE=1` e um cache Numba local para acelerar funções do pandas_ta:
   ```bash
