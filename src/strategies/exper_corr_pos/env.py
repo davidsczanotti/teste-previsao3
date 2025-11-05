@@ -360,9 +360,14 @@ class BTCMixtureEnv(gym.Env):
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float
     ) -> float:
-        if not getattr(self.cfg, "allow_intrabar_closes", True):
-            return 0.0
         if self._pos == 0 or self._trailing is None:
+            return 0.0
+        # evita fechar imediatamente após abrir (mesmo candle) quando desativado
+        if (
+            not getattr(self.cfg, "allow_intrabar_closes", True)
+            and self._pos != 0
+            and self._step == getattr(self, "_entry_step", 0)
+        ):
             return 0.0
         reward_adj = 0.0
         # Atualiza trailing combinando ATR e trailing por lucro (pico/vale)
