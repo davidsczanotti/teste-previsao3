@@ -10,3 +10,29 @@ docker compose exec -w /app -e BINANCE_OFFLINE=0 app \
 docker compose exec -w /app -e BINANCE_OFFLINE=1 \
   -e NUMBA_CACHE_DIR=/app/.numba_cache app \
   python -m src.strategies.exper_corr_neg.train
+
+/////////////////////////
+Para deixar o treino rodando mesmo após fechar o MobaXterm, inicie-o desacoplado do seu terminal. Exemplo:
+docker exec -d teste-previsao3-container sh -lc 'cd /app && export BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=/app/.numba_cache && nohup python -m src.strategies.exper_corr_neg.train > src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log 2>&1'. O -d desacopla o comando do seu SSH e o nohup … > …log & grava tudo em um arquivo dentro do repo.
+Para conferir amanhã se o treino segue ativo:
+docker compose ps (deve mostrar o container UP)
+docker exec teste-previsao3-container pgrep -af exper_corr_neg.train (retorna o PID se o script ainda estiver rodando).
+Para ver o log em tempo real: docker exec teste-previsao3-container tail -f src/strategies/exper_corr_neg/reports/train/train_YYYYMMDD_HHMM.log.
+Todos os artefatos são salvos no próprio repositório por causa do bind .:/app e também nos volumes nomeados definidos no docker-compose.yml. Depois de reconectar, basta olhar em:
+src/strategies/exper_corr_neg/reports/train/metrics.csv
+src/strategies/exper_corr_neg/reports/train/run_manifest.json
+src/strategies/exper_corr_neg/reports/train/*.pt (checkpoints)
+src/strategies/exper_corr_neg/reports/train/*.png (gráficos)
+Se precisar do caminho físico dos volumes, rode docker volume inspect app-data etc. (fica em /var/lib/docker/volumes/app-data/_data).
+Para interromper com segurança depois: docker exec teste-previsao3-container pkill -f exper_corr_neg.train. Para retomar, garanta que train.resume=true e train.resume_path apontam para o checkpoint desejado em src/strategies/exper_corr_neg/config.json.
+Próximos passos naturais: 1) mantenha um log por execução e rode tail para acompanhar; 2) considere scriptar o start/stop em bash para evitar digitar tudo de novo; 3) se quiser monitoramento remoto, use watch com docker exec … tail metrics.csv ou configure tmux no servidor para sessões persistentes.
+docker exec -d teste-previsao3-container sh -lc 'cd /app && export BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=/app/.numba_cache && nohup python -m src.strategies.exper_corr_neg.train > src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log 2>&1'
+
+
+O treino está rodando em background no container. Para acompanhar, rode:
+
+docker exec teste-previsao3-container tail -f src/strategies/exper_corr_neg/reports/train/train_$(date +%Y%m%d_%H%M).log (troque pelo timestamp que saiu no nohup, ex. train_20241103_1649.log).
+Se quiser conferir logs mais antigos: ls src/strategies/exper_corr_neg/reports/train/train_*.log.
+Quando quiser interromper: docker exec teste-previsao3-container pkill -f exper_corr_neg.train.
+
+Artefatos novos continuam em src/strategies/exper_corr_neg/reports/train/.
