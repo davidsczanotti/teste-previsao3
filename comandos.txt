@@ -1,0 +1,12 @@
+No servidor, garanta que você está em /home/zanotti/projetos/teste-previsao3.
+Pare e suba o serviço de novo:
+docker compose down
+docker compose up -d --build
+(Os volumes app-data, app-reports, etc., preservam cache e relatórios — nada é perdido.)
+Agora os comandos funcionam direto com docker compose exec:
+docker compose exec -w /app -e BINANCE_OFFLINE=0 app \
+  python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+
+docker compose exec -w /app -e BINANCE_OFFLINE=1 \
+  -e NUMBA_CACHE_DIR=/app/.numba_cache app \
+  python -m src.strategies.exper_corr_neg.train
