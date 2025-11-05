@@ -145,9 +145,16 @@ def main() -> None:
     days = args.days or int(cfg.get("visualize", {}).get("days", 180))
     base_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
-    min_bars = max(int(cfg.get("data", {}).get("spread_window", 240)) + 20, 600)
-    base_df = base_df.tail(max(bars_for_days(timeframe, days), min_bars))
-    dataset = prepare_dataset(base_df, config=cfg, confirm_df=confirm_df)
+    spread_window = int(cfg.get("data", {}).get("spread_window", 240))
+    min_bars = max(spread_window + 20, bars_for_days(timeframe, days))
+    base_trimmed = base_df.tail(min_bars)
+    dataset = prepare_dataset(base_trimmed, config=cfg, confirm_df=confirm_df)
+    if dataset.empty:
+        dataset = prepare_dataset(base_df, config=cfg, confirm_df=confirm_df)
+        if dataset.empty:
+            raise RuntimeError(
+                "Dataset vazio após aplicar filtros para auditoria. Aumente visualize.days/--days ou reduza spread_window."
+            )
     price_cols = ["open", "high", "low", "close", "volume"]
     timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
