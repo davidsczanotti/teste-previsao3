@@ -190,26 +190,29 @@ def _task_from_symbol(
 
 def main() -> None:
     args = parse_args()
-
     if os.environ.get("BINANCE_OFFLINE", "0") == "1":
         raise SystemExit(
             "BINANCE_OFFLINE=1 detectado. Para popular o cache, remova essa variável (ou defina 0) e rode novamente."
         )
 
-    if args.start is None:
-        start_dt = datetime.now(UTC) - timedelta(days=max(1, int(args.days)))
-        start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        start_str = args.start
+    tasks = list(_iter_tasks(args))
+    for task in tasks:
+        if task.start is None:
+            start_dt = datetime.now(UTC) - timedelta(days=max(1, int(task.days)))
+            start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            start_str = task.start
 
-    print(f"[populate] Baixando {args.symbol} @ {args.interval} desde {start_str} até {args.end or '(agora)'}...")
-    df = get_historical_klines(args.symbol, args.interval, start_str, args.end)
-    count = 0 if df is None else len(df)
-    if count == 0:
-        raise SystemExit("Nenhum dado retornado. Verifique símbolo/intervalo/tempo e conectividade.")
-    first = df.iloc[0]["Date"].strftime("%Y-%m-%d %H:%M:%S")
-    last = df.iloc[-1]["Date"].strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[populate] OK: {count} candles persistidos em data/klines_cache.db ({first} -> {last})")
+        print(
+            f"[populate] Baixando {task.symbol} @ {task.interval} desde {start_str} até {task.end or '(agora)'}..."
+        )
+        df = get_historical_klines(task.symbol, task.interval, start_str, task.end)
+        count = 0 if df is None else len(df)
+        if count == 0:
+            raise SystemExit("Nenhum dado retornado. Verifique símbolo/intervalo/tempo e conectividade.")
+        first = df.iloc[0]["Date"].strftime("%Y-%m-%d %H:%M:%S")
+        last = df.iloc[-1]["Date"].strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[populate] OK: {count} candles persistidos em data/klines_cache.db ({first} -> {last})")
 
 
 if __name__ == "__main__":
