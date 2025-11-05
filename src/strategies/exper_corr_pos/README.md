@@ -1,15 +1,14 @@
-# exper_corr_pos — Mixture of Experts (RL) para BTCUSDT 1h
+# exper_corr_pos — Mixture of Experts (RL) para BTCUSDT 1d
 
-Este experimento implementa um agente de Aprendizagem por Reforço com Mixture of Experts (MoE) para BTCUSDT (1h), seguindo o fluxo e as boas práticas descritas no `AGENTS.md`. A proposta aqui é explorar **correlação positiva** entre sinais: o agente só entra forte quando múltiplos especialistas concordam (técnico + modelo de direção, multiframe, cointegração de pares e padrões de candle), privilegiando precisão em detrimento de volume de trades.
+Este experimento implementa um agente de Aprendizagem por Reforço com Mixture of Experts (MoE) para BTCUSDT (1d), seguindo o fluxo e as boas práticas descritas no `AGENTS.md`. A proposta aqui é explorar **correlação positiva** entre sinais: o agente só entra forte quando múltiplos especialistas concordam (técnico + modelo de direção, multiframe, cointegração de pares e padrões de candle), privilegiando precisão em detrimento de volume de trades.
 
 ## Decisões-chave
-- Ativo/timeframe: BTCUSDT 1h, desde ~2017 (cache local `data/klines_cache.db`).
+- Ativo/timeframe: BTCUSDT 1d, desde ~2017 (cache local `data/klines_cache.db`).
 - Ambiente e ações: `{short, flat, long}` com capital lógico inicial de 1000, alavancagem configurável, stops móveis por ATR, trailing adicional por pico/vale de lucro e teto de notional por trade (1000 USD), penalidade de turnover e encerramento antecipado por piso de equity ou drawdown máximo. As janelas de treino podem iniciar em pontos aleatórios (`random_start`) para evitar viés de começo de série.
-- MoE (PyTorch): 4 especialistas + gating com softmax (temperatura ajustável) e top‑k esparso. Um regularizador de balanceamento mantém o uso distribuído.
+- MoE (PyTorch): especialistas habilitados via `model.especialistas` + gating com softmax (temperatura ajustável) e top‑k esparso. Um regularizador de balanceamento mantém o uso distribuído.
   - **TrendML** — EMAs, Donchian e um preditor direcional online (pseudo-LightGBM) com lags, RSI, ATR e hora do dia.
-  - **MultiFrame** — concordância entre um filtro de tendência em 4h e gatilhos de pullback/RSI em 1h.
-  - **Spread** — cointegração BTC×ETH via beta/VECM + triggers de Bollinger no spread logarítmico.
-  - **Pattern** — forma de candles normalizada pelo ATR, flags clássicas (doji, hammer, engulfing) e contagens rolling.
+  - **MultiFrame** — concordância entre tendência semanal (1W) e gatilhos diários (1d) com pullback/RSI.
+  - (opcionais) **Spread** e **Pattern** — podem ser reativados via config.
 - Treino RL: PPO adaptado ao MoE. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
 - Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). Walk‑Forward e Monte Carlo podem ser habilitados conforme necessidade.
 
@@ -24,7 +23,7 @@ src/strategies/exper_corr_pos/
   env.py                      # ambiente de trading (Gym‑like, com stub se gym não existir)
   models.py                   # experts, gating network e política MoE (PyTorch)
   trainer.py                  # PPO trainer adaptado ao MoE
-  data.py                     # carregamento do BTCUSDT 1h e alinhamento de features
+  data.py                     # carregamento do BTCUSDT 1d e alinhamento de features
   train.py                    # treino contínuo (config‑driven)
   walk_forward.py             # walk‑forward (treino por janela + validação)
   reports/                    # artefatos (checkpoints, resumos, etc.)
@@ -72,8 +71,8 @@ O auditor lê `visualize.days` para a janela (padrão 90) e força avaliação d
 Todos os parâmetros ficam em `src/strategies/exper_corr_pos/config.json`:
 - `data`: símbolo principal (`base_symbol`), par de confirmação (`confirm_symbol`), timeframe base e superior, horizonte do preditor direcional e janela usada para o spread BTC×ETH.
 - `env`: custos, tamanho/alavancagem da posição (fixo ou dinâmico), multiplicadores de ATR (stop/trailing), penalidade de turnover, pisos de equity/drawdown, `accounting_mode` (`"mtm"` evita dupla contagem de PnL) e janela/aleatoriedade de início
-  - Novos: `max_trade_notional` (teto em USD por trade; default 1000), `profit_trail_pct` (percentual para trailing por lucro sobre pico/vale; ex. 0.02 = 2%). O trailing por lucro complementa o stop/trailing por ATR, mantendo stop loss ativo.
-  - `idle_penalty_factor`: fator (0 a 1) para aplicar penalidade automática quando o agente fica em cash. A cada candle flat, o ambiente debita `init_equity × fator / window_bars` do reward; com `factor = 1.0` e `window_bars = 8760`, isso equivale a ~US$ 0.11 por hora parado.
+  - Novos: `max_trade_notional` (teto em USD por trade; default 1000), `profit_trail_pct` (percentual para trailing por lucro sobre pico/vale). O trailing por lucro complementa o stop/trailing por ATR, mantendo stop loss ativo.
+  - `idle_penalty_factor`: fator (0 a 1) para aplicar penalidade automática quando o agente fica em cash. A cada candle flat, o ambiente debita `init_equity × fator / window_bars` do reward; com `factor = 1.0` e `window_bars = 365`, isso equivale a ~US$ 2.74 por dia parado.
   - `hold_bonus_alpha`: fator da “gorjeta” ao fechar uma posição. O bônus (ou malus) adicionado ao reward é `alpha × duração × PnL`, reforçando lucros longos e penalizando prejuízos prolongados.
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
@@ -242,7 +241,7 @@ Use este fluxo quando quiser reiniciar totalmente o experimento.
    (remova `--force` se preferir confirmar manualmente).
 2. Garanta que o cache tenha os dados necessários (apenas quando precisar reatualizar):
    ```bash
-   poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+   poetry run python -m scripts.populate_cache BTCUSDT
    ```
 3. Exporte o modo offline e rode o treino principal:
    ```bash

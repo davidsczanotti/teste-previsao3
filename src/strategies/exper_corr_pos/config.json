@@ -2,8 +2,8 @@
   "data": {
     "base_symbol": "BTCUSDT",
     "confirm_symbol": "ETHUSDT",
-    "timeframe": "1h",
-    "higher_timeframe": "4h",
+    "timeframe": "1d",
+    "higher_timeframe": "1W",
     "lookback_days": 3650,
     "ml_horizon": 3,
     "ml_decay": 0.995,
@@ -15,21 +15,21 @@
     "slippage_pct": 0.0001,
     "position_size": 0.00043,
     "stop_atr_mult": 3.0,
-    "trail_atr_mult": 2.1,
+    "trail_atr_mult": 2.4,
     "accounting_mode": "mtm",
     "init_equity": 1000.0,
     "leverage": 1.0,
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
-    "drawdown_kill_bars": 96,
-    "turnover_penalty": 0.45,
+    "drawdown_kill_bars": 90,
+    "turnover_penalty": 0.55,
     "dynamic_position": false,
     "random_start": true,
-    "window_bars": 8760,
+    "window_bars": 365,
     "idle_penalty_factor": 0.0,
     "hold_bonus_alpha": 0.0025,
     "max_trade_notional": 50.0,
-    "profit_trail_pct": 0.06
+    "profit_trail_pct": 0.08
   },
   "model": {
     "expert_hidden": [
@@ -41,8 +41,8 @@
       32
     ],
     "num_experts": 2,
-    "temperature": 1.0,
-    "top_k": 1,
+    "temperature": 1.1,
+    "top_k": 2,
     "expert_names": [
       "TrendML",
       "MultiFrame",
@@ -69,7 +69,7 @@
   },
   "train": {
     "episodes": 100000,
-    "rollout_steps": 1500,
+    "rollout_steps": 600,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/train",
     "resume": true,
@@ -80,7 +80,7 @@
     "eval_days": 90,
     "seed": 42,
     "usage_window": 100,
-    "lb_coef": 0.015,
+    "lb_coef": 0.02,
     "ckpt_every": 10,
     "final_every": 100,
     "entropy_coef_start": 0.018,

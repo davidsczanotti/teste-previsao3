@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import List, Dict, Any
+
+import pandas as pd
 
 from .models import MoEPolicy
 
@@ -50,3 +53,46 @@ def build_policy(input_dim: int, cfg: Dict[str, Any]) -> MoEPolicy:
     )
     return policy
 
+
+def timeframe_to_timedelta(tf: str | None) -> pd.Timedelta:
+    tf = str(tf or "1h").strip()
+    try:
+        return pd.to_timedelta(tf)
+    except ValueError:
+        mapping = {
+            "1min": "1T",
+            "5min": "5T",
+            "15min": "15T",
+            "30min": "30T",
+            "60min": "1H",
+            "1m": "1T",
+            "5m": "5T",
+            "15m": "15T",
+            "30m": "30T",
+            "60m": "1H",
+            "1h": "1H",
+            "4h": "4H",
+            "1d": "1D",
+            "1w": "1W",
+            "1W": "1W",
+        }
+        alias = mapping.get(tf.lower())
+        if alias:
+            return pd.to_timedelta(alias)
+        raise
+
+
+def bars_for_days(timeframe: str | None, days: int) -> int:
+    delta = timeframe_to_timedelta(timeframe)
+    if delta <= pd.Timedelta(0):
+        return max(1, int(days))
+    total = pd.to_timedelta(days, unit="D")
+    bars = total / delta
+    if bars <= 1:
+        return 1
+    return int(math.ceil(float(bars)))
+
+
+def hours_per_bar(timeframe: str | None) -> float:
+    delta = timeframe_to_timedelta(timeframe)
+    return float(delta / pd.Timedelta(hours=1))

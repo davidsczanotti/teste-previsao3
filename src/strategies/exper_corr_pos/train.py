@@ -15,7 +15,7 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import PPOConfig
-from .utils_cfg import build_policy
+from .utils_cfg import build_policy, bars_for_days
 from .trainer import PPOTrainer
 
 
@@ -106,6 +106,11 @@ def main() -> None:
     primary_df = load_primary_series(config)
     confirm_df = load_confirm_series(config)
     dataset = prepare_dataset(primary_df, config=config, confirm_df=confirm_df)
+
+    data_cfg = config.get("data", {})
+    timeframe = str(data_cfg.get("timeframe") or "").strip()
+    if not timeframe:
+        raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
 
     price_cols = ["open", "high", "low", "close", "volume"]
     timestamps = dataset.index.to_list()
@@ -315,9 +320,9 @@ def main() -> None:
     def _greedy_eval() -> tuple[float, bool]:
         try:
             # pequena avaliação em uma janela do fim dos dados
-            hours = eval_days * 24
-            tail_prices = price_df.tail(hours).reset_index(drop=True)
-            tail_feats = feat_df.tail(hours).reset_index(drop=True)
+            eval_bars = bars_for_days(timeframe, eval_days)
+            tail_prices = price_df.tail(eval_bars).reset_index(drop=True)
+            tail_feats = feat_df.tail(eval_bars).reset_index(drop=True)
             # Avaliação determinística: força random_start=False e janela completa
             eval_cfg = EnvConfig(**env_cfg.__dict__)
             eval_cfg.random_start = False

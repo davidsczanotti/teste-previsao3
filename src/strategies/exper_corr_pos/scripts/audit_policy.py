@@ -27,7 +27,7 @@ from ..data import load_primary_series, load_confirm_series, prepare_dataset
 from ..env import BTCMixtureEnv, EnvConfig
 from ..models import MoEPolicy
 from ..visualize import _find_checkpoint
-from ..utils_cfg import enabled_expert_names
+from ..utils_cfg import enabled_expert_names, bars_for_days, hours_per_bar, build_policy
 
 
 plt.switch_backend("Agg")
@@ -41,25 +41,6 @@ def _expert_labels(cfg: dict, count: int) -> List[str]:
     if len(names) == count:
         return names
     return [f"e{i}" for i in range(count)]
-
-
-def _hours_per_bar(timeframe: str) -> float:
-    tf = str(timeframe or "1h")
-    try:
-        delta = pd.to_timedelta(tf)
-        return float(delta / np.timedelta64(1, "h"))
-    except Exception:
-        mapping = {
-            "1m": 1.0 / 60.0,
-            "5m": 5.0 / 60.0,
-            "15m": 15.0 / 60.0,
-            "30m": 0.5,
-            "1h": 1.0,
-            "4h": 4.0,
-            "1d": 24.0,
-            "1w": 24.0 * 7,
-        }
-        return float(mapping.get(tf.lower(), 1.0))
 
 
 def _vol_bucket(value: float, q1: float, q2: float) -> str:
@@ -130,7 +111,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_policy(cfg: dict, checkpoint: Path | None) -> tuple[MoEPolicy, Path]:
-    model_cfg = cfg.get("model", {})
     prefer = cfg.get("visualize", {}).get("prefer", "latest")
     chosen = Path(checkpoint) if checkpoint else _find_checkpoint(prefer)
 
@@ -141,15 +121,7 @@ def load_policy(cfg: dict, checkpoint: Path | None) -> tuple[MoEPolicy, Path]:
     price_cols = ["open", "high", "low", "close", "volume"]
     input_dim = dummy_dataset.drop(columns=price_cols).shape[1]
 
-    policy = MoEPolicy(
-        input_dim=input_dim,
-        num_actions=3,
-        expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
-        gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
-        num_experts=model_cfg.get("num_experts", 4),
-        temperature=model_cfg.get("temperature", 1.6),
-        top_k=model_cfg.get("top_k", 3),
-    )
+    policy = build_policy(input_dim, cfg)
     state = torch.load(chosen, map_location="cpu")
     model_state = policy.state_dict()
     filtered = {k: v for k, v in state.items() if k in model_state and model_state[k].shape == v.shape}
@@ -166,11 +138,15 @@ def main() -> None:
     gating_cfg = report_cfg.get("gating_attribution", {})
     regime_cfg = report_cfg.get("regime_summary", {})
 
+    data_cfg = cfg.get("data", {})
+    timeframe = str(data_cfg.get("timeframe") or "").strip()
+    if not timeframe:
+        raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
     days = args.days or int(cfg.get("visualize", {}).get("days", 180))
     base_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
     min_bars = max(int(cfg.get("data", {}).get("spread_window", 240)) + 20, 600)
-    base_df = base_df.tail(max(days * 24, min_bars))
+    base_df = base_df.tail(max(bars_for_days(timeframe, days), min_bars))
     dataset = prepare_dataset(base_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
     timestamps = dataset.index.to_list()
@@ -191,7 +167,7 @@ def main() -> None:
     trade_pnls: List[float] = []
     trade_bars: List[int] = []
 
-    hours_per_bar = _hours_per_bar(cfg.get("data", {}).get("timeframe", "1h"))
+    bar_hours = hours_per_bar(timeframe)
     if "ret_vol_24" in feat_df.columns:
         vol_series = feat_df["ret_vol_24"].dropna()
         if vol_series.empty:
@@ -234,7 +210,7 @@ def main() -> None:
             cost = float(info.get("trade_cost", 0.0))
             bonus = float(info.get("trade_bonus", 0.0))
             duration_bars = int(info.get("trade_bars", 0))
-            duration_hours = float(duration_bars) * hours_per_bar
+            duration_hours = float(duration_bars) * bar_hours
             reason = str(info.get("trade_reason", ""))
             side_int = int(info.get("trade_side", 0))
             size = float(info.get("trade_size", 0.0))

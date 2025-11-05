@@ -12,8 +12,7 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
-from .utils_cfg import build_policy
-from .utils_cfg import enabled_expert_names
+from .utils_cfg import build_policy, enabled_expert_names, bars_for_days
 
 CFG_PATH = Path("src/strategies/exper_corr_pos/config.json")
 FINAL_MODEL_PATH = Path("src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt")
@@ -108,11 +107,15 @@ def main() -> None:
     cfg = json.loads(CFG_PATH.read_text())
 
     # Janela de dados para visualização
+    data_cfg = cfg.get("data", {})
+    timeframe = str(data_cfg.get("timeframe") or "").strip()
+    if not timeframe:
+        raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
     vis_days = int(cfg.get("visualize", {}).get("days", 90))
     primary_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
     if vis_days > 0:
-        limit = vis_days * 24
+        limit = bars_for_days(timeframe, vis_days)
         primary_df = primary_df.tail(limit)
     dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
@@ -145,7 +148,7 @@ def main() -> None:
     ax_price.scatter(idx[shorts], closes[shorts], color="#ff6666", marker="v", s=40, label="Short")
 
     ax_price.set_xlabel("Índice do candle")
-    ax_price.set_ylabel("Preço BTCUSDT (1h)")
+    ax_price.set_ylabel(f"Preço {data_cfg.get('base_symbol', 'BTCUSDT')} ({timeframe})")
     ax_price.legend(loc="upper left")
 
     ax_equity = ax_price.twinx()
@@ -153,7 +156,7 @@ def main() -> None:
     ax_equity.set_ylabel("Equity lógica")
     ax_equity.legend(loc="upper right")
 
-    fig.suptitle("Agente MoE — Confluência de Correlação Positiva (BTCUSDT 1h)")
+    fig.suptitle(f"Agente MoE — Confluência de Correlação Positiva ({data_cfg.get('base_symbol', 'BTCUSDT')} {timeframe})")
     # legenda didática com nomes dos experts
     num_experts_cfg = cfg.get("model", {}).get("num_experts", 4)
     names = _expert_names(cfg, num_experts_cfg)

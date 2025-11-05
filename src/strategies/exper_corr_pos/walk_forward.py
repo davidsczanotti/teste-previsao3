@@ -13,7 +13,7 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy, PPOConfig
-from .utils_cfg import build_policy
+from .utils_cfg import build_policy, bars_for_days, hours_per_bar
 from .trainer import PPOTrainer
 from ...utils.metrics import calculate_metrics
 
@@ -60,7 +60,7 @@ def main() -> None:
     cfg = json.loads(Path(args.config).read_text())
     wf_cfg = cfg.get("walk_forward", {})
     env_cfg = EnvConfig(**cfg.get("env", {}))
-    model_cfg = cfg.get("model", {})
+    data_cfg = cfg.get("data", {})
     ppo_cfg = PPOConfig(**cfg.get("ppo", {}))
 
     primary_df = load_primary_series(cfg)
@@ -71,11 +71,15 @@ def main() -> None:
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
-    train_hours = int(wf_cfg.get("train_days", 720)) * 24
-    val_hours = int(wf_cfg.get("val_days", 180)) * 24
-    step_hours = int(wf_cfg.get("step_days", 90)) * 24
+    timeframe = str(data_cfg.get("timeframe") or "").strip()
+    if not timeframe:
+        raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
+    bar_hours = hours_per_bar(timeframe)
+    train_bars = bars_for_days(timeframe, int(wf_cfg.get("train_days", 720)))
+    val_bars = bars_for_days(timeframe, int(wf_cfg.get("val_days", 180)))
+    step_bars = bars_for_days(timeframe, int(wf_cfg.get("step_days", 90)))
 
-    windows = build_windows(len(price_df), train_hours, val_hours, step_hours)
+    windows = build_windows(len(price_df), train_bars, val_bars, step_bars)
     outdir = Path(wf_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/walk_forward"))
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -121,7 +125,7 @@ def main() -> None:
         metrics = calculate_metrics(trades)
         durs = [t.get("duration_bars", 0) for t in trades if t.get("duration_bars", 0) > 0]
         avg_dur_bars = float(np.mean(durs)) if durs else 0.0
-        avg_dur_hours = avg_dur_bars  # timeframe 1h
+        avg_dur_hours = avg_dur_bars * bar_hours
         return {
             "pnl": float(np.sum(rewards)),
             "equity_end": float(info.get("equity", 0.0)),

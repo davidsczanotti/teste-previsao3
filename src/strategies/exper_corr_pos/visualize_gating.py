@@ -11,8 +11,7 @@ import torch
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
-from .utils_cfg import build_policy
-from .utils_cfg import enabled_expert_names
+from .utils_cfg import build_policy, enabled_expert_names, bars_for_days
 
 CFG_PATH = Path("src/strategies/exper_corr_pos/config.json")
 FINAL_MODEL_PATH = Path("src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt")
@@ -60,12 +59,16 @@ def main() -> None:
     cfg = json.loads(CFG_PATH.read_text())
     env_cfg = EnvConfig(**cfg.get("env", {}))
     train_cfg = cfg.get("train", {})
+    data_cfg = cfg.get("data", {})
+    timeframe = str(data_cfg.get("timeframe") or "").strip()
+    if not timeframe:
+        raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
     eval_days = int(train_cfg.get("eval_days", 90))
 
     # dados
     primary_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
-    lookback_bars = max(eval_days, 120) * 24
+    lookback_bars = bars_for_days(timeframe, max(eval_days, 120))
     primary_df = primary_df.tail(lookback_bars)
     dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
     price_cols = ["open", "high", "low", "close", "volume"]
@@ -76,9 +79,9 @@ def main() -> None:
     policy = _load_policy(feat_df.shape[1], cfg)
 
     # janela de avaliação
-    hours = eval_days * 24
-    prices = price_df.tail(hours).reset_index(drop=True)
-    feats = feat_df.tail(hours).reset_index(drop=True)
+    eval_bars = bars_for_days(timeframe, eval_days)
+    prices = price_df.tail(eval_bars).reset_index(drop=True)
+    feats = feat_df.tail(eval_bars).reset_index(drop=True)
     tail_ts = timestamps[-len(prices) :] if len(prices) > 0 else []
     env = BTCMixtureEnv(prices, feats, env_cfg, timestamps=tail_ts)
 
