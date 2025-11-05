@@ -8,7 +8,7 @@
     "ml_horizon": 3,
     "ml_decay": 0.995,
     "ml_ridge": 0.001,
-    "spread_window": 240
+    "spread_window": 460
   },
   "env": {
     "fee_pct": 0.001,
@@ -27,9 +27,9 @@
     "random_start": true,
     "window_bars": 540,
     "idle_penalty_factor": 0.002,
-    "hold_bonus_alpha": 0.0025,
+    "hold_bonus_alpha": 0.0001,
     "max_trade_notional": 50.0,
-    "profit_trail_pct": 0.15,
+    "profit_trail_pct": 0.08,
     "allow_intrabar_closes": false
   },
   "model": {
@@ -41,9 +41,9 @@
       64,
       32
     ],
-    "num_experts": 3,
-    "temperature": 1.1,
-    "top_k": 1,
+    "num_experts": 4,
+    "temperature": 1.5,
+    "top_k": 3,
     "expert_names": [
       "TrendML",
       "MultiFrame",
@@ -54,7 +54,7 @@
       "TrendML": true,
       "MultiFrame": true,
       "Spread": true,
-      "Pattern": false
+      "Pattern": true
     }
   },
   "ppo": {
@@ -66,7 +66,7 @@
     "value_coef": 0.3,
     "max_grad_norm": 0.5,
     "train_iters": 6,
-    "batch_size": 768
+    "batch_size": 256
   },
   "train": {
     "episodes": 100000,
@@ -78,10 +78,10 @@
     "log_every": 5,
     "plot_every": 50,
     "eval_every": 50,
-    "eval_days": 90,
+    "eval_days": 180,
     "seed": 42,
     "usage_window": 100,
-    "lb_coef": 0.05,
+    "lb_coef": 0.12,
     "ckpt_every": 10,
     "final_every": 100,
     "entropy_coef_start": 0.018,
@@ -107,7 +107,7 @@
     "outdir": "src/strategies/exper_corr_pos/reports/walk_forward"
   },
   "visualize": {
-    "days": 90,
+    "days": 540,
     "prefer": "best"
   },
   "reports": {

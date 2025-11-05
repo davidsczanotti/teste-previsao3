@@ -141,6 +141,7 @@ class BTCMixtureEnv(gym.Env):
         self._start_idx: int = 0
         self._end_idx: int = len(self.df)
         self._idle_penalty_per_step: float = 0.0
+        self._pending_action: Optional[int] = None
 
     def reset(self) -> np.ndarray:
         total_len = len(self.df)
@@ -184,6 +185,7 @@ class BTCMixtureEnv(gym.Env):
         self._open_cost = 0.0
         self._entry_idx = -1
         self._entry_timestamp = None
+        self._pending_action = None
         self._episode_length = max(1, self._end_idx - self._start_idx)
         if self.cfg.idle_penalty_factor > 0.0:
             self._idle_penalty_per_step = (
@@ -201,6 +203,15 @@ class BTCMixtureEnv(gym.Env):
         cur_idx = self._start_idx + self._step
         price = float(self.df.iloc[cur_idx]["close"])
         atr = float(self.features.iloc[cur_idx]["atr_14"])
+
+        if not getattr(self.cfg, "allow_intrabar_closes", True):
+            if self._pending_action is not None:
+                action = self._pending_action
+                self._pending_action = None
+            else:
+                if not (self._step == 0 and self._pos == 0):
+                    self._pending_action = action
+                    action = self._pos + 1
 
         desired_pos = action - 1  # map {0:-1,1:0,2:+1}
 
