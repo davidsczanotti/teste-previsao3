@@ -158,12 +158,25 @@ def main() -> None:
     if metrics_path.exists():
         try:
             with metrics_path.open("r") as f:
-                header = f.readline()
-            if (
-                "entropy_coef" not in header
-                or (usage_cols and usage_cols[0] not in header)
-                or "greedy_ruined" not in header
-            ):
+                header = f.readline().strip()
+            expected_cols = [
+                "episode",
+                "policy_loss",
+                "value_loss",
+                "entropy",
+                "entropy_coef",
+                "load_balance",
+                "avg_reward",
+                "sum_reward",
+            ] + usage_cols + ["greedy_equity", "greedy_ruined"]
+
+            header_ok = header.startswith("episode,")
+            for col in ("entropy_coef", "greedy_ruined"):
+                header_ok &= col in header
+            if usage_cols:
+                header_ok &= usage_cols[0] in header
+
+            if not header_ok:
                 legacy_path = outdir / "metrics_legacy.csv"
                 metrics_path.rename(legacy_path)
                 print(f"[metrics] CSV antigo movido para {legacy_path} e um novo será criado.")
