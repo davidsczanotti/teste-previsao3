@@ -18,15 +18,23 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 """
 Tune timeouts to reduce read timeouts and allow per-call retries from wrappers.
 Using a (connect, read) tuple keeps the connection snappy while allowing
-slightly longer reads when Binance is slower.
+slightly longer reads quando a Binance está lenta.
 """
 
-_OFFLINE = os.environ.get("BINANCE_OFFLINE", "0") == "1"
+_client_cache: Client | None = None
 
-if _OFFLINE:
-    client = None
-else:
-    client = Client("", "", requests_params={"timeout": (5, 30), "verify": False})
+
+def _is_offline() -> bool:
+    return os.environ.get("BINANCE_OFFLINE", "0") == "1"
+
+
+def _get_client() -> Client | None:
+    global _client_cache
+    if _is_offline():
+        return None
+    if _client_cache is None:
+        _client_cache = Client("", "", requests_params={"timeout": (5, 30), "verify": False})
+    return _client_cache
 
 
 def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> float:
@@ -37,6 +45,9 @@ def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> fl
         retries: número de tentativas
         backoff: base do tempo de espera entre tentativas (segundos)
     """
+    client = _get_client()
+    if client is None:
+        raise RuntimeError("BINANCE_OFFLINE=1: não é possível buscar preço atual sem rede.")
     last_exc: Exception | None = None
     for i in range(max(1, retries)):
         try:
@@ -54,6 +65,7 @@ def get_current_price(symbol: str, retries: int = 3, backoff: float = 0.5) -> fl
 
 
 def _download_klines(symbol: str, interval: str, start_ms: int, end_ms: int):
+    client = _get_client()
     if start_ms > end_ms or client is None:
         return []
     raw = client.get_historical_klines(symbol, interval, start_ms, end_ms)
@@ -93,6 +105,9 @@ def _format_output(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _direct_download(symbol: str, interval: str, start_str, end_str=None) -> pd.DataFrame:
+    client = _get_client()
+    if client is None:
+        return pd.DataFrame()
     raw = client.get_historical_klines(symbol, interval, start_str, end_str)
     if not raw:
         return pd.DataFrame()

@@ -68,9 +68,16 @@ def main() -> None:
     # dados
     primary_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
-    lookback_bars = bars_for_days(timeframe, max(eval_days, 120))
-    primary_df = primary_df.tail(lookback_bars)
-    dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
+    spread_window = int(data_cfg.get("spread_window", 240))
+    min_bars = max(spread_window + 20, bars_for_days(timeframe, max(eval_days, 120)))
+    primary_trimmed = primary_df.tail(min_bars)
+    dataset = prepare_dataset(primary_trimmed, config=cfg, confirm_df=confirm_df)
+    if dataset.empty:
+        dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
+        if dataset.empty:
+            raise RuntimeError(
+                "Dataset vazio após aplicar filtros para visualizar o gating. Aumente train.eval_days ou reduza spread_window."
+            )
     price_cols = ["open", "high", "low", "close", "volume"]
     timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)

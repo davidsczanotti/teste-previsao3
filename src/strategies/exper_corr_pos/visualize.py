@@ -114,10 +114,21 @@ def main() -> None:
     vis_days = int(cfg.get("visualize", {}).get("days", 90))
     primary_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)
-    if vis_days > 0:
-        limit = bars_for_days(timeframe, vis_days)
-        primary_df = primary_df.tail(limit)
-    dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
+    spread_window = int(data_cfg.get("spread_window", 240))
+    min_bars = max(spread_window + 20, bars_for_days(timeframe, vis_days) if vis_days > 0 else 0)
+    if min_bars > 0:
+        primary_trimmed = primary_df.tail(min_bars)
+    else:
+        primary_trimmed = primary_df
+    dataset = prepare_dataset(primary_trimmed, config=cfg, confirm_df=confirm_df)
+    if dataset.empty:
+        # fallback para série completa
+        dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
+        if dataset.empty:
+            raise RuntimeError(
+                "Dataset vazio após aplicar filtros para visualização. Aumente visualize.days ou ajuste spread_window no config."
+            )
+
     price_cols = ["open", "high", "low", "close", "volume"]
     timestamps = dataset.index.to_list()
     price_df = dataset[price_cols].reset_index(drop=True)
