@@ -64,6 +64,7 @@ class EnvConfig:
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
+    allow_intrabar_closes: bool = True  # permite fechar/reabrir na mesma barra
 
 
 class BTCMixtureEnv(gym.Env):
@@ -359,6 +360,8 @@ class BTCMixtureEnv(gym.Env):
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float
     ) -> float:
+        if not getattr(self.cfg, "allow_intrabar_closes", True):
+            return 0.0
         if self._pos == 0 or self._trailing is None:
             return 0.0
         reward_adj = 0.0
