@@ -30,7 +30,10 @@
     "hold_bonus_alpha": 0.0001,
     "max_trade_notional": 50.0,
     "profit_trail_pct": 0.08,
-    "allow_intrabar_closes": false
+    "allow_intrabar_closes": false,
+    "adaptive_stop_window": 50,
+    "kelly_fraction": 0.1,
+    "var_confidence": 0.95
   },
   "model": {
     "expert_hidden": [

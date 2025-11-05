@@ -65,6 +65,9 @@ class EnvConfig:
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
     allow_intrabar_closes: bool = True  # permite fechar/reabrir na mesma barra
+    adaptive_stop_window: int = 50      # janela para calcular ATR histórico médio
+    kelly_fraction: float = 0.1         # fração Kelly para position sizing
+    var_confidence: float = 0.95        # confiança para VaR
 
 
 class BTCMixtureEnv(gym.Env):
@@ -348,6 +351,24 @@ class BTCMixtureEnv(gym.Env):
             return pnl - cost
         return -cost + pnl + bonus
 
+    def _compute_adaptive_atr_mult(self, atr: float) -> Tuple[float, float]:
+        """Calcula multiplicadores ATR adaptativos baseados na volatilidade histórica."""
+        window = getattr(self.cfg, "adaptive_stop_window", 50)
+        cur_idx = self._start_idx + self._step
+        start_idx = max(0, cur_idx - window)
+        if start_idx >= cur_idx:
+            # sem histórico suficiente, usa valores base
+            return self.cfg.stop_atr_mult, self.cfg.trail_atr_mult
+        hist_atr = self.features.iloc[start_idx:cur_idx]["atr_14"].mean()
+        if hist_atr <= 0:
+            return self.cfg.stop_atr_mult, self.cfg.trail_atr_mult
+        ratio = atr / hist_atr
+        # limita o ajuste para evitar extremos
+        ratio = max(0.5, min(2.0, ratio))
+        stop_mult = self.cfg.stop_atr_mult * ratio
+        trail_mult = self.cfg.trail_atr_mult * ratio
+        return stop_mult, trail_mult
+
     def _open_position(self, pos: int, price: float, atr: float) -> float:
         self._pos = pos
         self._entry_price = price
@@ -355,12 +376,14 @@ class BTCMixtureEnv(gym.Env):
         self._entry_step = self._step
         self._entry_idx = self._start_idx + self._step
         self._entry_timestamp = self._resolve_timestamp(self._entry_idx)
+        # Calcula stops adaptativos
+        stop_mult, trail_mult = self._compute_adaptive_atr_mult(atr)
         if pos > 0:
-            self._trailing = price - self.cfg.stop_atr_mult * atr
+            self._trailing = price - stop_mult * atr
             self._peak_price = price
             self._trough_price = None
         else:
-            self._trailing = price + self.cfg.stop_atr_mult * atr
+            self._trailing = price + stop_mult * atr
             self._trough_price = price
             self._peak_price = None
         cost = self._transaction_cost(price, self._pos_size)
@@ -431,9 +454,32 @@ class BTCMixtureEnv(gym.Env):
             cap_size = max_notional / px if max_notional > 0 else float("inf")
             return float(min(self.cfg.position_size, cap_size))
         equity = max(self._equity, 0.0)
-        notional = equity * max(self.cfg.leverage, 0.0)
-        capped = min(notional, max_notional) if max_notional > 0 else notional
-        return capped / px
+        # Kelly Criterion simplificado: usa volatilidade como proxy para risco
+        kelly_fraction = getattr(self.cfg, "kelly_fraction", 0.1)
+        var_confidence = getattr(self.cfg, "var_confidence", 0.95)
+        # Calcula volatilidade histórica (std de retornos)
+        window = getattr(self.cfg, "adaptive_stop_window", 50)
+        cur_idx = self._start_idx + self._step
+        start_idx = max(0, cur_idx - window)
+        if start_idx < cur_idx:
+            returns = self.df.iloc[start_idx:cur_idx]["close"].pct_change().dropna()
+            if len(returns) > 0:
+                vol = returns.std()
+                # Kelly: f = (expected_return / variance), mas aqui expected_return ~ 0, então f = kelly_fraction / vol
+                kelly_adj = kelly_fraction / max(vol, 0.01)  # evita divisão por zero
+                # VaR: limita exposição para não exceder perda máxima
+                z_score = np.abs(np.percentile(np.random.normal(0, 1, 1000), (1 - var_confidence) * 100))
+                var_limit = equity * 0.1  # assume perda máxima de 10% do equity
+                var_size = var_limit / (px * vol * z_score) if vol > 0 else float("inf")
+                # Combina Kelly e VaR
+                notional = equity * min(kelly_adj, var_size / equity)
+            else:
+                notional = equity * kelly_fraction
+        else:
+            notional = equity * kelly_fraction
+        # Aplica leverage e cap
+        notional = min(notional * max(self.cfg.leverage, 0.0), max_notional) if max_notional > 0 else notional * max(self.cfg.leverage, 0.0)
+        return notional / px
 
     def _resolve_timestamp(self, idx: int) -> Optional[pd.Timestamp]:
         if self._timestamps is None or len(self._timestamps) == 0:
