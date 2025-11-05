@@ -48,8 +48,13 @@ def build_policy(input_dim: int, cfg: Dict[str, Any]) -> MoEPolicy:
         expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
         gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
         num_experts=num_experts,
-        temperature=model_cfg.get("temperature", 1.6),
-        top_k=model_cfg.get("top_k", 3),
+        temperature=float(model_cfg.get("temperature", 1.6)),
+        top_k=int(model_cfg.get("top_k", 3)),
+        gating_use_attention=bool(model_cfg.get("use_attention", False)),
+        attention_dim=int(model_cfg.get("attention_dim", 64)),
+        attention_heads=int(model_cfg.get("attention_heads", 4)),
+        attention_dropout=float(model_cfg.get("attention_dropout", 0.0)),
+        attention_weight=float(model_cfg.get("attention_weight", 1.0)),
     )
     return policy
 

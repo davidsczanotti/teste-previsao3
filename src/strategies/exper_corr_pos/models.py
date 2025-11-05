@@ -29,24 +29,69 @@ class Expert(nn.Module):
 
 
 class GatingNetwork(nn.Module):
-    def __init__(self, input_dim: int, num_experts: int, hidden: List[int], temperature: float = 0.7) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        num_experts: int,
+        hidden: List[int],
+        temperature: float = 0.7,
+        *,
+        use_attention: bool = False,
+        attention_dim: int = 64,
+        attention_heads: int = 4,
+        attention_dropout: float = 0.0,
+        attention_weight: float = 1.0,
+    ) -> None:
         super().__init__()
         self.temperature = temperature
         self.num_experts = num_experts
         self.net = mlp(input_dim, hidden, num_experts)
+        self.use_attention = bool(use_attention)
+        self.attention_weight = float(attention_weight)
+        self._eps = 1e-9
+
+        if self.use_attention:
+            self.attention_dim = int(attention_dim)
+            heads = max(1, int(attention_heads))
+            if self.attention_dim % heads != 0:
+                raise ValueError("attention_dim deve ser divisível por attention_heads")
+            self.query_proj = nn.Linear(input_dim, self.attention_dim)
+            self.key_proj = nn.Linear(input_dim, num_experts * self.attention_dim)
+            self.value_proj = nn.Linear(input_dim, num_experts * self.attention_dim)
+            self.attn = nn.MultiheadAttention(
+                self.attention_dim,
+                num_heads=heads,
+                batch_first=True,
+                dropout=float(attention_dropout),
+            )
 
     def forward(self, x: torch.Tensor, top_k: int = 2) -> Tuple[torch.Tensor, torch.Tensor]:
-        logits = self.net(x) / self.temperature
+        logits = self.net(x)
+
+        if self.use_attention:
+            # Atenção simples: projeta a observação para query e gera chaves/valores dependentes dos experts.
+            query = self.query_proj(x).unsqueeze(1)  # [B, 1, D]
+            keys = self.key_proj(x).view(-1, self.num_experts, self.attention_dim)
+            values = self.value_proj(x).view(-1, self.num_experts, self.attention_dim)
+            _, attn_weights = self.attn(query, keys, values)
+            # Usa a distribuição de atenção (já normalizada) como ajuste nos logits.
+            attn_logits = torch.log(attn_weights.squeeze(1) + self._eps)
+            logits = logits + self.attention_weight * attn_logits
+
+        logits = logits / self.temperature
         weights = torch.softmax(logits, dim=-1)
-        if top_k >= self.num_experts:
-            return weights, torch.ones_like(weights)
+
+        if top_k is None or top_k <= 0 or top_k >= self.num_experts:
+            mask = torch.ones_like(weights)
+            return weights, mask
+
+        top_k = min(int(top_k), self.num_experts)
         top_values, top_indices = torch.topk(weights, k=top_k, dim=-1)
         mask = torch.zeros_like(weights)
         mask.scatter_(dim=-1, index=top_indices, src=torch.ones_like(top_values))
         masked_weights = weights * mask
-        norm_weights = masked_weights / (masked_weights.sum(dim=-1, keepdim=True) + 1e-9)
+        norm_weights = masked_weights / (masked_weights.sum(dim=-1, keepdim=True) + self._eps)
         return norm_weights, mask
-
 
 @dataclass
 class PPOConfig:
@@ -71,6 +116,11 @@ class MoEPolicy(nn.Module):
         num_experts: int = 5,
         temperature: float = 0.7,
         top_k: int = 2,
+        gating_use_attention: bool = False,
+        attention_dim: int = 64,
+        attention_heads: int = 4,
+        attention_dropout: float = 0.0,
+        attention_weight: float = 1.0,
     ) -> None:
         super().__init__()
         self.num_actions = num_actions
@@ -79,7 +129,17 @@ class MoEPolicy(nn.Module):
         self.experts = nn.ModuleList(
             [Expert(input_dim, expert_hidden, num_actions) for _ in range(num_experts)]
         )
-        self.gating = GatingNetwork(input_dim, num_experts, gating_hidden, temperature=temperature)
+        self.gating = GatingNetwork(
+            input_dim,
+            num_experts,
+            gating_hidden,
+            temperature=temperature,
+            use_attention=gating_use_attention,
+            attention_dim=attention_dim,
+            attention_heads=attention_heads,
+            attention_dropout=attention_dropout,
+            attention_weight=attention_weight,
+        )
         self.value_net = mlp(input_dim, expert_hidden, 1)
 
     def forward(self, obs: torch.Tensor) -> Tuple[Categorical, torch.Tensor, torch.Tensor]:
@@ -91,4 +151,3 @@ class MoEPolicy(nn.Module):
         # load balancing (variance of weights)
         lb_loss = mask.mean(dim=0).var()  # encourages spread usage
         return dist, value, lb_loss
-

@@ -44,6 +44,11 @@
     "num_experts": 4,
     "temperature": 1.5,
     "top_k": 3,
+    "use_attention": true,
+    "attention_dim": 96,
+    "attention_heads": 4,
+    "attention_dropout": 0.1,
+    "attention_weight": 0.75,
     "expert_names": [
       "TrendML",
       "MultiFrame",
