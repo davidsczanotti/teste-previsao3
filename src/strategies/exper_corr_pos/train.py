@@ -164,22 +164,15 @@ def main() -> None:
         try:
             with metrics_path.open("r") as f:
                 header = f.readline().strip()
-            expected_cols = [
-                "episode",
-                "policy_loss",
-                "value_loss",
-                "entropy",
-                "entropy_coef",
-                "load_balance",
-                "avg_reward",
-                "sum_reward",
-            ] + usage_cols + ["greedy_equity", "greedy_ruined"]
-
-            header_ok = header.startswith("episode,")
-            for col in ("entropy_coef", "greedy_ruined"):
-                header_ok &= col in header
-            if usage_cols:
-                header_ok &= usage_cols[0] in header
+            header_ok = header.startswith("episode,") and ("entropy_coef" in header) and ("greedy_ruined" in header)
+            # Verifica se a quantidade de colunas usage_e* no cabeçalho bate com o número de experts
+            try:
+                cols = [c.strip() for c in header.split(",") if c]
+                usage_in_header = [c for c in cols if c.startswith("usage_e")]
+                if len(usage_in_header) != len(usage_cols):
+                    header_ok = False
+            except Exception:
+                header_ok = False
 
             if not header_ok:
                 legacy_path = outdir / "metrics_legacy.csv"

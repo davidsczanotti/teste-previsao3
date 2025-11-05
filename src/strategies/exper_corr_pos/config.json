@@ -40,7 +40,7 @@
       64,
       32
     ],
-    "num_experts": 2,
+    "num_experts": 3,
     "temperature": 1.1,
     "top_k": 2,
     "expert_names": [
@@ -52,7 +52,7 @@
     "especialistas": {
       "TrendML": true,
       "MultiFrame": true,
-      "Spread": false,
+      "Spread": true,
       "Pattern": false
     }
   },
@@ -90,7 +90,7 @@
   "pbt": {
     "pop": 2,
     "rounds": 3,
-    "episodes": 5000,
+    "episodes": 15000,
     "concurrency": 2,
     "threads": 2,
     "seed_checkpoint": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
