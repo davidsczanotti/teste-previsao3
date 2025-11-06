@@ -140,7 +140,8 @@ def perturb_features(feat_df: pd.DataFrame, rng: Generator, noise_std: float) ->
     feat_std = feat_df.std().replace(0.0, 1.0)
     noise = rng.normal(0.0, noise_std, size=feat_df.shape)
     perturbed = feat_df + noise * feat_std.values
-    return perturbed.replace([np.inf, -np.inf], np.nan).fillna(method="ffill").fillna(0.0)
+    # Future-proof forward fill (avoid deprecated fillna(method="ffill"))
+    return perturbed.replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
 
 
 def run_monte_carlo_analysis(

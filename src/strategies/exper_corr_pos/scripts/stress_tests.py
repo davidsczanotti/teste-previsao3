@@ -178,8 +178,8 @@ def main() -> None:
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     payload = {
-        "config": args.config,
-        "model_path": args.model_path,
+        "config": str(Path(args.config)),
+        "model_path": str(Path(args.model_path)),
         "baseline": baseline,
         "cost_sensitivity": cost_results,
         "lag_sensitivity": lag_results,

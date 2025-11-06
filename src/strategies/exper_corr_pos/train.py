@@ -479,6 +479,8 @@ def train_agent(
 
     last_metrics: Optional[Dict[str, Any]] = None
     for episode in range(1, episodes + 1):
+        # Compute absolute episode index (respects resumed runs)
+        actual_episode = episode_offset + episode
         if ent_decay_episodes > 0:
             progress = min(1.0, episode / float(ent_decay_episodes))
             current_entropy_coef = ent_start + (ent_end - ent_start) * progress
@@ -486,9 +488,9 @@ def train_agent(
         else:
             current_entropy_coef = trainer.cfg.entropy_coef
 
-        rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, episode, base_rollout_steps)
+        # Use absolute index to select curriculum phase when resuming
+        rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, actual_episode, base_rollout_steps)
         last_metrics = trainer.train_step(env, rollout_steps)
-        actual_episode = episode_offset + episode
 
         greedy_equity = None
         greedy_ruined = None
