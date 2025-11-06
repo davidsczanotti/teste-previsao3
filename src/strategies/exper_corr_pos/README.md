@@ -196,6 +196,13 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   ```
   Usa o bloco `optimize` do `config.json` para varrer `ppo.learning_rate`, `ppo.gamma`, `model.top_k` e `train.entropy_coef_start`. Resultados de cada trial ficam em `src/strategies/exper_corr_pos/reports/optuna/<timestamp>/trial_XXXX/`, e o resumo global (`summary.json`, `best_config.json`, `trials.csv`, `summary.md`) é salvo na mesma pasta. Ao final, o script aplica automaticamente os hiperparâmetros vencedores no `config.json` (backup `config_backup_<timestamp>.json`) e roda, por padrão, um baseline configurado em `optimize.baseline` para comparação direta.
 
+  - Aplicar melhor trial já existente (sem rodar novos)
+    ```bash
+    BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+      poetry run python -m src.strategies.exper_corr_pos.optimize --apply-best-only
+    ```
+    Reutiliza o `study_name`/`experiment_id` do `config.json` para localizar o estudo no banco e atualiza o `config.json` com o melhor conjunto encontrado, gerando backup.
+
 ## Treino em População (PBT‑lite)
 - Ideia: rodar 2–3 treinamentos em paralelo (seeds/hipers levemente mutados), medir `greedy_equity` e promover um campeão por rodada. Os demais retomam do campeão no próximo round.
 - Comando base (2 runs × 3 rounds × 400 episódios; WSL/CPU):

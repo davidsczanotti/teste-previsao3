@@ -204,7 +204,7 @@
     }
   },
   "optimize": {
-    "trials": 25,
+    "trials": 1,
     "sampler_seed": 202,
     "direction": "maximize",
     "episodes": 1500,
@@ -215,7 +215,9 @@
     "outdir": "src/strategies/exper_corr_pos/reports/optuna",
     "storage": "sqlite:///data/optuna_studies.db",
     "study_name": "exper_corr_pos_main",
+    "experiment_id": "exper_corr_pos",
     "score": "best_greedy",
+    "apply_best_only": false,
     "baseline": {
       "enabled": true,
       "episodes": 1500,

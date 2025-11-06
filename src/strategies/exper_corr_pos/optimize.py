@@ -84,6 +84,8 @@ def main() -> None:
     study_name = optimize_cfg.get("study_name")
     timeout = optimize_cfg.get("timeout")
     score_metric = optimize_cfg.get("score", "best_greedy")
+    experiment_id = str(optimize_cfg.get("experiment_id", "exper_corr_pos")).strip()
+    apply_best_only = bool(optimize_cfg.get("apply_best_only", False))
 
     search_space: Dict[str, Dict[str, Any]] = optimize_cfg.get("parameters") or {
         "ppo.learning_rate": {"type": "loguniform", "low": 1e-5, "high": 5e-4},
@@ -167,6 +169,81 @@ def main() -> None:
         study_name=study_name,
         load_if_exists=bool(storage and study_name),
     )
+    # Amarrar estudo ao experimento corrente para não misturar repositórios/estratégias distintos
+    try:
+        current_exp = study.user_attrs.get("experiment_id")  # type: ignore[attr-defined]
+    except Exception:
+        current_exp = None
+    if current_exp is None:
+        try:
+            study.set_user_attr("experiment_id", experiment_id)
+        except Exception:
+            pass
+    elif str(current_exp) != experiment_id:
+        raise RuntimeError(
+            f"Este estudo ('{study.study_name}') pertence a outro experimento (experiment_id='{current_exp}'). "
+            f"Defina optimize.study_name ou optimize.experiment_id diferentes no config para separar estudos."
+        )
+
+    # Modo apply-best-only: não roda trials; aplica melhor já existente e sai
+    if apply_best_only:
+        completed_records: List[Dict[str, Any]] = []
+        for trial in study.get_trials(deepcopy=False):
+            if trial.value is None:
+                continue
+            params_attr = trial.user_attrs.get("param_overrides")
+            try:
+                params = json.loads(params_attr) if isinstance(params_attr, str) else (params_attr or {})
+            except Exception:
+                params = {}
+            summary_attr = trial.user_attrs.get("result_summary")
+            try:
+                summary = json.loads(summary_attr) if isinstance(summary_attr, str) else (summary_attr or {})
+            except Exception:
+                summary = {}
+            completed_records.append(
+                {"trial": trial.number, "value": float(trial.value), "params": params, "summary": summary}
+            )
+        if not completed_records:
+            raise RuntimeError("Nenhum trial completo encontrado neste estudo; nada a aplicar.")
+        best_record = max(completed_records, key=lambda r: r["value"]) if direction == "maximize" else min(
+            completed_records, key=lambda r: r["value"]
+        )
+        best_params = best_record["params"]
+        best_trial_number = best_record["trial"]
+
+        # Construir best_config
+        best_config = deepcopy(config)
+        def _deep_update(target: Dict[str, Any], updates: Dict[str, Any]) -> None:
+            for k, v in updates.items():
+                if isinstance(v, dict) and isinstance(target.get(k), dict):
+                    _deep_update(target[k], v)
+                else:
+                    target[k] = v
+        _deep_update(best_config, best_params)
+
+        # Persistir no mesmo esquema de outputs
+        (out_base / "best_config.json").write_text(json.dumps(best_config, indent=2))
+        backup_path = cfg_path.with_name(f"{cfg_path.stem}_backup_{timestamp}{cfg_path.suffix}")
+        backup_path.write_text(json.dumps(config, indent=2))
+        cfg_path.write_text(json.dumps(best_config, indent=2))
+        # Sumário mínimo
+        (out_base / "summary.json").write_text(
+            json.dumps(
+                {
+                    "study_name": study.study_name,
+                    "direction": study.direction.name,
+                    "best_trial": {"number": best_trial_number, "value": best_record["value"], "params": best_params},
+                    "mode": "apply_best_only",
+                    "note": "Aplicado melhor trial já existente sem rodar novos trials.",
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"[optimize] apply-best-only: Trial {best_trial_number} aplicado ao {cfg_path} (backup: {backup_path})."
+        )
+        return
 
     def objective(trial: optuna.Trial) -> float:
         trial_id = f"trial_{trial.number:04d}"
@@ -222,9 +299,41 @@ def main() -> None:
         )
         return value
 
-    study.optimize(objective, n_trials=trials, timeout=timeout)
+    # Executa a rodada de trials, mas garante sumarização mesmo se houver interrupção
+    try:
+        study.optimize(objective, n_trials=trials, timeout=timeout)
+    finally:
+        pass
 
-    completed_records = _load_records(study)
+    # Consolida resultados; fallback robusto se helper não estiver no escopo
+    try:
+        completed_records = _load_records(study)
+    except NameError:  # pragma: no cover — segurança adicional
+        completed_records = []
+        for trial in study.get_trials(deepcopy=False):
+            if trial.value is None:
+                continue
+            try:
+                params_attr = trial.user_attrs.get("param_overrides")
+                params = json.loads(params_attr) if isinstance(params_attr, str) else (params_attr or {})
+            except Exception:
+                params = {}
+            try:
+                summary_attr = trial.user_attrs.get("result_summary")
+                summary = json.loads(summary_attr) if isinstance(summary_attr, str) else (summary_attr or {})
+            except Exception:
+                summary = {}
+            completed_records.append(
+                {
+                    "trial": trial.number,
+                    "value": float(trial.value),
+                    "params": params,
+                    "summary": summary,
+                    "outdir": trial.user_attrs.get("outdir"),
+                    "datetime_start": str(trial.datetime_start) if trial.datetime_start else "",
+                    "datetime_complete": str(trial.datetime_complete) if trial.datetime_complete else "",
+                }
+            )
     if not completed_records:
         print("[optimize] Nenhum trial completo (talvez todos interrompidos/pruned). Nada a aplicar.")
         return
