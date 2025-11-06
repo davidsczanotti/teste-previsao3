@@ -210,6 +210,7 @@
     "episodes": 1500,
     "rollout_steps": 384,
     "eval_every": 300,
+    "timeout": 7200,
     "log_every": 0,
     "outdir": "src/strategies/exper_corr_pos/reports/optuna",
     "storage": "sqlite:///data/optuna_studies.db",
