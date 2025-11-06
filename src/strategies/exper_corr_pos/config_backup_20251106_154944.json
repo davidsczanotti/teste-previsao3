@@ -22,11 +22,11 @@
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
     "drawdown_kill_bars": 90,
-    "turnover_penalty": 0.2,
+    "turnover_penalty": 0.8,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
-    "idle_penalty_factor": 0.0005,
+    "idle_penalty_factor": 0.002,
     "hold_bonus_alpha": 0.0015,
     "max_trade_notional": 50.0,
     "profit_trail_pct": 0.08,
@@ -66,10 +66,10 @@
     }
   },
   "ppo": {
-    "gamma": 0.9921020385151985,
+    "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_ratio": 0.2,
-    "learning_rate": 0.0001460916366797005,
+    "learning_rate": 8e-05,
     "entropy_coef": 0.006,
     "value_coef": 0.3,
     "max_grad_norm": 0.5,
@@ -77,7 +77,7 @@
     "batch_size": 256
   },
   "train": {
-    "episodes": 1000,
+    "episodes": 100000,
     "rollout_steps": 400,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/train",
@@ -92,7 +92,7 @@
     "lb_coef": 0.12,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.010558523768657853,
+    "entropy_coef_start": 0.018,
     "entropy_coef_end": 0.004,
     "entropy_decay_episodes": 2000,
     "curriculum": {

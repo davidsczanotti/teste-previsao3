@@ -105,18 +105,20 @@ def main() -> None:
     done = False
     drawdowns: List[float] = []
     ruined_step: int | None = None
+    last_action: int | None = None
     while not done:
         with torch.no_grad():
             dist, _, _ = policy(obs)
             action = torch.argmax(dist.probs, dim=-1).item()
             weights, mask = policy.gating(obs, top_k=policy.top_k)
 
-        current_pos = info.get("position", 0)
-        if action != current_pos:
-            if current_pos == 1:  # Estava flat, vai entrar
+        # Marca entradas/saídas comparando o último comando de ação (não depende de 'info')
+        if last_action is not None and action != last_action:
+            if last_action == 1 and action != 1:  # de flat para posição
                 trade_entry_steps.append(len(actions))
-            elif action == 1:  # Estava comprado/vendido, vai sair
+            elif action == 1 and last_action != 1:  # de posição para flat
                 trade_exit_steps.append(len(actions))
+
         next_obs, _, done, info = env.step(action)
         weights_trace.append(weights.squeeze(0).cpu().numpy())
         masks_trace.append(mask.squeeze(0).cpu().numpy())
@@ -128,6 +130,7 @@ def main() -> None:
         if info.get("ruined") and ruined_step is None:
             ruined_step = len(weights_trace) - 1
         obs = torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)
+        last_action = action
 
     weights_arr = np.vstack(weights_trace)  # [T, E]
     masks_arr = np.vstack(masks_trace)  # [T, E]
