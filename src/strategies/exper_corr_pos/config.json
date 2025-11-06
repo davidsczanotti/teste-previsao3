@@ -145,7 +145,27 @@
     "episodes": 10,
     "rollout_steps": 256,
     "device": "cpu",
-    "outdir": "src/strategies/exper_corr_pos/reports/walk_forward"
+    "outdir": "src/strategies/exper_corr_pos/reports/walk_forward",
+    "monte_carlo": {
+      "simulations": 500,
+      "feature_noise_std": 0.01,
+      "price_noise_std": 0.002,
+      "seed": 1234
+    },
+    "stress_costs": {
+      "factors": [
+        0.5,
+        1.0,
+        1.5
+      ]
+    },
+    "stress_lag": {
+      "max_lag": 5
+    },
+    "regimes": {
+      "low_quantile": 0.33,
+      "high_quantile": 0.66
+    }
   },
   "visualize": {
     "days": 540,

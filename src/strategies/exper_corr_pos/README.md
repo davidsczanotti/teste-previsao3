@@ -10,7 +10,7 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
   - **MultiFrame** — concordância entre tendência semanal (1W) e gatilhos diários (1d) com pullback/RSI, ATR relativo e volatilidade do timeframe superior.
   - (opcionais) **Spread** e **Pattern** — spread beta/z-score, correlações roll com ETH, z-score do spread, padrões de candle enriquecidos (gaps, wick imbalance, métricas normalizadas por ATR).
 - Treino RL: PPO adaptado ao MoE com **curriculum learning** (`train.curriculum`) — primeiras fases sem `random_start`, janelas maiores e rollouts curtos; depois libera regime completo. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
-- Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). Walk‑Forward e Monte Carlo podem ser habilitados conforme necessidade.
+- Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). O Walk‑Forward inclui Monte Carlo (ruído em preço/features), stress de custos (±50%), lags (1–5) e análise de regimes (vol baixa/média/alta).
 - Otimização: bloco `optimize` no `config.json` usa Optuna para varrer `ppo.learning_rate`, `ppo.gamma`, `model.top_k` e entropia inicial, salvando resultados em `reports/optuna/`.
 
 Observação de avaliação: a avaliação greedy durante o treino é determinística (sem `random_start` e usando a janela fixa do fim dos dados). Isso deixa o `moe_policy_best_eval.pt` reprodutível e coerente com a auditoria.
@@ -187,7 +187,7 @@ Observações
   BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
     poetry run python -m src.strategies.exper_corr_pos.walk_forward
   ```
-  Artefatos: `src/strategies/exper_corr_pos/reports/walk_forward/`
+  Artefatos: `src/strategies/exper_corr_pos/reports/walk_forward/` (`wf_summary.json` + `wf_summary.md`, checkpoints por janela e stats de Monte Carlo/custos/lag/regimes).
 
 - Limpeza de checkpoints intermediários (`moe_policy_ep*.pt`)
   ```bash
@@ -289,3 +289,37 @@ Qualquer alteração no comportamento deve ser feita editando o `config.json`. O
 
 
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.scripts.audit_policy
+
+
+
+////////////
+Fluxo Com Otimização (recomendado agora)
+
+Passo 0 — Atualizar cache (mesmo de cima)
+poetry run python -m scripts.populate_cache 
+
+Otimização (Optuna, curriculum curto, baseline e logs periódicos)
+BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache poetry run python -m src.strategies.exper_corr_pos.optimize
+
+O script:
+roda baseline (controlado por optimize.baseline no src/strategies/exper_corr_pos/config.json);
+executa trials com logs por episódio (intervalo vem de optimize.log_every ou episodes/20);
+salva summary.md/json, trials.csv e pastas trial_XXXX/ em src/strategies/exper_corr_pos/reports/optuna/<timestamp>;
+aplica automaticamente o vencedor no src/strategies/exper_corr_pos/config.json e cria backup config_backup_<timestamp>.json.
+Treino final (já com os melhores hypers aplicados)
+
+BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache poetry run python -m src.strategies.exper_corr_pos.train
+Onde ver e como “conversar” sobre o resultado
+
+Otimização:
+Scoreboard e comparação com baseline no final do terminal.
+Relatórios: src/strategies/exper_corr_pos/reports/optuna/<timestamp>/summary.md e summary.json.
+Treino:
+Métricas/uso: src/strategies/exper_corr_pos/reports/train/metrics.csv|png, expert_usage.png.
+Gating/pesos: src/strategies/exper_corr_pos/reports/train/gating_heatmap.png, gating_usage.png.
+- Stress tests rápidos (custo/lag/Monte Carlo sobre o modelo final)
+  ```bash
+  BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+    poetry run python -m src.strategies.exper_corr_pos.scripts.stress_tests
+  ```
+  Salva `stress_tests.json|md` em `src/strategies/exper_corr_pos/reports/train/` com baseline vs. sensibilidades.
