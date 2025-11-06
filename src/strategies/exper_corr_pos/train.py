@@ -20,6 +20,11 @@ from .models import PPOConfig
 from .utils_cfg import build_policy, bars_for_days
 from .trainer import PPOTrainer
 
+try:  # Optional Weights & Biases integration
+    import wandb  # type: ignore
+except ImportError:  # pragma: no cover - wandb is optional
+    wandb = None  # type: ignore
+
 
 DEFAULT_CONFIG = Path("src/strategies/exper_corr_pos/config.json")
 MANIFEST_PATH = Path("src/strategies/exper_corr_pos/reports/train/run_manifest.json")
@@ -137,6 +142,7 @@ def train_agent(
     record_manifest: bool = True,
     enable_plots: bool = True,
     trial_id: Optional[str] = None,
+    disable_wandb: bool = False,
 ) -> Dict[str, Any]:
     cfg = deepcopy(config)
     if overrides:
@@ -145,6 +151,16 @@ def train_agent(
     train_cfg = cfg.get("train", {})
     seed = int(train_cfg.get("seed", 42))
     _set_seeds(seed)
+
+    logging_cfg = cfg.get("logging", {})
+    wandb_cfg = logging_cfg.get("wandb", {}) or {}
+    wandb_enabled = bool(wandb_cfg.get("enabled", False)) and not disable_wandb
+    wandb_run = None
+    if wandb_enabled and wandb is None:
+        print("[wandb] habilitado no config, mas pacote não encontrado. Desativando.")
+        wandb_enabled = False
+    artifact_prefix = wandb_cfg.get("artifact_prefix", "exper_corr_pos")
+    best_artifact_logged = False
 
     if record_manifest and cfg_path is not None:
         _record_manifest(cfg, cfg_path, seed)
@@ -176,6 +192,31 @@ def train_agent(
         lb_coef=float(train_cfg.get("lb_coef", 0.01)),
     )
 
+    if wandb_enabled:
+        init_kwargs: Dict[str, Any] = {}
+        for key in ("project", "entity", "name", "group", "job_type"):
+            value = wandb_cfg.get(key)
+            if value:
+                init_kwargs[key] = value
+        tags = wandb_cfg.get("tags")
+        if tags:
+            init_kwargs["tags"] = tags
+        try:
+            logged_config = json.loads(json.dumps(cfg))
+        except TypeError:
+            logged_config = {}
+        wandb_run = wandb.init(config=logged_config, reinit=True, **init_kwargs)  # type: ignore[arg-type]
+        wandb_run.define_metric("episode")
+        wandb_run.define_metric("greedy_equity", step="episode")
+        wandb_run.define_metric("avg_reward", step="episode")
+        wandb_run.define_metric("sum_reward", step="episode")
+        if wandb_cfg.get("watch", False):
+            wandb.watch(  # type: ignore[call-arg]
+                policy,
+                log=wandb_cfg.get("watch_log", "gradients"),
+                log_freq=int(wandb_cfg.get("watch_freq", 100)),
+            )
+
     base_outdir = Path(train_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/train"))
     outdir = base_outdir / trial_id if trial_id else base_outdir
     outdir.mkdir(parents=True, exist_ok=True)
@@ -196,7 +237,11 @@ def train_agent(
 
     episodes = int(train_cfg.get("episodes", 500))
     base_rollout_steps = int(train_cfg.get("rollout_steps", 2048))
-    log_every = int(train_cfg.get("log_every", 5))
+    log_every_cfg = train_cfg.get("log_every")
+    if log_every_cfg is None:
+        log_every = max(1, episodes // 20)
+    else:
+        log_every = max(1, int(log_every_cfg))
     plot_every = int(train_cfg.get("plot_every", 50))
     eval_every = int(train_cfg.get("eval_every", 50))
     eval_days = int(train_cfg.get("eval_days", 90))
@@ -250,25 +295,43 @@ def train_agent(
         greedy_equity: Optional[float] = None,
         greedy_ruined: Optional[bool] = None,
         entropy_coef_val: Optional[float] = None,
-    ) -> None:
+    ) -> Dict[str, Any]:
+        usage = list(m.get("expert_usage") or [])
+        row_map: Dict[str, Any] = {
+            "episode": ep,
+            "policy_loss": m.get("policy_loss"),
+            "value_loss": m.get("value_loss"),
+            "entropy": m.get("entropy"),
+            "entropy_coef": entropy_coef_val if entropy_coef_val is not None else ppo_cfg.entropy_coef,
+            "load_balance": m.get("load_balance"),
+            "avg_reward": m.get("avg_reward"),
+            "sum_reward": m.get("sum_reward"),
+            "greedy_equity": greedy_equity,
+            "greedy_ruined": int(greedy_ruined) if greedy_ruined is not None else None,
+        }
+        for idx, col in enumerate(usage_cols):
+            row_map[col] = usage[idx] if idx < len(usage) else None
+
         with metrics_path.open("a", newline="") as f:
             writer = csv.writer(f)
             row = [
-                ep,
-                m.get("policy_loss"),
-                m.get("value_loss"),
-                m.get("entropy"),
-                entropy_coef_val if entropy_coef_val is not None else ppo_cfg.entropy_coef,
-                m.get("load_balance"),
-                m.get("avg_reward"),
-                m.get("sum_reward"),
+                row_map["episode"],
+                row_map["policy_loss"],
+                row_map["value_loss"],
+                row_map["entropy"],
+                row_map["entropy_coef"],
+                row_map["load_balance"],
+                row_map["avg_reward"],
+                row_map["sum_reward"],
             ]
-            usage = m.get("expert_usage") or []
-            usage = list(usage) + [""] * max(0, len(usage_cols) - len(usage))
-            row.extend(usage[: len(usage_cols)])
-            row.append(greedy_equity if greedy_equity is not None else "")
-            row.append(int(greedy_ruined) if greedy_ruined is not None else "")
+            for col in usage_cols:
+                value = row_map[col]
+                row.append("" if value is None else value)
+            row.append("" if greedy_equity is None else greedy_equity)
+            row.append("" if row_map["greedy_ruined"] is None else row_map["greedy_ruined"])
             writer.writerow(row)
+
+        return row_map
 
     def _plot_metrics() -> None:
         if not enable_plots or plot_every <= 0:
@@ -439,14 +502,32 @@ def train_agent(
                 best_greedy = greedy_equity
                 torch.save(policy.state_dict(), best_path)
                 print(f"[eval] Novo melhor greedy_equity={best_greedy:.2f} salvo em {best_path}")
+                if wandb_run:
+                    wandb_run.log(
+                        {"best_greedy": best_greedy, "best_episode": actual_episode},
+                        step=actual_episode,
+                    )
+                    if not best_artifact_logged and best_path.exists():
+                        artifact = wandb.Artifact(f"{artifact_prefix}-best", type="model")
+                        artifact.add_file(str(best_path))
+                        wandb_run.log_artifact(artifact)
+                        best_artifact_logged = True
 
-        _append_metrics(
+        row_data = _append_metrics(
             actual_episode,
             last_metrics or {},
             greedy_equity,
             greedy_ruined,
             entropy_coef_val=current_entropy_coef,
         )
+        if wandb_run:
+            log_payload = {k: v for k, v in row_data.items() if v is not None}
+            log_payload["episode"] = actual_episode
+            if greedy_ruined is not None:
+                log_payload["greedy_ruined"] = bool(greedy_ruined)
+            if greedy_equity is not None:
+                log_payload["greedy_equity"] = greedy_equity
+            wandb_run.log(log_payload, step=actual_episode)
 
         if plot_every > 0 and episode % plot_every == 0:
             _plot_metrics()
@@ -469,13 +550,35 @@ def train_agent(
         best_greedy = final_greedy
         torch.save(policy.state_dict(), best_path)
         print(f"[eval] Final greedy melhorado={best_greedy:.2f} salvo em {best_path}")
+        if wandb_run:
+            wandb_run.log(
+                {"best_greedy": best_greedy, "best_episode": episode_offset + episodes},
+                step=episode_offset + episodes,
+            )
+            if not best_artifact_logged and best_path.exists():
+                artifact = wandb.Artifact(f"{artifact_prefix}-best", type="model")
+                artifact.add_file(str(best_path))
+                wandb_run.log_artifact(artifact)
+                best_artifact_logged = True
 
     final_path = outdir / "moe_policy_final.pt"
     torch.save(policy.state_dict(), final_path)
     print(f"Treinamento finalizado. Modelo salvo em {final_path}")
+    if wandb_run:
+        artifact = wandb.Artifact(f"{artifact_prefix}-final", type="model")
+        artifact.add_file(str(final_path))
+        wandb_run.log_artifact(artifact)
+        wandb_run.log(
+            {
+                "final_greedy": final_greedy,
+                "final_ruined": bool(final_ruined),
+                "best_greedy": best_greedy,
+            },
+            step=episode_offset + episodes,
+        )
 
     best_metric = best_greedy if best_greedy != float("-inf") else final_greedy
-    return {
+    result = {
         "best_greedy": float(best_metric),
         "final_greedy": float(final_greedy),
         "final_ruined": bool(final_ruined),
@@ -485,6 +588,9 @@ def train_agent(
         "rollout_steps": base_rollout_steps,
         "last_metrics": last_metrics or {},
     }
+    if wandb_run:
+        wandb_run.finish()
+    return result
 
 
 def parse_args() -> argparse.Namespace:

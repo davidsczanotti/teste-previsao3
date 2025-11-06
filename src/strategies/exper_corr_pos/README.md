@@ -10,6 +10,7 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
   - **MultiFrame** — concordância entre tendência semanal (1W) e gatilhos diários (1d) com pullback/RSI, ATR relativo e volatilidade do timeframe superior.
   - (opcionais) **Spread** e **Pattern** — spread beta/z-score, correlações roll com ETH, z-score do spread, padrões de candle enriquecidos (gaps, wick imbalance, métricas normalizadas por ATR).
 - Treino RL: PPO adaptado ao MoE com **curriculum learning** (`train.curriculum`) — primeiras fases sem `random_start`, janelas maiores e rollouts curtos; depois libera regime completo. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
+- Logging: CSVs e gráficos locais + integração opcional com Weights & Biases (configurar `logging.wandb`) para acompanhar métricas, checkpoints e artefatos em tempo real.
 - Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). O Walk‑Forward inclui Monte Carlo (ruído em preço/features), stress de custos (±50%), lags (1–5) e análise de regimes (vol baixa/média/alta).
 - Otimização: bloco `optimize` no `config.json` usa Optuna para varrer `ppo.learning_rate`, `ppo.gamma`, `model.top_k` e entropia inicial, salvando resultados em `reports/optuna/`.
 
@@ -78,6 +79,7 @@ Todos os parâmetros ficam em `src/strategies/exper_corr_pos/config.json`:
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)
+- `logging`: integrações opcionais de monitoramento (ex.: `wandb` com `project`, `entity`, `tags`, `watch`, `artifact_prefix`)
 - `pbt`: parâmetros da população (tamanho, rounds, episódios por round, paralelismo, threads, checkpoint inicial e se o campeão deve ser promovido automaticamente para `moe_policy_final.pt`)
 - `walk_forward`: agenda (dias de treino/val/step), episódios por janela, device, diretório
 - `docs`: descrições em português para cada parâmetro (apenas leitura humana; o código ignora este bloco)
@@ -91,6 +93,76 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
     poetry run python -m src.strategies.exper_corr_pos.train
   ```
   Artefatos: `src/strategies/exper_corr_pos/reports/train/`
+  - Para enviar métricas/artefatos ao Weights & Biases, edite `logging.wandb.enabled` para `true` no `config.json` (configure também `project/entity/name` conforme sua conta) antes de rodar o treino.
+
+## Fluxo (Botões do Fliperama)
+
+- Start (começar do zero)
+  1) Limpar artefatos anteriores (treino/optuna/WF)
+     ```bash
+     poetry run python -m src.strategies.exper_corr_pos.scripts.reset_reports --force
+     ```
+  2) Atualizar cache local (base e confirm do config)
+     ```bash
+     poetry run python -m scripts.populate_cache BTCUSDT 1d --start "2017-01-01 00:00:00"
+     poetry run python -m scripts.populate_cache ETHUSDT 1d --start "2017-01-01 00:00:00"
+     ```
+  3) Otimizar hiperparâmetros (aplica vencedor ao `config.json` automaticamente; gera backup)
+     ```bash
+     BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+       poetry run python -m src.strategies.exper_corr_pos.optimize
+     ```
+     Saídas: `src/strategies/exper_corr_pos/reports/optuna/<timestamp>/{summary.json,summary.md,trials.csv}` + `config_backup_<timestamp>.json`.
+  4) Treinar com os melhores parâmetros
+     ```bash
+     BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+       poetry run python -m src.strategies.exper_corr_pos.train
+     ```
+
+- Continue (retomar do último agente)
+  - Verifique no `config.json`:
+    - `train.resume: true`
+    - `train.resume_path: "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt"`
+  - Rodar
+    ```bash
+    BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+      poetry run python -m src.strategies.exper_corr_pos.train
+    ```
+
+- Relatórios e Status (sem re‑treinar)
+  - Consolidar métricas/gráficos do treino atual
+    ```bash
+    BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.make_reports
+    ```
+  - Visualizar backtest (preço + ações + equity)
+    ```bash
+    BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.visualize
+    ```
+  - Análise do gating (pesos/top‑k, drawdown/ruína)
+    ```bash
+    BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.visualize_gating
+    ```
+  - Onde olhar: `src/strategies/exper_corr_pos/reports/train/{metrics.csv,metrics.png,expert_usage.png,gating_heatmap.png}`
+
+- Walk‑Forward (robusto)
+  ```bash
+  BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+    poetry run python -m src.strategies.exper_corr_pos.walk_forward
+  ```
+  Saídas: `wf_summary.json` + `wf_summary.md` em `src/strategies/exper_corr_pos/reports/walk_forward/` (inclui Monte Carlo, stress de custos/lag e regimes).
+
+- Stress Tests (rápidos no modelo final)
+  ```bash
+  BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+    poetry run python -m src.strategies.exper_corr_pos.scripts.stress_tests
+  ```
+  Saídas: `src/strategies/exper_corr_pos/reports/train/stress_tests.json|md`.
+
+- Tests (unitários)
+  ```bash
+  poetry run pytest -q
+  ```
+  Cobertura inicial: `tests/test_models.py` (gating/política) e `tests/test_env.py` (dinâmica e ruína do ambiente).
 
 - Atualização automática de relatórios durante o treino
   - A cada `train.plot_every` episódios o treino atualiza, em sincronia:
@@ -323,3 +395,9 @@ Gating/pesos: src/strategies/exper_corr_pos/reports/train/gating_heatmap.png, ga
     poetry run python -m src.strategies.exper_corr_pos.scripts.stress_tests
   ```
   Salva `stress_tests.json|md` em `src/strategies/exper_corr_pos/reports/train/` com baseline vs. sensibilidades.
+
+- Testes unitários (pytest)
+  ```bash
+  poetry run pytest -q
+  ```
+  Cobertura inicial em `tests/test_models.py` (gating e política) e `tests/test_env.py` (dinâmica básica do ambiente).

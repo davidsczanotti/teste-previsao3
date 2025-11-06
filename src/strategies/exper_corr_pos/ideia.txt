@@ -43,6 +43,8 @@ O “expert Pattern” recebe justamente essas colunas do dataframe (doji_flag, 
 Validação:
 - Walk-forward agora roda Monte Carlo com ruído em preço/feature, stress de custo (±50%), lags 1–5 barras e classifica os resultados por regime de volatilidade (low/mid/high).
 - Para auditoria rápida fora do WF, o script `scripts/stress_tests.py` aplica os mesmos cenários sobre o `moe_policy_final.pt` e gera JSON/Markdown em `reports/train/`.
+- Logging opcional via Weights & Biases (`logging.wandb` no config) para comparar runs e versionar artefatos; fallback continua sendo CSV/plots locais.
+- Testes unitários básicos (`pytest -q`) garantem que o gating normalize pesos/top-k e que o ambiente responda a passos simples sem quebrar.
 
 Curriculum: o treino começa com episódios mais fáceis (sem random_start, janela maior) e rollouts menores; gradualmente libera o regime completo (`train.curriculum`). Isso acelera a estabilização da política antes de expor todo o histórico.
 

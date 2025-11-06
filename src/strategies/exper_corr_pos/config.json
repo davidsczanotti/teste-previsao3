@@ -129,6 +129,23 @@
       }
     }
   },
+  "logging": {
+    "wandb": {
+      "enabled": false,
+      "project": "exper_corr_pos",
+      "entity": null,
+      "name": null,
+      "group": null,
+      "tags": [
+        "exper_corr_pos"
+      ],
+      "job_type": "train",
+      "watch": false,
+      "watch_log": "gradients",
+      "watch_freq": 100,
+      "artifact_prefix": "exper_corr_pos"
+    }
+  },
   "pbt": {
     "pop": 2,
     "rounds": 3,

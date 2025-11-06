@@ -149,6 +149,7 @@ def main() -> None:
             record_manifest=False,
             enable_plots=False,
             trial_id="baseline",
+            disable_wandb=True,
         )
         (baseline_dir / "baseline_summary.json").write_text(json.dumps(baseline_result, indent=2))
         print(
@@ -191,6 +192,7 @@ def main() -> None:
             record_manifest=False,
             enable_plots=enable_plots,
             trial_id=trial_id,
+            disable_wandb=True,
         )
 
         last_metrics = result.get("last_metrics", {})
