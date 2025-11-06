@@ -27,7 +27,7 @@
     "random_start": true,
     "window_bars": 540,
     "idle_penalty_factor": 0.002,
-    "hold_bonus_alpha": 0.0001,
+    "hold_bonus_alpha": 0.0015,
     "max_trade_notional": 50.0,
     "profit_trail_pct": 0.08,
     "allow_intrabar_closes": false,

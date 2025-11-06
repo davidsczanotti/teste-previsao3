@@ -100,6 +100,8 @@ def main() -> None:
     equities: List[float] = []
     timestamps_step: List[str] = []
 
+    trade_entry_steps: List[int] = []
+    trade_exit_steps: List[int] = []
     done = False
     drawdowns: List[float] = []
     ruined_step: int | None = None
@@ -109,6 +111,12 @@ def main() -> None:
             action = torch.argmax(dist.probs, dim=-1).item()
             weights, mask = policy.gating(obs, top_k=policy.top_k)
 
+        current_pos = info.get("position", 0)
+        if action != current_pos:
+            if current_pos == 1:  # Estava flat, vai entrar
+                trade_entry_steps.append(len(actions))
+            elif action == 1:  # Estava comprado/vendido, vai sair
+                trade_exit_steps.append(len(actions))
         next_obs, _, done, info = env.step(action)
         weights_trace.append(weights.squeeze(0).cpu().numpy())
         masks_trace.append(mask.squeeze(0).cpu().numpy())
@@ -128,7 +136,12 @@ def main() -> None:
 
     # CSV de traço
     trace_path = OUTDIR / "gating_trace.csv"
-    header = ["timestamp"] + [f"w_e{i}" for i in range(weights_arr.shape[1])] + [f"m_e{i}" for i in range(masks_arr.shape[1])] + ["action", "equity"]
+    header = (
+        ["timestamp"]
+        + [f"w_e{i}" for i in range(weights_arr.shape[1])]
+        + [f"m_e{i}" for i in range(masks_arr.shape[1])]
+        + ["action", "equity"]
+    )
     import csv
 
     with trace_path.open("w", newline="") as f:
@@ -157,6 +170,12 @@ def main() -> None:
         dd_idx = np.where(dd >= thr)[0]
         for t in dd_idx:
             ax.axvline(t, color="#f0e68c", alpha=0.35, lw=0.6)  # amarelo claro
+    # marcadores de entrada/saída
+    for t in trade_entry_steps:
+        ax.axvline(t, color="#66ff66", alpha=0.5, lw=0.8, ls=":")  # verde para entrada
+    for t in trade_exit_steps:
+        ax.axvline(t, color="#ffb366", alpha=0.5, lw=0.8, ls=":")  # laranja para saída
+
     # ruína (linha vermelha)
     if ruined_step is not None:
         ax.axvline(ruined_step, color="#ff6666", ls="--", lw=1.0, label="ruína")

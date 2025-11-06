@@ -401,3 +401,15 @@ Gating/pesos: src/strategies/exper_corr_pos/reports/train/gating_heatmap.png, ga
   poetry run pytest -q
   ```
   Cobertura inicial em `tests/test_models.py` (gating e política) e `tests/test_env.py` (dinâmica básica do ambiente).
+
+
+*********************************************
+Se a sua intenção de “Start” for treino do zero mantendo histórico de estudos (recomendado), já está pronto para o próximo passo (populate cache → optimize → train).
+
+Se você quer um “zero absoluto” (sem histórico nem reuso de estudo):
+
+Opcional: remover resultados antigos do Optuna
+rm -rf src/strategies/exper_corr_pos/reports/optuna
+Opcional: zerar o banco de estudos
+rm -f data/optuna_studies.db (ou altere optimize.study_name no config.json para criar um estudo novo)
+**********************************************
