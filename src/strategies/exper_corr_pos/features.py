@@ -82,6 +82,23 @@ def _prepare_confirm_df(confirm_df: pd.DataFrame, index: pd.DatetimeIndex) -> pd
     return aligned.interpolate(method="time").ffill().bfill()
 
 
+def _linear_regression_slope(series: pd.Series, window: int) -> pd.Series:
+    """Slope of a rolling linear regression (normalized by window length)."""
+    if window <= 1:
+        return pd.Series(0.0, index=series.index)
+    idx = np.arange(window, dtype=np.float64)
+    denom = np.sum((idx - idx.mean()) ** 2)
+
+    def _slope(sub: np.ndarray) -> float:
+        if np.any(~np.isfinite(sub)):
+            return np.nan
+        y = sub.astype(np.float64)
+        num = np.sum((idx - idx.mean()) * (y - y.mean()))
+        return num / (denom + 1e-9)
+
+    return series.rolling(window, min_periods=window).apply(_slope, raw=True)
+
+
 def compute_features(
     df: pd.DataFrame,
     *,
@@ -110,6 +127,7 @@ def compute_features(
     close = base["close"]
     volume = base["volume"]
     returns = close.pct_change()
+    log_returns = np.log(close.replace(0.0, np.nan)).diff()
 
     out = pd.DataFrame(index=base.index)
 
@@ -119,25 +137,46 @@ def compute_features(
     out["ema_fast"] = ema_fast
     out["ema_slow"] = ema_slow
     out["ema_cross"] = ema_fast - ema_slow
+    out["ema_ratio"] = ema_fast / (ema_slow + 1e-9)
     out["trend_strength"] = out["ema_cross"] / (close.rolling(55).std() + 1e-9)
+    out["trend_accel"] = out["ema_cross"].diff()
 
     donchian_up = high.rolling(40, min_periods=40).max()
     donchian_down = low.rolling(40, min_periods=40).min()
     out["breakout_up"] = (close - donchian_up) / (close + 1e-9)
     out["breakout_down"] = (close - donchian_down) / (close + 1e-9)
+    out["donchian_width"] = (donchian_up - donchian_down) / (close + 1e-9)
 
     atr_14 = _atr(base, 14)
     out["atr_14"] = atr_14
     out["atr_norm"] = atr_14 / (close.rolling(55).mean().abs() + 1e-9)
+    atr_28 = _atr(base, 28)
+    out["atr_ratio"] = atr_14 / (atr_28 + 1e-9)
+
+    hv_14 = log_returns.rolling(14, min_periods=14).std() * math.sqrt(365.0)
+    hv_30 = log_returns.rolling(30, min_periods=30).std() * math.sqrt(365.0)
+    out["realized_vol_14"] = hv_14
+    out["realized_vol_30"] = hv_30
+    out["realized_vol_ratio"] = hv_14 / (hv_30 + 1e-9)
+    out["vol_zscore_30"] = _zscore(hv_14, 30)
 
     ml_features = pd.DataFrame(index=base.index)
     ml_features["lag_ret_1"] = returns.shift(1)
     ml_features["lag_ret_2"] = returns.shift(2)
     ml_features["lag_ret_3"] = returns.shift(3)
     ml_features["lag_ret_6"] = returns.shift(6)
+    ml_features["lag_ret_12"] = returns.shift(12)
+    ml_features["lag_ret_24"] = returns.shift(24)
+    ml_features["rsi_7"] = _rsi(close, 7) / 100.0
     ml_features["rsi_14"] = _rsi(close, 14) / 100.0
+    ml_features["rsi_21"] = _rsi(close, 21) / 100.0
     ml_features["atr_rel"] = atr_14 / (close + 1e-9)
     ml_features["range_rel"] = (high - low) / (close + 1e-9)
+    ml_features["mom_10"] = close.pct_change(10)
+    ml_features["mom_20"] = close.pct_change(20)
+    ml_features["price_slope_20"] = _linear_regression_slope(close, 20)
+    ml_features["ema_fast_dev"] = (close - ema_fast) / (atr_14 + 1e-9)
+    ml_features["ema_slow_dev"] = (close - ema_slow) / (atr_14 + 1e-9)
     ml_features["hour_sin"] = np.sin(2 * math.pi * base.index.hour / 24.0)
     ml_features["hour_cos"] = np.cos(2 * math.pi * base.index.hour / 24.0)
     # Use modern forward-fill API to avoid FutureWarning
@@ -166,18 +205,26 @@ def compute_features(
             higher["htf_trend_state"] = np.sign(higher["ema_fast_htf"] - higher["ema_slow_htf"])
             higher["htf_trend_strength"] = higher["ema_fast_htf"] - higher["ema_slow_htf"]
             higher["htf_rsi"] = _rsi(higher["close"], 14)
+            higher["htf_atr"] = _atr(higher, 14)
+            higher["htf_vol"] = np.log(higher["close"] + 1e-9).diff().rolling(30, min_periods=30).std()
             higher = higher.reindex(out.index, method="ffill")
             out["htf_trend_state"] = higher["htf_trend_state"]
             out["htf_trend_strength"] = higher["htf_trend_strength"]
             out["htf_rsi"] = higher["htf_rsi"] / 100.0
+            out["htf_atr_rel"] = higher["htf_atr"] / (higher["close"] + 1e-9)
+            out["htf_vol"] = higher["htf_vol"]
         except Exception:
             out["htf_trend_state"] = 0.0
             out["htf_trend_strength"] = 0.0
             out["htf_rsi"] = 0.5
+            out["htf_atr_rel"] = 0.0
+            out["htf_vol"] = 0.0
     else:
         out["htf_trend_state"] = 0.0
         out["htf_trend_strength"] = 0.0
         out["htf_rsi"] = 0.5
+        out["htf_atr_rel"] = 0.0
+        out["htf_vol"] = 0.0
 
     out["ltf_rsi_5"] = _rsi(close, 5) / 100.0
     out["ltf_pullback"] = (close - ema_fast) / (atr_14 + 1e-9)
@@ -210,6 +257,10 @@ def compute_features(
         out["spread_bb_lower"] = spread_mean - 2 * spread_std
         out["spread_revert_signal"] = -spread_z
         out["vecm_error"] = spread.diff() - spread.diff().rolling(window, min_periods=window).mean()
+        confirm_returns = ref_close.pct_change()
+        out["roll_corr_confirm_60"] = returns.rolling(60, min_periods=30).corr(confirm_returns)
+        out["roll_corr_confirm_120"] = returns.rolling(120, min_periods=60).corr(confirm_returns)
+        out["spread_z_zscore"] = _zscore(spread_z, window)
     else:
         out["spread_beta"] = 0.0
         out["spread_z"] = 0.0
@@ -219,6 +270,9 @@ def compute_features(
         out["spread_bb_lower"] = 0.0
         out["spread_revert_signal"] = 0.0
         out["vecm_error"] = 0.0
+        out["roll_corr_confirm_60"] = 0.0
+        out["roll_corr_confirm_120"] = 0.0
+        out["spread_z_zscore"] = 0.0
 
     # --- Pattern specialist --------------------------------------------------
     candle_range = (high - low).replace(0.0, np.nan)
@@ -268,12 +322,21 @@ def compute_features(
     out["engulf_diff_roll5"] = (
         out["bullish_engulf_flag"] - out["bearish_engulf_flag"]
     ).rolling(5, min_periods=1).mean()
+    out["wick_imbalance"] = (out["upper_wick_atr"] - out["lower_wick_atr"])
+    out["body_direction"] = np.sign(body).fillna(0.0)
+    out["gap_up"] = (open_ > prev_close).astype(float)
+    out["gap_down"] = (open_ < prev_close).astype(float)
+    out["body_range_pct_roll5"] = out["body_range_pct"].rolling(5, min_periods=1).mean()
 
     # Context helpers shared across experts
     out["ret_1"] = returns
     out["ret_4"] = close.pct_change(4)
     out["ret_vol_24"] = returns.rolling(24, min_periods=12).std()
     out["volume_zscore"] = _zscore(volume, 120)
+    out["ret_skew_60"] = returns.rolling(60, min_periods=30).skew()
+    out["ret_kurt_60"] = returns.rolling(60, min_periods=30).kurt()
+    out["cumulative_return_90"] = (1 + returns).rolling(90, min_periods=30).apply(np.prod, raw=True) - 1.0
+    out["drawdown_rolling_90"] = (close / close.rolling(90, min_periods=30).max()) - 1.0
 
     out = out.replace([np.inf, -np.inf], np.nan).dropna()
     return out

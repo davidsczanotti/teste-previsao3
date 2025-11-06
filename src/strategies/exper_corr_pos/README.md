@@ -6,9 +6,9 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
 - Ativo/timeframe: BTCUSDT 1d, desde ~2017 (cache local `data/klines_cache.db`).
 - Ambiente e ações: `{short, flat, long}` com capital lógico inicial de 1000, alavancagem configurável, stops móveis por ATR, trailing adicional por pico/vale de lucro e teto de notional por trade (1000 USD), penalidade de turnover e encerramento antecipado por piso de equity ou drawdown máximo. As janelas de treino podem iniciar em pontos aleatórios (`random_start`) para evitar viés de começo de série.
 - MoE (PyTorch): especialistas habilitados via `model.especialistas` + gating com softmax (temperatura ajustável) e top‑k esparso. Um regularizador de balanceamento mantém o uso distribuído.
-  - **TrendML** — EMAs, Donchian e um preditor direcional online (pseudo-LightGBM) com lags, RSI, ATR e hora do dia.
-  - **MultiFrame** — concordância entre tendência semanal (1W) e gatilhos diários (1d) com pullback/RSI.
-  - (opcionais) **Spread** e **Pattern** — podem ser reativados via config.
+  - **TrendML** — EMAs, ratio/accel, Donchian width, volatilidades realizadas (14/30), matriz de lags, momentum, slopes e preditor direcional online (pseudo-LightGBM) com features horárias.
+  - **MultiFrame** — concordância entre tendência semanal (1W) e gatilhos diários (1d) com pullback/RSI, ATR relativo e volatilidade do timeframe superior.
+  - (opcionais) **Spread** e **Pattern** — spread beta/z-score, correlações roll com ETH, z-score do spread, padrões de candle enriquecidos (gaps, wick imbalance, métricas normalizadas por ATR).
 - Treino RL: PPO adaptado ao MoE. O gating escolhe/pondera especialistas por passo; schedule de entropia reduz exploração ao longo dos episódios.
 - Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). Walk‑Forward e Monte Carlo podem ser habilitados conforme necessidade.
 

@@ -4,7 +4,7 @@ e0 - Trend técnico + modelo ML de direção
 
 Trend: EMA cross / breakout.
 
-ML: LightGBM com lags, RSI, ATR, ranges, hora do dia.
+ML: LightGBM com lags, RSI (7/14/21), ATR, volatilidade realizada (14/30), slopes lineares, mom10/mom20, desvios das EMAs e hora do dia.
 
 Uso: só entra quando ambos concordam; exige menos trades e melhora precision.
 
@@ -12,7 +12,7 @@ e1 - Sinais multiframe
 
 Higher TF (ex.: 1h): filtro de tendência (EMA slow).
 
-Lower TF (ex.: 5m): gatilho (pullback/RSI).
+Lower TF (ex.: 5m): gatilho (pullback/RSI) + ATR relativo. Incluímos volatilidade do TF superior para medir regime.
 
 Uso: concordância de timeframes costuma aumentar o hit rate.
 
@@ -22,7 +22,7 @@ VECM: indica desvio do equilíbrio entre dois ativos.
 
 Técnico: Bollinger no spread para gatilho.
 
-Uso: quando ambos sinalizam convergência, reforça o trade de pairs.
+Uso: quando ambos sinalizam convergência, reforça o trade de pairs. Agora também acompanhamos correlação rolling (60/120) e z-score do spread sobre janela longa para reforçar confiança.
 
 e3 - forma de candles (corpo/pavio), padrões simples (doji, hammer, engulfing) e contagens rolling
 
@@ -37,4 +37,5 @@ Contagens rolling:
 hammer_roll3: média dos hammers nas últimas 3 velas.
 shooting_star_roll3: idem para shooting star.
 engulf_diff_roll5: diferença entre engolfos altistas e baixistas nos últimos 5 candles.
+Novos sinalizadores: gaps (gap_up/gap_down), wick imbalance (diferença entre pavios normalizada), direção do corpo, médias móveis das proporções de corpo.
 O “expert Pattern” recebe justamente essas colunas do dataframe (doji_flag, hammer_flag, body_atr, engulf_diff_roll5) e, via MLP, decide se vale apostar em reversão/continuação. Ele não tem lógica if/else própria — aprende a usar essas features com o PPO, como se fosse um operador humano treinando olho para candles.
