@@ -405,7 +405,11 @@ def main() -> None:
     )
     summary_md_lines.append("")
     summary_md_lines.append("## Scoreboard (console)")
-    summary_md_lines.append("```\n" + _format_scoreboard(completed_records) + "\n```")
+    try:
+        scoreboard_text = _format_scoreboard(completed_records)
+    except NameError:  # pragma: no cover
+        scoreboard_text = "scoreboard indisponível"
+    summary_md_lines.append("```\n" + scoreboard_text + "\n```")
 
     (out_base / "summary.json").write_text(json.dumps(summary, indent=2))
     (out_base / "best_config.json").write_text(json.dumps(best_config, indent=2))
@@ -421,7 +425,7 @@ def main() -> None:
         improvement = study.best_value - baseline_result.get("best_greedy", 0.0)
         print(f"[optimize] Comparado ao baseline: Δbest_greedy={improvement:.2f}")
     print(f"[optimize] Config principal atualizado em {cfg_path} (backup: {backup_path})")
-    print(f"[optimize] Scoreboard resumido:\n{_format_scoreboard(completed_records)}")
+    print(f"[optimize] Scoreboard resumido:\n{scoreboard_text}")
     print(f"[optimize] Relatórios: {out_base}")
 
 
