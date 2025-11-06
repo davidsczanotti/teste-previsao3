@@ -8,6 +8,8 @@ import hashlib
 import random
 import subprocess
 from datetime import datetime, timezone
+from copy import deepcopy
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -83,31 +85,75 @@ def _record_manifest(config: dict, cfg_path: Path, seed: int) -> None:
     MANIFEST_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train MoE PPO agent (config-driven)")
-    parser.add_argument(
-        "--config",
-        default=DEFAULT_CONFIG,
-        help="Path to JSON configuration (default: src/strategies/exper_corr_pos/config.json)",
-    )
-    return parser.parse_args()
+def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
 
 
-def main() -> None:
-    args = parse_args()
-    cfg_path = Path(args.config)
-    config = json.loads(cfg_path.read_text())
+def _apply_curriculum_phase(
+    curriculum_cfg: Optional[Dict[str, Any]],
+    env: BTCMixtureEnv,
+    episode: int,
+    default_rollout: int,
+) -> int:
+    if not curriculum_cfg:
+        return default_rollout
 
-    train_cfg = config.get("train", {})
+    phases = curriculum_cfg.get("phases") or []
+    chosen: Optional[Dict[str, Any]] = None
+    for phase in phases:
+        until = int(phase.get("until_episode", 0))
+        if until <= 0:
+            continue
+        if episode <= until:
+            chosen = phase
+            break
+    if chosen is None:
+        chosen = curriculum_cfg.get("final", {})
+
+    env_overrides = (chosen or {}).get("env", {})
+    for attr, value in env_overrides.items():
+        if hasattr(env.cfg, attr):
+            setattr(env.cfg, attr, value)
+
+    train_overrides = (chosen or {}).get("train", {})
+    if "rollout_steps" in train_overrides:
+        try:
+            return int(train_overrides["rollout_steps"])
+        except Exception:
+            pass
+    return default_rollout
+
+
+def train_agent(
+    config: Dict[str, Any],
+    *,
+    cfg_path: Optional[Path] = None,
+    overrides: Optional[Dict[str, Any]] = None,
+    record_manifest: bool = True,
+    enable_plots: bool = True,
+    trial_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    cfg = deepcopy(config)
+    if overrides:
+        _deep_update(cfg, overrides)
+
+    train_cfg = cfg.get("train", {})
     seed = int(train_cfg.get("seed", 42))
     _set_seeds(seed)
-    _record_manifest(config, cfg_path, seed)
 
-    primary_df = load_primary_series(config)
-    confirm_df = load_confirm_series(config)
-    dataset = prepare_dataset(primary_df, config=config, confirm_df=confirm_df)
+    if record_manifest and cfg_path is not None:
+        _record_manifest(cfg, cfg_path, seed)
 
-    data_cfg = config.get("data", {})
+    primary_df = load_primary_series(cfg)
+    confirm_df = load_confirm_series(cfg)
+    dataset = prepare_dataset(primary_df, config=cfg, confirm_df=confirm_df)
+
+    data_cfg = cfg.get("data", {})
     timeframe = str(data_cfg.get("timeframe") or "").strip()
     if not timeframe:
         raise ValueError("Parâmetro obrigatório ausente: data.timeframe no config.json")
@@ -117,12 +163,12 @@ def main() -> None:
     price_df = dataset[price_cols].reset_index(drop=True)
     feat_df = dataset.drop(columns=price_cols).reset_index(drop=True)
 
-    env_cfg = EnvConfig(**config.get("env", {}))
+    env_cfg = EnvConfig(**cfg.get("env", {}))
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     input_dim = feat_df.shape[1]
-    policy = build_policy(input_dim, config)
-    ppo_cfg = PPOConfig(**config.get("ppo", {}))
+    policy = build_policy(input_dim, cfg)
+    ppo_cfg = PPOConfig(**cfg.get("ppo", {}))
     trainer = PPOTrainer(
         policy,
         ppo_cfg,
@@ -130,10 +176,10 @@ def main() -> None:
         lb_coef=float(train_cfg.get("lb_coef", 0.01)),
     )
 
-    outdir = Path(train_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/train"))
+    base_outdir = Path(train_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/train"))
+    outdir = base_outdir / trial_id if trial_id else base_outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
-    # Resume logic: if enabled and checkpoint exists, warm-start the policy
     resume = bool(train_cfg.get("resume", False))
     resume_path_str = train_cfg.get("resume_path")
     resume_path = Path(resume_path_str) if resume_path_str else (outdir / "moe_policy_final.pt")
@@ -149,23 +195,23 @@ def main() -> None:
             print(f"[resume] Falha ao carregar {resume_path}: {e}. Iniciando do zero.")
 
     episodes = int(train_cfg.get("episodes", 500))
-    rollout_steps = int(train_cfg.get("rollout_steps", 2048))
+    base_rollout_steps = int(train_cfg.get("rollout_steps", 2048))
     log_every = int(train_cfg.get("log_every", 5))
     plot_every = int(train_cfg.get("plot_every", 50))
     eval_every = int(train_cfg.get("eval_every", 50))
     eval_days = int(train_cfg.get("eval_days", 90))
     ckpt_every = int(train_cfg.get("ckpt_every", 10))
-    final_every = int(train_cfg.get("final_every", 0))  # 0 = só no fim
+    final_every = int(train_cfg.get("final_every", 0))
+    usage_window = int(train_cfg.get("usage_window", train_cfg.get("plot_every", 100)))
+    curriculum_cfg = train_cfg.get("curriculum")
 
     metrics_path = outdir / "metrics.csv"
     usage_cols = [f"usage_e{i}" for i in range(policy.num_experts)]
-    # Se já existir um CSV antigo sem as colunas novas, rotaciona para *_legacy.csv
     if metrics_path.exists():
         try:
             with metrics_path.open("r") as f:
                 header = f.readline().strip()
             header_ok = header.startswith("episode,") and ("entropy_coef" in header) and ("greedy_ruined" in header)
-            # Verifica se a quantidade de colunas usage_e* no cabeçalho bate com o número de experts
             try:
                 cols = [c.strip() for c in header.split(",") if c]
                 usage_in_header = [c for c in cols if c.startswith("usage_e")]
@@ -200,10 +246,10 @@ def main() -> None:
 
     def _append_metrics(
         ep: int,
-        m: dict,
-        greedy_equity: float | None = None,
-        greedy_ruined: bool | None = None,
-        entropy_coef_val: float | None = None,
+        m: Dict[str, Any],
+        greedy_equity: Optional[float] = None,
+        greedy_ruined: Optional[bool] = None,
+        entropy_coef_val: Optional[float] = None,
     ) -> None:
         with metrics_path.open("a", newline="") as f:
             writer = csv.writer(f)
@@ -218,7 +264,6 @@ def main() -> None:
                 m.get("sum_reward"),
             ]
             usage = m.get("expert_usage") or []
-            # garante número fixo de colunas
             usage = list(usage) + [""] * max(0, len(usage_cols) - len(usage))
             row.extend(usage[: len(usage_cols)])
             row.append(greedy_equity if greedy_equity is not None else "")
@@ -226,6 +271,8 @@ def main() -> None:
             writer.writerow(row)
 
     def _plot_metrics() -> None:
+        if not enable_plots or plot_every <= 0:
+            return
         try:
             import pandas as pd
             import matplotlib.pyplot as plt
@@ -236,19 +283,22 @@ def main() -> None:
             ax = axes[0, 0]
             ax.plot(dfm["episode"], dfm["policy_loss"], label="policy_loss")
             ax.plot(dfm["episode"], dfm["value_loss"], label="value_loss")
-            ax.legend(); ax.set_title("Losses")
+            ax.legend()
+            ax.set_title("Losses")
 
             ax = axes[0, 1]
             ax.plot(dfm["episode"], dfm["entropy"], label="entropy")
             if "entropy_coef" in dfm.columns:
                 ax.plot(dfm["episode"], dfm["entropy_coef"], label="entropy_coef")
             ax.plot(dfm["episode"], dfm["load_balance"], label="load_balance")
-            ax.legend(); ax.set_title("Entropy / Balance")
+            ax.legend()
+            ax.set_title("Entropy / Balance")
 
             ax = axes[1, 0]
             ax.plot(dfm["episode"], dfm["avg_reward"], label="avg_reward")
             ax.plot(dfm["episode"], dfm["sum_reward"], label="sum_reward")
-            ax.legend(); ax.set_title("Rewards")
+            ax.legend()
+            ax.set_title("Rewards")
 
             ax = axes[1, 1]
             if "greedy_equity" in dfm.columns:
@@ -273,7 +323,8 @@ def main() -> None:
                             )
                 else:
                     ax.text(0.5, 0.5, "sem avaliações ainda", transform=ax.transAxes, ha="center", va="center")
-            ax.legend(); ax.set_title("Greedy equity (eval)")
+            ax.legend()
+            ax.set_title("Greedy equity (eval)")
 
             fig.tight_layout()
             fig.savefig(outdir / "metrics.png", dpi=120)
@@ -281,7 +332,9 @@ def main() -> None:
         except Exception as e:
             print(f"[plot] Falha ao gerar metrics.png: {e}")
 
-    def _plot_usage(window: int = 100) -> None:
+    def _plot_usage() -> None:
+        if not enable_plots or plot_every <= 0:
+            return
         try:
             import pandas as pd
             import matplotlib.pyplot as plt
@@ -292,7 +345,7 @@ def main() -> None:
             cols = [c for c in usage_cols if c in dfm.columns]
             if not cols:
                 return
-            tail = dfm.tail(window)
+            tail = dfm.tail(usage_window)
             means = tail[cols].mean(numeric_only=True)
             plt.style.use("dark_background")
             fig, ax = plt.subplots(figsize=(8, 4))
@@ -310,13 +363,11 @@ def main() -> None:
         except Exception as e:
             print(f"[plot] Falha ao gerar expert_usage.png: {e}")
 
-    def _greedy_eval() -> tuple[float, bool]:
+    def _greedy_eval() -> Tuple[float, bool]:
         try:
-            # pequena avaliação em uma janela do fim dos dados
             eval_bars = bars_for_days(timeframe, eval_days)
             tail_prices = price_df.tail(eval_bars).reset_index(drop=True)
             tail_feats = feat_df.tail(eval_bars).reset_index(drop=True)
-            # Avaliação determinística: força random_start=False e janela completa
             eval_cfg = EnvConfig(**env_cfg.__dict__)
             eval_cfg.random_start = False
             eval_cfg.window_bars = 0
@@ -324,7 +375,7 @@ def main() -> None:
             eval_env = BTCMixtureEnv(tail_prices, tail_feats, eval_cfg, timestamps=tail_ts)
             obs = torch.tensor(eval_env.reset(), dtype=torch.float32)
             done = False
-            info = {"equity": float(env_cfg.init_equity)}
+            info: Dict[str, Any] = {"equity": float(env_cfg.init_equity)}
             ruined = False
             while not done:
                 with torch.no_grad():
@@ -359,20 +410,21 @@ def main() -> None:
     best_greedy = float(best_greedy)
     best_path = outdir / "moe_policy_best_eval.pt"
 
-    # Entropy schedule (opcional): linear start->end em 'entropy_decay_episodes'
     ent_start = float(train_cfg.get("entropy_coef_start", ppo_cfg.entropy_coef))
     ent_end = float(train_cfg.get("entropy_coef_end", ent_start))
     ent_decay_episodes = int(train_cfg.get("entropy_decay_episodes", episodes))
 
+    last_metrics: Optional[Dict[str, Any]] = None
     for episode in range(1, episodes + 1):
-        # atualiza coeficiente de entropia conforme agenda
         if ent_decay_episodes > 0:
             progress = min(1.0, episode / float(ent_decay_episodes))
             current_entropy_coef = ent_start + (ent_end - ent_start) * progress
             trainer.cfg.entropy_coef = float(current_entropy_coef)
         else:
             current_entropy_coef = trainer.cfg.entropy_coef
-        metrics = trainer.train_step(env, rollout_steps)
+
+        rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, episode, base_rollout_steps)
+        last_metrics = trainer.train_step(env, rollout_steps)
         actual_episode = episode_offset + episode
 
         greedy_equity = None
@@ -390,7 +442,7 @@ def main() -> None:
 
         _append_metrics(
             actual_episode,
-            metrics,
+            last_metrics or {},
             greedy_equity,
             greedy_ruined,
             entropy_coef_val=current_entropy_coef,
@@ -398,20 +450,58 @@ def main() -> None:
 
         if plot_every > 0 and episode % plot_every == 0:
             _plot_metrics()
-            _plot_usage(window=int(train_cfg.get("usage_window", train_cfg.get("plot_every", 100))))
+            _plot_usage()
 
         if ckpt_every > 0 and episode % ckpt_every == 0:
             ckpt_path = outdir / f"moe_policy_ep{episode}.pt"
             torch.save(policy.state_dict(), ckpt_path)
         if final_every > 0 and episode % final_every == 0:
-            # alias de conveniência para scripts que buscam 'final'
             torch.save(policy.state_dict(), outdir / "moe_policy_final.pt")
-        if episode % log_every == 0:
-            print(f"Episode {actual_episode} (run {episode}): {metrics}")
+        if log_every > 0 and episode % log_every == 0:
+            print(f"Episode {actual_episode} (run {episode}): {last_metrics}")
+
+    final_greedy, final_ruined = _greedy_eval()
+    if (
+        final_greedy == final_greedy
+        and not final_ruined
+        and final_greedy > best_greedy
+    ):
+        best_greedy = final_greedy
+        torch.save(policy.state_dict(), best_path)
+        print(f"[eval] Final greedy melhorado={best_greedy:.2f} salvo em {best_path}")
 
     final_path = outdir / "moe_policy_final.pt"
     torch.save(policy.state_dict(), final_path)
     print(f"Treinamento finalizado. Modelo salvo em {final_path}")
+
+    best_metric = best_greedy if best_greedy != float("-inf") else final_greedy
+    return {
+        "best_greedy": float(best_metric),
+        "final_greedy": float(final_greedy),
+        "final_ruined": bool(final_ruined),
+        "outdir": str(outdir),
+        "metrics_path": str(metrics_path),
+        "episodes": episodes,
+        "rollout_steps": base_rollout_steps,
+        "last_metrics": last_metrics or {},
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train MoE PPO agent (config-driven)")
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG,
+        help="Path to JSON configuration (default: src/strategies/exper_corr_pos/config.json)",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    cfg_path = Path(args.config)
+    config = json.loads(cfg_path.read_text())
+    train_agent(config, cfg_path=cfg_path)
 
 
 if __name__ == "__main__":

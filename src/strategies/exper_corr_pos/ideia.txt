@@ -39,3 +39,7 @@ shooting_star_roll3: idem para shooting star.
 engulf_diff_roll5: diferença entre engolfos altistas e baixistas nos últimos 5 candles.
 Novos sinalizadores: gaps (gap_up/gap_down), wick imbalance (diferença entre pavios normalizada), direção do corpo, médias móveis das proporções de corpo.
 O “expert Pattern” recebe justamente essas colunas do dataframe (doji_flag, hammer_flag, body_atr, engulf_diff_roll5) e, via MLP, decide se vale apostar em reversão/continuação. Ele não tem lógica if/else própria — aprende a usar essas features com o PPO, como se fosse um operador humano treinando olho para candles.
+
+Curriculum: o treino começa com episódios mais fáceis (sem random_start, janela maior) e rollouts menores; gradualmente libera o regime completo (`train.curriculum`). Isso acelera a estabilização da política antes de expor todo o histórico.
+
+Otimização: existe um fluxo Optuna (`optimize.py`) que varre lr/gamma/top_k/entropia, aproveitando o curriculum curto para avaliar rapidamente qual combinação entrega maior greedy equity. O melhor resultado gera um `best_config.json` para atualizar a configuração principal.

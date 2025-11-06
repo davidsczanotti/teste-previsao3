@@ -94,7 +94,40 @@
     "final_every": 100,
     "entropy_coef_start": 0.018,
     "entropy_coef_end": 0.004,
-    "entropy_decay_episodes": 2000
+    "entropy_decay_episodes": 2000,
+    "curriculum": {
+      "phases": [
+        {
+          "until_episode": 2500,
+          "env": {
+            "random_start": false,
+            "window_bars": 720
+          },
+          "train": {
+            "rollout_steps": 256
+          }
+        },
+        {
+          "until_episode": 10000,
+          "env": {
+            "random_start": true,
+            "window_bars": 540
+          },
+          "train": {
+            "rollout_steps": 384
+          }
+        }
+      ],
+      "final": {
+        "env": {
+          "random_start": true,
+          "window_bars": 0
+        },
+        "train": {
+          "rollout_steps": 400
+        }
+      }
+    }
   },
   "pbt": {
     "pop": 2,
@@ -131,6 +164,47 @@
     "regime_summary": {
       "enabled": true,
       "path": "src/strategies/exper_corr_pos/reports/train/regime_summary.json"
+    }
+  },
+  "optimize": {
+    "trials": 25,
+    "sampler_seed": 202,
+    "direction": "maximize",
+    "episodes": 1500,
+    "rollout_steps": 384,
+    "eval_every": 300,
+    "log_every": 0,
+    "outdir": "src/strategies/exper_corr_pos/reports/optuna",
+    "storage": "sqlite:///data/optuna_studies.db",
+    "study_name": "exper_corr_pos_main",
+    "score": "best_greedy",
+    "baseline": {
+      "enabled": true,
+      "episodes": 1500,
+      "rollout_steps": 384,
+      "eval_every": 300
+    },
+    "parameters": {
+      "ppo.learning_rate": {
+        "type": "loguniform",
+        "low": 5e-06,
+        "high": 3e-04
+      },
+      "ppo.gamma": {
+        "type": "uniform",
+        "low": 0.96,
+        "high": 0.999
+      },
+      "model.top_k": {
+        "type": "int",
+        "low": 1,
+        "high": 4
+      },
+      "train.entropy_coef_start": {
+        "type": "uniform",
+        "low": 0.006,
+        "high": 0.02
+      }
     }
   },
   "docs": {
