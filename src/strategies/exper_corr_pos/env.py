@@ -71,6 +71,7 @@ class EnvConfig:
     adaptive_stop_window: int = 50      # janela para calcular ATR histórico médio
     kelly_fraction: float = 0.1         # fração Kelly para position sizing
     var_confidence: float = 0.95        # confiança para VaR
+    trend_penalty_coef: float = 0.0     # penaliza posição contra tendência HTF
 
 
 class BTCMixtureEnv(gym.Env):
@@ -243,6 +244,13 @@ class BTCMixtureEnv(gym.Env):
 
         # mark-to-market PnL
         reward += self._pos * self._pos_size * (next_price - price)
+
+        # Penalidade por operar contra a tendência do timeframe superior
+        if getattr(self.cfg, "trend_penalty_coef", 0.0) > 0.0 and self._pos != 0:
+            trend_value = float(self.features.iloc[cur_idx].get("htf_trend_state", 0.0))
+            if trend_value == trend_value and trend_value != 0.0:  # ignora NaN e neutro
+                if np.sign(trend_value) == -np.sign(self._pos):
+                    reward -= abs(self.cfg.trend_penalty_coef)
 
         # Update trailing stop
         reward += self._maybe_apply_trailing(next_price, next_low, next_high, next_atr)

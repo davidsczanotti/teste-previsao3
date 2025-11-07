@@ -34,7 +34,8 @@
     "allow_intrabar_closes": false,
     "adaptive_stop_window": 50,
     "kelly_fraction": 0.1,
-    "var_confidence": 0.95
+    "var_confidence": 0.95,
+    "trend_penalty_coef": 0.05
   },
   "model": {
     "expert_hidden": [
