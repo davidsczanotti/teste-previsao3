@@ -61,6 +61,9 @@ class EnvConfig:
     window_bars: int = 0
     idle_penalty_factor: float = 0.0
     hold_bonus_alpha: float = 0.0
+    # Se verdadeiro, o bônus de hold só é aplicado quando o trade tem PnL positivo.
+    # Em perdas, não aplica malus adicional.
+    hold_bonus_positive_only: bool = False
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
@@ -326,7 +329,11 @@ class BTCMixtureEnv(gym.Env):
         # bônus/malus por duração do trade
         bonus = 0.0
         if self.cfg.hold_bonus_alpha > 0.0:
-            bonus = self.cfg.hold_bonus_alpha * duration_bars * pnl
+            raw_bonus = self.cfg.hold_bonus_alpha * duration_bars * pnl
+            if getattr(self.cfg, "hold_bonus_positive_only", False) and raw_bonus < 0.0:
+                bonus = 0.0
+            else:
+                bonus = raw_bonus
         # PnL total realizado do trade (inclui custos de entrada e saída e bônus)
         trade_pnl_total = pnl - self._open_cost - cost + bonus
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
