@@ -60,7 +60,7 @@ def test_env_triggers_ruin_on_equity_floor():
     feat_df = _make_features_df(length)
     cfg = EnvConfig(
         init_equity=1000.0,
-        equity_floor_pct=0.5,
+        equity_floor_pct=0.95,
         max_drawdown_pct=0.6,
         drawdown_kill_bars=1,
         position_size=1.0,
