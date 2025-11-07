@@ -92,6 +92,11 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
     poetry run python -m src.strategies.exper_corr_pos.train
   ```
+  for i in {1..3}; do
+    BINANCE_OFFLINE=1 NUMBA_CACHE_DIR=$PWD/.numba_cache \
+    poetry run python -m src.strategies.exper_corr_pos.train
+  done
+
   Artefatos: `src/strategies/exper_corr_pos/reports/train/`
   - Para enviar métricas/artefatos ao Weights & Biases, edite `logging.wandb.enabled` para `true` no `config.json` (configure também `project/entity/name` conforme sua conta) antes de rodar o treino.
 

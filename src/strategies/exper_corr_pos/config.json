@@ -77,7 +77,7 @@
     "batch_size": 256
   },
   "train": {
-    "episodes": 1000,
+    "episodes": 10000,
     "rollout_steps": 400,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/train",
@@ -149,7 +149,7 @@
   "pbt": {
     "pop": 2,
     "rounds": 3,
-    "episodes": 15000,
+    "episodes": 35000,
     "concurrency": 2,
     "threads": 2,
     "seed_checkpoint": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
@@ -204,7 +204,7 @@
     }
   },
   "optimize": {
-    "trials": 0,
+    "trials": 25,
     "sampler_seed": 202,
     "direction": "maximize",
     "episodes": 1500,
@@ -217,7 +217,7 @@
     "study_name": "exper_corr_pos_main",
     "experiment_id": "exper_corr_pos",
     "score": "best_greedy",
-    "apply_best_only": false,
+    "apply_best_only": true,
     "baseline": {
       "enabled": true,
       "episodes": 1500,
