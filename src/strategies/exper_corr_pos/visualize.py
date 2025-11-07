@@ -148,9 +148,24 @@ def main() -> None:
     closes = price_df["close"].to_numpy()[: len(actions)]
     idx = np.arange(len(actions))
 
+    # Extrai indicadores de tendência usados pelos experts para contexto visual
+    ema_fast = dataset.get("ema_fast")
+    ema_slow = dataset.get("ema_slow")
+    htf_trend = dataset.get("htf_trend_state")
+    if ema_fast is not None and ema_slow is not None:
+        ema_fast = ema_fast.to_numpy()[: len(actions)]
+        ema_slow = ema_slow.to_numpy()[: len(actions)]
+    else:
+        ema_fast = ema_slow = None
+    if htf_trend is not None:
+        htf_trend = htf_trend.to_numpy()[: len(actions)]
+
     plt.style.use("dark_background")
     fig, ax_price = plt.subplots(figsize=(12, 6))
     ax_price.plot(idx, closes, color="#4da6ff", linewidth=1.2, label="Preço")
+    if ema_fast is not None and ema_slow is not None:
+        ax_price.plot(idx, ema_fast, color="#63ff85", linewidth=1.0, label="EMA rápida")
+        ax_price.plot(idx, ema_slow, color="#ff5f5f", linewidth=1.0, label="EMA lenta")
 
     # marca entradas long/short para visualização rápida
     longs = actions == 1
@@ -166,6 +181,16 @@ def main() -> None:
     ax_equity.plot(idx, equity, color="#f0c674", linewidth=1.0, label="Equity")
     ax_equity.set_ylabel("Equity lógica")
     ax_equity.legend(loc="upper right")
+
+    if htf_trend is not None:
+        ax_trend = ax_price.twinx()
+        ax_trend.step(idx, htf_trend, where="post", color="#8ecae6", alpha=0.3, linewidth=1.0, label="Trend HTF")
+        ax_trend.set_yticks([-1, 0, 1])
+        ax_trend.set_ylim(-1.5, 1.5)
+        ax_trend.spines["right"].set_position(("axes", 1.08))
+        ax_trend.tick_params(axis="y", colors="#8ecae6")
+        ax_trend.set_ylabel("HTF trend", color="#8ecae6")
+        ax_trend.legend(loc="lower right")
 
     fig.suptitle(f"Agente MoE — Confluência de Correlação Positiva ({data_cfg.get('base_symbol', 'BTCUSDT')} {timeframe})")
     # legenda didática com nomes dos experts
