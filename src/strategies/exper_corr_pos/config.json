@@ -35,7 +35,7 @@
     "adaptive_stop_window": 50,
     "kelly_fraction": 0.1,
     "var_confidence": 0.95,
-    "trend_penalty_coef": 0.05
+    "trend_penalty_coef": 0.10
   },
   "model": {
     "expert_hidden": [

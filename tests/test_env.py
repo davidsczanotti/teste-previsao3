@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.strategies.exper_corr_pos.env import BTCMixtureEnv, EnvConfig
 
@@ -85,3 +86,45 @@ def test_env_turnover_penalty_applies_on_flip():
     env.step(2)
     _, reward, _, _ = env.step(0)
     assert reward <= 0
+
+
+def test_trend_penalty_penalizes_contra_trend_positions():
+    length = 5
+    base = np.full(length, 100.0)
+    price_df = pd.DataFrame(
+        {
+            "open": base,
+            "high": base,
+            "low": base,
+            "close": base,
+            "volume": np.ones(length),
+        }
+    )
+    feat_df = pd.DataFrame(
+        {
+            "atr_14": np.ones(length),
+            "htf_trend_state": np.ones(length),  # tendencia positiva
+        }
+    )
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=0.5,
+        stop_atr_mult=1.0,
+        trail_atr_mult=1.0,
+        trend_penalty_coef=0.25,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=length,
+        idle_penalty_factor=0.0,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    # Long segue a tendência -> não deveria penalizar
+    _, reward_long, _, _ = env.step(2)
+    env.reset()
+    # Short vai contra a tendência -> recebe penalidade negativa
+    _, reward_short, _, _ = env.step(0)
+    assert reward_long == pytest.approx(0.0, abs=1e-6)
+    assert reward_short < reward_long
+    assert reward_short == pytest.approx(-cfg.trend_penalty_coef, abs=1e-6)
