@@ -149,5 +149,5 @@ class MoEPolicy(nn.Module):
         dist = Categorical(logits=mixed_logits)
         value = self.value_net(obs).squeeze(-1)
         # load balancing (variance of weights)
-        lb_loss = mask.mean(dim=0).var()  # encourages spread usage
+        lb_loss = mask.mean(dim=0).var(unbiased=False)  # encourages spread usage
         return dist, value, lb_loss
