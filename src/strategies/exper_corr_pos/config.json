@@ -206,7 +206,7 @@
     }
   },
   "optimize": {
-    "trials": 25,
+    "trials": 50,
     "sampler_seed": 202,
     "direction": "maximize",
     "episodes": 1500,
