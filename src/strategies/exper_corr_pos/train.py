@@ -256,7 +256,12 @@ def train_agent(
         try:
             with metrics_path.open("r") as f:
                 header = f.readline().strip()
-            header_ok = header.startswith("episode,") and ("entropy_coef" in header) and ("greedy_ruined" in header)
+            header_ok = (
+                header.startswith("episode,")
+                and ("entropy_coef" in header)
+                and ("lb_coef" in header)
+                and ("greedy_ruined" in header)
+            )
             try:
                 cols = [c.strip() for c in header.split(",") if c]
                 usage_in_header = [c for c in cols if c.startswith("usage_e")]
@@ -281,6 +286,7 @@ def train_agent(
                 "value_loss",
                 "entropy",
                 "entropy_coef",
+                "lb_coef",
                 "load_balance",
                 "avg_reward",
                 "sum_reward",
@@ -295,6 +301,7 @@ def train_agent(
         greedy_equity: Optional[float] = None,
         greedy_ruined: Optional[bool] = None,
         entropy_coef_val: Optional[float] = None,
+        lb_coef_val: Optional[float] = None,
     ) -> Dict[str, Any]:
         usage = list(m.get("expert_usage") or [])
         row_map: Dict[str, Any] = {
@@ -303,6 +310,7 @@ def train_agent(
             "value_loss": m.get("value_loss"),
             "entropy": m.get("entropy"),
             "entropy_coef": entropy_coef_val if entropy_coef_val is not None else ppo_cfg.entropy_coef,
+            "lb_coef": lb_coef_val if lb_coef_val is not None else trainer.lb_coef,
             "load_balance": m.get("load_balance"),
             "avg_reward": m.get("avg_reward"),
             "sum_reward": m.get("sum_reward"),
@@ -320,6 +328,7 @@ def train_agent(
                 row_map["value_loss"],
                 row_map["entropy"],
                 row_map["entropy_coef"],
+                row_map["lb_coef"],
                 row_map["load_balance"],
                 row_map["avg_reward"],
                 row_map["sum_reward"],
@@ -477,16 +486,29 @@ def train_agent(
     ent_end = float(train_cfg.get("entropy_coef_end", ent_start))
     ent_decay_episodes = int(train_cfg.get("entropy_decay_episodes", episodes))
 
+    # Schedule para lb_coef (balanceamento do gate)
+    lb_start = float(train_cfg.get("lb_coef_start", train_cfg.get("lb_coef", 0.01)))
+    lb_end = float(train_cfg.get("lb_coef_end", lb_start))
+    lb_decay_episodes = int(train_cfg.get("lb_decay_episodes", ent_decay_episodes))
+    trainer.lb_coef = lb_start
+
     last_metrics: Optional[Dict[str, Any]] = None
     for episode in range(1, episodes + 1):
         # Compute absolute episode index (respects resumed runs)
         actual_episode = episode_offset + episode
         if ent_decay_episodes > 0:
-            progress = min(1.0, episode / float(ent_decay_episodes))
-            current_entropy_coef = ent_start + (ent_end - ent_start) * progress
+            ent_progress = min(1.0, episode / float(ent_decay_episodes))
+            current_entropy_coef = ent_start + (ent_end - ent_start) * ent_progress
             trainer.cfg.entropy_coef = float(current_entropy_coef)
         else:
             current_entropy_coef = trainer.cfg.entropy_coef
+
+        if lb_decay_episodes > 0:
+            lb_progress = min(1.0, episode / float(lb_decay_episodes))
+            current_lb_coef = lb_start + (lb_end - lb_start) * lb_progress
+            trainer.lb_coef = float(current_lb_coef)
+        else:
+            current_lb_coef = trainer.lb_coef
 
         # Use absolute index to select curriculum phase when resuming
         rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, actual_episode, base_rollout_steps)
@@ -521,6 +543,7 @@ def train_agent(
             greedy_equity,
             greedy_ruined,
             entropy_coef_val=current_entropy_coef,
+            lb_coef_val=current_lb_coef,
         )
         if wandb_run:
             log_payload = {k: v for k, v in row_data.items() if v is not None}

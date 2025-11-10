@@ -92,10 +92,13 @@
     "seed": 42,
     "usage_window": 100,
     "lb_coef": 0.2,
+    "lb_coef_start": 0.2,
+    "lb_coef_end": 0.05,
+    "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
     "entropy_coef_start": 0.010558523768657853,
-    "entropy_coef_end": 0.004,
+    "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 2000,
     "curriculum": {
       "phases": [

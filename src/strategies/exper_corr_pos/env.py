@@ -72,6 +72,13 @@ class EnvConfig:
     kelly_fraction: float = 0.1         # fração Kelly para position sizing
     var_confidence: float = 0.95        # confiança para VaR
     trend_penalty_coef: float = 0.0     # penaliza posição contra tendência HTF
+    trend_penalty_entry_mult: float = 1.0  # multiplicador aplicado na penalidade única em novas entradas
+    trend_throttle_threshold: float = 0.0  # |htf_trend_strength| mínimo para bloquear trades contra a tendência
+    trend_throttle_cooldown: int = 0       # número de barras em que o bloqueio permanece ativo
+    trend_throttle_idle_penalty: float = 0.0  # penalidade aplicada quando o throttle impede uma ação
+    trend_throttle_use_divergence_override: bool = False  # permite furar o bloqueio se houver divergência forte
+    trend_throttle_spread_thr: float = 1.5  # |spread_z_zscore| mínimo para considerar divergência
+    trend_throttle_pattern_thr: float = 0.6  # intensidade mínima de padrão (ex.: hammer/shooting_star roll) para liberar
 
 
 class BTCMixtureEnv(gym.Env):
@@ -149,6 +156,8 @@ class BTCMixtureEnv(gym.Env):
         self._end_idx: int = len(self.df)
         self._idle_penalty_per_step: float = 0.0
         self._pending_action: Optional[int] = None
+        self._trend_cooldown: int = 0
+        self._trend_cooldown_sign: int = 0
 
     def reset(self) -> np.ndarray:
         total_len = len(self.df)
@@ -193,6 +202,8 @@ class BTCMixtureEnv(gym.Env):
         self._entry_idx = -1
         self._entry_timestamp = None
         self._pending_action = None
+        self._trend_cooldown = 0
+        self._trend_cooldown_sign = 0
         self._episode_length = max(1, self._end_idx - self._start_idx)
         if self.cfg.idle_penalty_factor > 0.0:
             self._idle_penalty_per_step = (
@@ -210,6 +221,7 @@ class BTCMixtureEnv(gym.Env):
         cur_idx = self._start_idx + self._step
         price = float(self.df.iloc[cur_idx]["close"])
         atr = float(self.features.iloc[cur_idx]["atr_14"])
+        trend_state, trend_strength = self._trend_snapshot(cur_idx)
 
         if not getattr(self.cfg, "allow_intrabar_closes", True):
             if self._pending_action is not None:
@@ -221,6 +233,27 @@ class BTCMixtureEnv(gym.Env):
                     action = self._pos + 1
 
         desired_pos = action - 1  # map {0:-1,1:0,2:+1}
+        idle_throttle_penalty = float(getattr(self.cfg, "trend_throttle_idle_penalty", 0.0))
+        reward_adjust = 0.0
+
+        if self._trend_cooldown > 0:
+            if desired_pos == -self._trend_cooldown_sign:
+                desired_pos = 0
+                if idle_throttle_penalty > 0.0:
+                    reward_adjust -= idle_throttle_penalty
+            self._trend_cooldown -= 1
+            if self._trend_cooldown == 0:
+                self._trend_cooldown_sign = 0
+        else:
+            if desired_pos != self._pos and desired_pos != 0:
+                if self._should_throttle(desired_pos, trend_state, trend_strength):
+                    desired_pos = 0
+                    cooldown_len = int(getattr(self.cfg, "trend_throttle_cooldown", 0))
+                    if cooldown_len > 0:
+                        self._trend_cooldown = cooldown_len
+                        self._trend_cooldown_sign = int(np.sign(trend_state))
+                    if idle_throttle_penalty > 0.0:
+                        reward_adjust -= idle_throttle_penalty
 
         if desired_pos != self._pos:
             if self.cfg.turnover_penalty > 0.0:
@@ -245,15 +278,14 @@ class BTCMixtureEnv(gym.Env):
         # mark-to-market PnL
         reward += self._pos * self._pos_size * (next_price - price)
 
-        # Penalidade por operar contra a tendência do timeframe superior
-        if getattr(self.cfg, "trend_penalty_coef", 0.0) > 0.0 and self._pos != 0:
-            trend_value = float(self.features.iloc[cur_idx].get("htf_trend_state", 0.0))
-            if trend_value == trend_value and trend_value != 0.0:  # ignora NaN e neutro
-                if np.sign(trend_value) == -np.sign(self._pos):
-                    reward -= abs(self.cfg.trend_penalty_coef)
+        # Removido: penalidade por barra contra tendência. Agora aplicamos um custo único na abertura
+        # (registrado em _open_position). Mantemos este trecho sem efeito por compatibilidade.
 
         # Update trailing stop
         reward += self._maybe_apply_trailing(next_price, next_low, next_high, next_atr)
+
+        # Aplica eventuais ajustes do throttle (idle penalty quando bloqueado)
+        reward += reward_adjust
 
         # Penalidade por ficar flat (sem posição)
         if self._pos == 0 and self._idle_penalty_per_step > 0.0:
@@ -384,6 +416,104 @@ class BTCMixtureEnv(gym.Env):
         trail_mult = self.cfg.trail_atr_mult * ratio
         return stop_mult, trail_mult
 
+    def _trend_snapshot(self, idx: int) -> Tuple[float, float]:
+        """Retorna (estado, força) da tendência HTF no índice informado."""
+        if idx < 0 or idx >= len(self.features):
+            return 0.0, 0.0
+        row = self.features.iloc[idx]
+        state = row.get("htf_trend_state", 0.0)
+        strength = row.get("htf_trend_strength", 0.0)
+        try:
+            state = float(state)
+        except (TypeError, ValueError):
+            state = 0.0
+        try:
+            strength = float(strength)
+        except (TypeError, ValueError):
+            strength = 0.0
+        return state, strength
+
+    def _trend_alignment_penalty(
+        self,
+        pos: int,
+        idx: Optional[int] = None,
+        *,
+        multiplier: Optional[float] = None,
+    ) -> float:
+        """Penalidade proporcional à força da tendência superior quando posicionado contra ela."""
+        coef = abs(getattr(self.cfg, "trend_penalty_coef", 0.0))
+        if coef <= 0.0 or pos == 0:
+            return 0.0
+        idx = self._start_idx + self._step if idx is None else idx
+        state, strength = self._trend_snapshot(idx)
+        if not np.isfinite(state) or state == 0.0:
+            return 0.0
+        if np.sign(state) == np.sign(pos):
+            return 0.0
+        if not np.isfinite(strength) or strength == 0.0:
+            strength = 1.0
+        mult = multiplier if multiplier is not None else 1.0
+        penalty = coef * abs(strength) * max(1.0, mult)
+        return penalty
+
+    def _should_throttle(self, desired_pos: int, trend_state: float, trend_strength: float) -> bool:
+        threshold = float(getattr(self.cfg, "trend_throttle_threshold", 0.0))
+        cooldown = int(getattr(self.cfg, "trend_throttle_cooldown", 0))
+        if desired_pos == 0 or threshold <= 0.0 or cooldown <= 0:
+            return False
+        if not np.isfinite(trend_state) or trend_state == 0.0:
+            return False
+        if np.sign(trend_state) != -np.sign(desired_pos):
+            return False
+        if not np.isfinite(trend_strength):
+            return False
+        # Verifica possibilidade de override por divergência forte (Spread/Pattern)
+        if bool(getattr(self.cfg, "trend_throttle_use_divergence_override", False)):
+            if self._has_strong_divergence(desired_pos, trend_state):
+                return False
+        return abs(trend_strength) >= threshold
+
+    def _has_strong_divergence(self, desired_pos: int, trend_state: float) -> bool:
+        """Retorna True se houver evidência forte (Spread/Pattern) contra a tendência HTF.
+
+        - desired_pos: +1 para long, -1 para short
+        - trend_state: +1 tendência alta, -1 tendência baixa
+        """
+        idx = self._start_idx + self._step
+        if idx < 0 or idx >= len(self.features):
+            return False
+        row = self.features.iloc[idx]
+        spread_thr = float(getattr(self.cfg, "trend_throttle_spread_thr", 1.5))
+        patt_thr = float(getattr(self.cfg, "trend_throttle_pattern_thr", 0.6))
+        # Indicadores de spread
+        spread_z_z = row.get("spread_z_zscore", 0.0)
+        try:
+            spread_z_z = float(spread_z_z)
+        except (TypeError, ValueError):
+            spread_z_z = 0.0
+        spread_ok = abs(spread_z_z) >= spread_thr
+
+        # Indicadores de padrão
+        hammer = float(row.get("hammer_roll3", 0.0) or 0.0)
+        shooting = float(row.get("shooting_star_roll3", 0.0) or 0.0)
+        engulf_diff = float(row.get("engulf_diff_roll5", 0.0) or 0.0)
+        body_atr = float(row.get("body_atr", 0.0) or 0.0)
+
+        pattern_bearish = max(shooting, float(row.get("bearish_engulf_flag", 0.0) or 0.0), max(0.0, -body_atr))
+        pattern_bullish = max(hammer, float(row.get("bullish_engulf_flag", 0.0) or 0.0), max(0.0, body_atr))
+        # Ajusta por sinal de engolfo médio
+        if engulf_diff < 0:
+            pattern_bearish = max(pattern_bearish, min(1.0, -engulf_diff))
+        elif engulf_diff > 0:
+            pattern_bullish = max(pattern_bullish, min(1.0, engulf_diff))
+
+        # Regras de override específicas por lado desejado
+        if desired_pos < 0 and trend_state > 0:  # quer short em tendência de alta
+            return spread_ok or (pattern_bearish >= patt_thr)
+        if desired_pos > 0 and trend_state < 0:  # quer long em tendência de baixa
+            return spread_ok or (pattern_bullish >= patt_thr)
+        return False
+
     def _open_position(self, pos: int, price: float, atr: float) -> float:
         self._pos = pos
         self._entry_price = price
@@ -403,8 +533,11 @@ class BTCMixtureEnv(gym.Env):
             self._peak_price = None
         cost = self._transaction_cost(price, self._pos_size)
         # registra custo de entrada para contabilizar no PnL do trade no fechamento
-        self._open_cost = float(cost)
-        return -cost
+        entry_penalty_mult = float(getattr(self.cfg, "trend_penalty_entry_mult", 1.0))
+        idx = self._start_idx + self._step
+        entry_penalty = self._trend_alignment_penalty(pos, idx=idx, multiplier=entry_penalty_mult)
+        self._open_cost = float(cost + entry_penalty)
+        return -(cost + entry_penalty)
 
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float
