@@ -36,14 +36,14 @@
     "kelly_fraction": 0.1,
     "var_confidence": 0.95,
     "trend_penalty_coef": 0.10,
-    "trend_penalty_entry_mult": 1.0,
-    "trend_throttle_threshold": 0.9,
+    "trend_penalty_entry_mult": 0.6,
+    "trend_throttle_threshold": 0.55,
     "trend_throttle_cooldown": 6,
     "trend_throttle_idle_penalty": 0.3,
     "trend_throttle_use_divergence_override": true,
-    "trend_throttle_spread_thr": 1.5,
-    "trend_throttle_pattern_thr": 0.7,
-    "reward_scale_divisor": 1000.0
+    "trend_throttle_spread_thr": 1.2,
+    "trend_throttle_pattern_thr": 0.6,
+    "reward_scale_divisor": 300.0
   },
   "model": {
     "expert_hidden": [
@@ -101,7 +101,7 @@
     "usage_window": 100,
     "lb_coef": 0.2,
     "lb_coef_start": 0.25,
-    "lb_coef_end": 0.03,
+    "lb_coef_end": 0.06,
     "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
@@ -111,7 +111,7 @@
     "curriculum": {
       "phases": [
         {
-          "until_episode": 5000,
+          "until_episode": 2500,
           "env": {
             "random_start": false,
             "window_bars": 720
@@ -121,7 +121,7 @@
           }
         },
         {
-          "until_episode": 15000,
+          "until_episode": 10000,
           "env": {
             "random_start": true,
             "window_bars": 540
