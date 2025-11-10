@@ -79,6 +79,7 @@ class EnvConfig:
     trend_throttle_use_divergence_override: bool = False  # permite furar o bloqueio se houver divergência forte
     trend_throttle_spread_thr: float = 1.5  # |spread_z_zscore| mínimo para considerar divergência
     trend_throttle_pattern_thr: float = 0.6  # intensidade mínima de padrão (ex.: hammer/shooting_star roll) para liberar
+    reward_scale_divisor: float = 1.0   # divisor aplicado na recompensa para evitar explosões numéricas
 
 
 class BTCMixtureEnv(gym.Env):
@@ -290,6 +291,9 @@ class BTCMixtureEnv(gym.Env):
         # Penalidade por ficar flat (sem posição)
         if self._pos == 0 and self._idle_penalty_per_step > 0.0:
             reward -= self._idle_penalty_per_step
+
+        reward_scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
+        reward /= reward_scale
 
         self._cash += reward
         self._equity = self._cash
