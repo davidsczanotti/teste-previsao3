@@ -1,10 +1,7 @@
 import pytest
 
 from src.strategies.exper_corr_pos.env import EnvConfig
-from src.strategies.exper_corr_pos.scripts.audit_policy import (
-    _expected_bonus,
-    _expected_penalty_components,
-)
+from src.strategies.exper_corr_pos.scripts.audit_policy import _expected_bonus, _expected_penalty_components
 
 
 def test_expected_penalty_components_pct_breakdown():
@@ -63,3 +60,23 @@ def test_expected_bonus_positive_only():
     bonus_loss = _expected_bonus(cfg, pnl_gross=-5.0, duration_bars=3)
     assert bonus_win == pytest.approx(0.1 * 3 * 20.0)
     assert bonus_loss == 0.0
+
+
+def test_expected_bonus_alignment_component():
+    cfg = EnvConfig(
+        hold_bonus_alpha=0.0,
+        trend_bonus_coef_pct=0.02,
+        trend_bonus_entry_mult=1.5,
+    )
+    bonus = _expected_bonus(
+        cfg,
+        pnl_gross=0.0,
+        duration_bars=1,
+        size=0.5,
+        entry_price=100.0,
+        side=1,
+        trend_state=1.0,
+        trend_strength=2.0,
+    )
+    # notional=50, coef=0.02 -> base=1.0, *strength=2.0, *mult=1.5 => 3.0
+    assert bonus == pytest.approx(3.0)

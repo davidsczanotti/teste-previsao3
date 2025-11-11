@@ -22,10 +22,10 @@
     "equity_floor_pct": 0.25,
     "max_drawdown_pct": 0.75,
     "drawdown_kill_bars": 90,
-    "turnover_penalty": 0.5,
-    "turnover_penalty_pct": 0.0,
+    "turnover_penalty": 0.0,
+    "turnover_penalty_pct": 0.002,
     "flip_exit_penalty": 0.0,
-    "flip_exit_penalty_pct": 0.0,
+    "flip_exit_penalty_pct": 0.003,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
@@ -38,16 +38,19 @@
     "adaptive_stop_window": 50,
     "kelly_fraction": 0.1,
     "var_confidence": 0.95,
-    "trend_penalty_coef": 0.10,
+    "trend_penalty_coef": 0.0,
     "trend_penalty_coef_pct": 0.0,
-    "trend_penalty_entry_mult": 0.6,
+    "trend_penalty_entry_mult": 1.0,
+    "trend_bonus_coef": 0.0,
+    "trend_bonus_coef_pct": 0.006,
+    "trend_bonus_entry_mult": 1.0,
     "trend_throttle_threshold": 0.55,
     "trend_throttle_cooldown": 6,
-    "trend_throttle_idle_penalty": 0.3,
+    "trend_throttle_idle_penalty": 0.1,
     "trend_throttle_use_divergence_override": true,
     "trend_throttle_spread_thr": 1.2,
     "trend_throttle_pattern_thr": 0.6,
-    "reward_scale_divisor": 300.0
+    "reward_scale_divisor": 80.0
   },
   "model": {
     "expert_hidden": [
@@ -59,8 +62,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 1.5,
-    "top_k": 2,
+    "temperature": 1.0,
+    "top_k": 1,
     "use_attention": true,
     "attention_dim": 96,
     "attention_heads": 4,
@@ -104,18 +107,18 @@
     "seed": 42,
     "usage_window": 100,
     "lb_coef": 0.2,
-    "lb_coef_start": 0.25,
-    "lb_coef_end": 0.06,
+    "lb_coef_start": 0.02,
+    "lb_coef_end": 0.0,
     "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.010558523768657853,
-    "entropy_coef_end": 0.002,
+    "entropy_coef_start": 0.002,
+    "entropy_coef_end": 0.0005,
     "entropy_decay_episodes": 2000,
     "curriculum": {
       "phases": [
         {
-          "until_episode": 2500,
+          "until_episode": 4000,
           "env": {
             "random_start": false,
             "window_bars": 720

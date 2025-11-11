@@ -251,3 +251,29 @@ def test_hold_bonus_matches_alpha_formula():
     assert info["trade_closed"] is True
     expected_bonus = cfg.hold_bonus_alpha * info["trade_bars"] * info["trade_gross"]
     assert info["trade_bonus"] == pytest.approx(expected_bonus, rel=1e-6)
+
+
+def test_trend_bonus_pct_awards_on_alignment():
+    # Trend up, open long: deve ganhar bônus na entrada proporcional ao notional
+    price_df, feat_df = _make_constant_env_inputs(5, price=200.0, trend_state=1.0, trend_strength=1.5)
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=0.2,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        trend_bonus_coef=0.0,
+        trend_bonus_coef_pct=0.01,
+        trend_bonus_entry_mult=1.0,
+        trend_penalty_coef=0.0,
+        trend_penalty_coef_pct=0.0,
+        random_start=False,
+        window_bars=5,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    env.step(2)
+    _, _, _, info = env.step(1)
+    assert info["trade_closed"] is True
+    notional = 200.0 * cfg.position_size
+    expected_entry_bonus = notional * cfg.trend_bonus_coef_pct * abs(feat_df.loc[0, "htf_trend_strength"]) * cfg.trend_bonus_entry_mult
+    assert info["trade_bonus"] == pytest.approx(expected_entry_bonus, rel=1e-6)

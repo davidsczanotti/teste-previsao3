@@ -58,6 +58,7 @@ def _expected_penalty_components(
     env_cfg: EnvConfig,
     size: float,
     entry_price: float,
+    exit_price: float | None = None,
     side: int,
     reason: str,
     trend_state: float,
@@ -92,22 +93,55 @@ def _expected_penalty_components(
     if reason == "flip":
         flip_pct = max(0.0, float(getattr(env_cfg, "flip_exit_penalty_pct", 0.0)))
         if flip_pct > 0.0:
-            flip = notional * flip_pct
+            use_price = float(exit_price) if exit_price is not None else entry_price
+            flip = abs(size * use_price) * flip_pct
         else:
             flip = max(0.0, float(getattr(env_cfg, "flip_exit_penalty", 0.0)))
 
     return {"turnover": turnover, "trend": trend, "flip": flip}
 
 
-def _expected_bonus(env_cfg: EnvConfig, *, pnl_gross: float, duration_bars: int) -> float:
+def _expected_bonus(
+    env_cfg: EnvConfig,
+    *,
+    pnl_gross: float,
+    duration_bars: int,
+    size: float | None = None,
+    entry_price: float | None = None,
+    side: int | None = None,
+    trend_state: float | None = None,
+    trend_strength: float | None = None,
+) -> float:
+    # Hold bonus
     alpha = float(getattr(env_cfg, "hold_bonus_alpha", 0.0))
-    if alpha <= 0.0:
-        return 0.0
-    duration = max(1, int(duration_bars))
-    raw_bonus = alpha * duration * pnl_gross
-    if bool(getattr(env_cfg, "hold_bonus_positive_only", False)) and raw_bonus < 0.0:
-        return 0.0
-    return raw_bonus
+    total = 0.0
+    if alpha > 0.0:
+        duration = max(1, int(duration_bars))
+        raw_bonus = alpha * duration * pnl_gross
+        if bool(getattr(env_cfg, "hold_bonus_positive_only", False)) and raw_bonus < 0.0:
+            pass
+        else:
+            total += raw_bonus
+
+    # Entry alignment bonus
+    if (
+        size is not None
+        and entry_price is not None
+        and side is not None
+        and trend_state is not None
+        and trend_strength is not None
+    ):
+        if side != 0 and np.isfinite(trend_state) and trend_state != 0.0 and np.sign(trend_state) == np.sign(side):
+            notional = abs(size * entry_price)
+            coef_pct = max(0.0, float(getattr(env_cfg, "trend_bonus_coef_pct", 0.0)))
+            base = notional * coef_pct if coef_pct > 0.0 else max(0.0, float(getattr(env_cfg, "trend_bonus_coef", 0.0)))
+            if base > 0.0:
+                strength = trend_strength
+                if not np.isfinite(strength) or strength == 0.0:
+                    strength = 1.0
+                mult = float(getattr(env_cfg, "trend_bonus_entry_mult", getattr(env_cfg, "trend_penalty_entry_mult", 1.0)))
+                total += base * abs(float(strength)) * max(1.0, mult)
+    return float(total)
 
 
 def _metrics(df: pd.DataFrame) -> Dict[str, Any]:
@@ -306,6 +340,7 @@ def main() -> None:
                 env_cfg=env_cfg,
                 size=size,
                 entry_price=entry_price,
+                exit_price=exit_price,
                 side=side_int,
                 reason=reason,
                 trend_state=trend_state,
@@ -313,7 +348,16 @@ def main() -> None:
             )
             penalty_expected = sum(penalty_components.values())
             penalty_delta = penalty - penalty_expected
-            bonus_expected = _expected_bonus(env_cfg, pnl_gross=pnl_gross, duration_bars=duration_bars)
+            bonus_expected = _expected_bonus(
+                env_cfg,
+                pnl_gross=pnl_gross,
+                duration_bars=duration_bars,
+                size=size,
+                entry_price=entry_price,
+                side=side_int,
+                trend_state=trend_state,
+                trend_strength=float(entry_feat.get("htf_trend_strength", np.nan)) if not entry_feat.empty else np.nan,
+            )
             bonus_delta = bonus - bonus_expected
 
             row: Dict[str, Any] = {

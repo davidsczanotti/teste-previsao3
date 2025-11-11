@@ -77,6 +77,10 @@ class EnvConfig:
     trend_penalty_coef: float = 0.0     # penaliza posição contra tendência HTF
     trend_penalty_coef_pct: float = 0.0
     trend_penalty_entry_mult: float = 1.0  # multiplicador aplicado na penalidade única em novas entradas
+    # Bônus de alinhamento com a tendência HTF (opcional, default desligado)
+    trend_bonus_coef: float = 0.0
+    trend_bonus_coef_pct: float = 0.0
+    trend_bonus_entry_mult: float = 1.0
     trend_throttle_threshold: float = 0.0  # |htf_trend_strength| mínimo para bloquear trades contra a tendência
     trend_throttle_cooldown: int = 0       # número de barras em que o bloqueio permanece ativo
     trend_throttle_idle_penalty: float = 0.0  # penalidade aplicada quando o throttle impede uma ação
@@ -195,6 +199,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_cost = 0.0
         self._last_trade_bonus = 0.0
         self._last_trade_gross = 0.0
+        self._open_bonus = 0.0
         self._last_trade_entry_price = 0.0
         self._last_trade_exit_price = 0.0
         self._last_trade_entry_idx = -1
@@ -206,6 +211,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_penalty = 0.0
         self._open_cost = 0.0
         self._current_trade_penalty = 0.0
+        self._current_trade_bonus = 0.0
         self._entry_idx = -1
         self._entry_timestamp = None
         self._pending_action = None
@@ -389,7 +395,7 @@ class BTCMixtureEnv(gym.Env):
         self._peak_price = None
         self._trough_price = None
         mode = (self.cfg.accounting_mode or "mtm").lower()
-        # bônus/malus por duração do trade
+        # bônus/malus por duração do trade + bônus de alinhamento na entrada
         bonus = 0.0
         if self.cfg.hold_bonus_alpha > 0.0:
             raw_bonus = self.cfg.hold_bonus_alpha * duration_bars * pnl
@@ -397,6 +403,9 @@ class BTCMixtureEnv(gym.Env):
                 bonus = 0.0
             else:
                 bonus = raw_bonus
+        # adiciona bônus de alinhamento (se configurado) calculado na abertura
+        if getattr(self, "_open_bonus", 0.0) != 0.0:
+            bonus += float(self._open_bonus)
         flip_penalty = self._flip_exit_penalty_value(notional) if reason == "flip" else 0.0
         # PnL total realizado do trade (inclui custos de entrada, saída, penalidades e bônus)
         trade_penalty_total = float(self._current_trade_penalty + flip_penalty)
@@ -420,6 +429,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_size = float(size)
         self._entry_idx = -1
         self._entry_timestamp = None
+        self._open_bonus = 0.0
         self._current_trade_penalty = 0.0
         if mode == "legacy":
             return pnl - cost - flip_penalty
@@ -491,6 +501,41 @@ class BTCMixtureEnv(gym.Env):
             return 0.0
         penalty = base * abs(strength) * max(1.0, mult)
         return penalty
+
+    def _trend_alignment_bonus(
+        self,
+        pos: int,
+        idx: Optional[int] = None,
+        *,
+        multiplier: Optional[float] = None,
+    ) -> float:
+        """Bônus proporcional quando a posição está ALINHADA à tendência HTF.
+
+        Retorna 0 quando não há alinhamento ou coeficientes desabilitados.
+        """
+        if pos == 0:
+            return 0.0
+        idx = self._start_idx + self._step if idx is None else idx
+        state, strength = self._trend_snapshot(idx)
+        if not np.isfinite(state) or state == 0.0:
+            return 0.0
+        if np.sign(state) != np.sign(pos):
+            return 0.0
+        if not np.isfinite(strength) or strength == 0.0:
+            strength = 1.0
+        mult = multiplier if multiplier is not None else 1.0
+        coef_pct = abs(float(getattr(self.cfg, "trend_bonus_coef_pct", 0.0)))
+        base_coef = abs(float(getattr(self.cfg, "trend_bonus_coef", 0.0)))
+        if coef_pct > 0.0:
+            price = float(self.df.iloc[idx]["close"])
+            notional = abs(self._pos_size * price)
+            base = notional * coef_pct if notional > 0.0 else base_coef
+        else:
+            base = base_coef
+        if base <= 0.0:
+            return 0.0
+        bonus = base * abs(strength) * max(1.0, mult)
+        return bonus
 
     def _should_throttle(self, desired_pos: int, trend_state: float, trend_strength: float) -> bool:
         threshold = float(getattr(self.cfg, "trend_throttle_threshold", 0.0))
@@ -568,7 +613,7 @@ class BTCMixtureEnv(gym.Env):
             self._trough_price = price
             self._peak_price = None
         cost = self._transaction_cost(price, self._pos_size)
-        # registra custo de entrada para contabilizar no PnL do trade no fechamento
+        # registra custo/bonus de entrada para contabilizar no PnL do trade no fechamento
         entry_penalty_mult = float(getattr(self.cfg, "trend_penalty_entry_mult", 1.0))
         idx = self._start_idx + self._step
         entry_penalty = self._trend_alignment_penalty(pos, idx=idx, multiplier=entry_penalty_mult)
@@ -577,7 +622,12 @@ class BTCMixtureEnv(gym.Env):
         entry_penalty_total = entry_penalty + turnover_penalty
         self._current_trade_penalty = float(entry_penalty_total)
         self._open_cost = float(cost + entry_penalty_total)
-        return -(cost + entry_penalty_total)
+        # cálculo do bônus por alinhamento com a tendência
+        entry_bonus_mult = float(getattr(self.cfg, "trend_bonus_entry_mult", getattr(self.cfg, "trend_penalty_entry_mult", 1.0)))
+        entry_bonus = self._trend_alignment_bonus(pos, idx=idx, multiplier=entry_bonus_mult)
+        self._open_bonus = float(entry_bonus)
+        self._current_trade_bonus = float(entry_bonus)
+        return -(cost + entry_penalty_total) + entry_bonus
 
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float

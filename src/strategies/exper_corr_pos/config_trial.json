@@ -1,0 +1,123 @@
+{
+  "data": {
+    "base_symbol": "BTCUSDT",
+    "confirm_symbol": "ETHUSDT",
+    "timeframe": "1d",
+    "higher_timeframe": "1W",
+    "lookback_days": 3650,
+    "ml_horizon": 3,
+    "ml_decay": 0.995,
+    "ml_ridge": 0.001,
+    "spread_window": 460
+  },
+  "env": {
+    "fee_pct": 0.001,
+    "slippage_pct": 0.0001,
+    "position_size": 0.00043,
+    "stop_atr_mult": 2.2,
+    "trail_atr_mult": 4.5,
+    "accounting_mode": "mtm",
+    "init_equity": 1000.0,
+    "leverage": 1.0,
+    "equity_floor_pct": 0.25,
+    "max_drawdown_pct": 0.75,
+    "drawdown_kill_bars": 90,
+    "turnover_penalty": 0.0,
+    "turnover_penalty_pct": 0.002,
+    "flip_exit_penalty": 0.0,
+    "flip_exit_penalty_pct": 0.003,
+    "dynamic_position": false,
+    "random_start": true,
+    "window_bars": 540,
+    "idle_penalty_factor": 0.0,
+    "hold_bonus_alpha": 0.08,
+    "hold_bonus_positive_only": true,
+    "max_trade_notional": 40.0,
+    "profit_trail_pct": 0.08,
+    "allow_intrabar_closes": false,
+    "adaptive_stop_window": 50,
+    "kelly_fraction": 0.1,
+    "var_confidence": 0.95,
+    "trend_penalty_coef": 0.0,
+    "trend_penalty_coef_pct": 0.0,
+    "trend_penalty_entry_mult": 1.0,
+    "trend_bonus_coef": 0.0,
+    "trend_bonus_coef_pct": 0.006,
+    "trend_bonus_entry_mult": 1.0,
+    "trend_throttle_threshold": 0.55,
+    "trend_throttle_cooldown": 6,
+    "trend_throttle_idle_penalty": 0.1,
+    "trend_throttle_use_divergence_override": true,
+    "trend_throttle_spread_thr": 1.2,
+    "trend_throttle_pattern_thr": 0.6,
+    "reward_scale_divisor": 80.0
+  },
+  "model": {
+    "expert_hidden": [64, 32],
+    "gating_hidden": [64, 32],
+    "num_experts": 4,
+    "temperature": 1.0,
+    "top_k": 1,
+    "use_attention": true,
+    "attention_dim": 96,
+    "attention_heads": 4,
+    "attention_dropout": 0.1,
+    "attention_weight": 0.75,
+    "expert_names": ["TrendML", "MultiFrame", "Spread", "Pattern"],
+    "especialistas": {"TrendML": true, "MultiFrame": true, "Spread": true, "Pattern": true}
+  },
+  "ppo": {
+    "gamma": 0.996,
+    "gae_lambda": 0.95,
+    "clip_ratio": 0.2,
+    "learning_rate": 0.0001460916366797005,
+    "entropy_coef": 0.006,
+    "value_coef": 0.3,
+    "max_grad_norm": 0.5,
+    "train_iters": 6,
+    "batch_size": 256
+  },
+  "train": {
+    "episodes": 40,
+    "rollout_steps": 384,
+    "device": "cpu",
+    "outdir": "src/strategies/exper_corr_pos/reports/train/trial",
+    "resume": false,
+    "log_every": 5,
+    "plot_every": 10,
+    "eval_every": 10,
+    "eval_days": 180,
+    "seed": 42,
+    "usage_window": 100,
+    "lb_coef": 0.2,
+    "lb_coef_start": 0.02,
+    "lb_coef_end": 0.0,
+    "lb_decay_episodes": 2500,
+    "ckpt_every": 0,
+    "final_every": 0,
+    "entropy_coef_start": 0.002,
+    "entropy_coef_end": 0.0005,
+    "entropy_decay_episodes": 2000,
+    "curriculum": {
+      "phases": [
+        {
+          "until_episode": 40,
+          "env": {"random_start": false, "window_bars": 720},
+          "train": {"rollout_steps": 256}
+        }
+      ],
+      "final": {"env": {"random_start": true, "window_bars": 0}, "train": {"rollout_steps": 384}}
+    }
+  },
+  "visualize": {"days": 900, "prefer": "best"},
+  "reports": {
+    "trade_ledger": {"enabled": true, "path": "src/strategies/exper_corr_pos/reports/train/trial/trade_ledger.csv"},
+    "gating_attribution": {
+      "enabled": true,
+      "path": "src/strategies/exper_corr_pos/reports/train/trial/gating_attribution.csv",
+      "plot_path": "src/strategies/exper_corr_pos/reports/train/trial/gating_attribution.png"
+    },
+    "regime_summary": {"enabled": true, "path": "src/strategies/exper_corr_pos/reports/train/trial/regime_summary.json"}
+  }
+}
+
