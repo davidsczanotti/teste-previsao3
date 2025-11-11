@@ -56,6 +56,9 @@ class EnvConfig:
     max_drawdown_pct: float = 1.0
     drawdown_kill_bars: int = 0
     turnover_penalty: float = 0.0
+    turnover_penalty_pct: float = 0.0
+    flip_exit_penalty: float = 0.0
+    flip_exit_penalty_pct: float = 0.0
     dynamic_position: bool = False
     random_start: bool = False
     window_bars: int = 0
@@ -72,6 +75,7 @@ class EnvConfig:
     kelly_fraction: float = 0.1         # fração Kelly para position sizing
     var_confidence: float = 0.95        # confiança para VaR
     trend_penalty_coef: float = 0.0     # penaliza posição contra tendência HTF
+    trend_penalty_coef_pct: float = 0.0
     trend_penalty_entry_mult: float = 1.0  # multiplicador aplicado na penalidade única em novas entradas
     trend_throttle_threshold: float = 0.0  # |htf_trend_strength| mínimo para bloquear trades contra a tendência
     trend_throttle_cooldown: int = 0       # número de barras em que o bloqueio permanece ativo
@@ -199,7 +203,9 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_exit_ts = None
         self._last_trade_side = 0
         self._last_trade_size = 0.0
+        self._last_trade_penalty = 0.0
         self._open_cost = 0.0
+        self._current_trade_penalty = 0.0
         self._entry_idx = -1
         self._entry_timestamp = None
         self._pending_action = None
@@ -257,11 +263,10 @@ class BTCMixtureEnv(gym.Env):
                         reward_adjust -= idle_throttle_penalty
 
         if desired_pos != self._pos:
-            if self.cfg.turnover_penalty > 0.0:
-                reward -= self.cfg.turnover_penalty
             # close current position first
             if self._pos != 0:
-                reward += self._close_position(price, reason="flip")
+                close_reason = "flip" if desired_pos != 0 else "close"
+                reward += self._close_position(price, reason=close_reason)
             # open new position
             if desired_pos != 0:
                 reward += self._open_position(desired_pos, price, atr)
@@ -341,6 +346,7 @@ class BTCMixtureEnv(gym.Env):
             "trade_exit_ts": self._format_timestamp(self._last_trade_exit_ts) if self._just_closed else "",
             "trade_side": int(self._last_trade_side) if self._just_closed else 0,
             "trade_size": float(self._last_trade_size) if self._just_closed else 0.0,
+            "trade_penalty": float(self._last_trade_penalty) if self._just_closed else 0.0,
             "timestamp": self._format_timestamp(self._resolve_timestamp(self._start_idx + self._step)),
         }
         # reset do marcador de fechamento para o próximo passo
@@ -352,12 +358,25 @@ class BTCMixtureEnv(gym.Env):
         notional = price * size
         return notional * (self.cfg.fee_pct + self.cfg.slippage_pct)
 
+    def _turnover_penalty_value(self, notional: float) -> float:
+        pct = max(0.0, float(getattr(self.cfg, "turnover_penalty_pct", 0.0)))
+        if pct > 0.0 and notional > 0.0:
+            return notional * pct
+        return max(0.0, float(getattr(self.cfg, "turnover_penalty", 0.0)))
+
+    def _flip_exit_penalty_value(self, notional: float) -> float:
+        pct = max(0.0, float(getattr(self.cfg, "flip_exit_penalty_pct", 0.0)))
+        if pct > 0.0 and notional > 0.0:
+            return notional * pct
+        return max(0.0, float(getattr(self.cfg, "flip_exit_penalty", 0.0)))
+
     def _close_position(self, price: float, reason: str = "close") -> float:
         entry_price = self._entry_price
         pnl = self._pos * self._pos_size * (price - entry_price)
         side = self._pos
         size = self._pos_size
         cost = self._transaction_cost(price, size)
+        notional = abs(size * price)
         # duração do trade em barras desde a entrada
         duration_bars = max(1, self._step - self._entry_step)
         exit_idx = self._start_idx + self._step
@@ -378,8 +397,10 @@ class BTCMixtureEnv(gym.Env):
                 bonus = 0.0
             else:
                 bonus = raw_bonus
-        # PnL total realizado do trade (inclui custos de entrada e saída e bônus)
-        trade_pnl_total = pnl - self._open_cost - cost + bonus
+        flip_penalty = self._flip_exit_penalty_value(notional) if reason == "flip" else 0.0
+        # PnL total realizado do trade (inclui custos de entrada, saída, penalidades e bônus)
+        trade_penalty_total = float(self._current_trade_penalty + flip_penalty)
+        trade_pnl_total = pnl - self._open_cost - cost - flip_penalty + bonus
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
         self._just_closed = True
         self._last_trade_pnl = float(trade_pnl_total)
@@ -388,6 +409,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_cost = float(self._open_cost + cost)
         self._last_trade_bonus = float(bonus)
         self._last_trade_gross = float(pnl)
+        self._last_trade_penalty = trade_penalty_total
         self._last_trade_entry_price = float(entry_price)
         self._last_trade_exit_price = float(price)
         self._last_trade_entry_idx = int(entry_idx)
@@ -398,9 +420,10 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_size = float(size)
         self._entry_idx = -1
         self._entry_timestamp = None
+        self._current_trade_penalty = 0.0
         if mode == "legacy":
-            return pnl - cost
-        return -cost + pnl + bonus
+            return pnl - cost - flip_penalty
+        return -cost - flip_penalty + pnl + bonus
 
     def _compute_adaptive_atr_mult(self, atr: float) -> Tuple[float, float]:
         """Calcula multiplicadores ATR adaptativos baseados na volatilidade histórica."""
@@ -445,8 +468,7 @@ class BTCMixtureEnv(gym.Env):
         multiplier: Optional[float] = None,
     ) -> float:
         """Penalidade proporcional à força da tendência superior quando posicionado contra ela."""
-        coef = abs(getattr(self.cfg, "trend_penalty_coef", 0.0))
-        if coef <= 0.0 or pos == 0:
+        if pos == 0:
             return 0.0
         idx = self._start_idx + self._step if idx is None else idx
         state, strength = self._trend_snapshot(idx)
@@ -457,7 +479,17 @@ class BTCMixtureEnv(gym.Env):
         if not np.isfinite(strength) or strength == 0.0:
             strength = 1.0
         mult = multiplier if multiplier is not None else 1.0
-        penalty = coef * abs(strength) * max(1.0, mult)
+        coef_pct = abs(float(getattr(self.cfg, "trend_penalty_coef_pct", 0.0)))
+        base_coef = abs(float(getattr(self.cfg, "trend_penalty_coef", 0.0)))
+        if coef_pct > 0.0:
+            price = float(self.df.iloc[idx]["close"])
+            notional = abs(self._pos_size * price)
+            base = notional * coef_pct if notional > 0.0 else base_coef
+        else:
+            base = base_coef
+        if base <= 0.0:
+            return 0.0
+        penalty = base * abs(strength) * max(1.0, mult)
         return penalty
 
     def _should_throttle(self, desired_pos: int, trend_state: float, trend_strength: float) -> bool:
@@ -540,8 +572,12 @@ class BTCMixtureEnv(gym.Env):
         entry_penalty_mult = float(getattr(self.cfg, "trend_penalty_entry_mult", 1.0))
         idx = self._start_idx + self._step
         entry_penalty = self._trend_alignment_penalty(pos, idx=idx, multiplier=entry_penalty_mult)
-        self._open_cost = float(cost + entry_penalty)
-        return -(cost + entry_penalty)
+        notional = abs(self._pos_size * price)
+        turnover_penalty = self._turnover_penalty_value(notional) if notional > 0.0 else 0.0
+        entry_penalty_total = entry_penalty + turnover_penalty
+        self._current_trade_penalty = float(entry_penalty_total)
+        self._open_cost = float(cost + entry_penalty_total)
+        return -(cost + entry_penalty_total)
 
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float

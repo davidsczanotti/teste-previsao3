@@ -16,7 +16,7 @@ import csv
 import json
 from pathlib import Path
 from statistics import mean, median
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,6 +51,63 @@ def _vol_bucket(value: float, q1: float, q2: float) -> str:
     if value <= q2:
         return "medium"
     return "high"
+
+
+def _expected_penalty_components(
+    *,
+    env_cfg: EnvConfig,
+    size: float,
+    entry_price: float,
+    side: int,
+    reason: str,
+    trend_state: float,
+    trend_strength: float,
+) -> Dict[str, float]:
+    notional = abs(size * entry_price)
+    if notional <= 0.0:
+        return {"turnover": 0.0, "trend": 0.0, "flip": 0.0}
+
+    turnover_pct = max(0.0, float(getattr(env_cfg, "turnover_penalty_pct", 0.0)))
+    if turnover_pct > 0.0:
+        turnover = notional * turnover_pct
+    else:
+        turnover = max(0.0, float(env_cfg.turnover_penalty))
+
+    trend = 0.0
+    trend_coef_pct = max(0.0, float(getattr(env_cfg, "trend_penalty_coef_pct", 0.0)))
+    base_trend = max(0.0, float(env_cfg.trend_penalty_coef))
+    if side != 0 and np.isfinite(trend_state) and trend_state != 0.0 and np.sign(trend_state) != np.sign(side):
+        if trend_coef_pct > 0.0:
+            base = notional * trend_coef_pct
+        else:
+            base = base_trend
+        if base > 0.0:
+            strength = trend_strength
+            if not np.isfinite(strength) or strength == 0.0:
+                strength = 1.0
+            mult = max(1.0, float(getattr(env_cfg, "trend_penalty_entry_mult", 1.0)))
+            trend = base * abs(strength) * mult
+
+    flip = 0.0
+    if reason == "flip":
+        flip_pct = max(0.0, float(getattr(env_cfg, "flip_exit_penalty_pct", 0.0)))
+        if flip_pct > 0.0:
+            flip = notional * flip_pct
+        else:
+            flip = max(0.0, float(getattr(env_cfg, "flip_exit_penalty", 0.0)))
+
+    return {"turnover": turnover, "trend": trend, "flip": flip}
+
+
+def _expected_bonus(env_cfg: EnvConfig, *, pnl_gross: float, duration_bars: int) -> float:
+    alpha = float(getattr(env_cfg, "hold_bonus_alpha", 0.0))
+    if alpha <= 0.0:
+        return 0.0
+    duration = max(1, int(duration_bars))
+    raw_bonus = alpha * duration * pnl_gross
+    if bool(getattr(env_cfg, "hold_bonus_positive_only", False)) and raw_bonus < 0.0:
+        return 0.0
+    return raw_bonus
 
 
 def _metrics(df: pd.DataFrame) -> Dict[str, Any]:
@@ -216,6 +273,7 @@ def main() -> None:
             pnl_gross = float(info.get("trade_gross", 0.0))
             cost = float(info.get("trade_cost", 0.0))
             bonus = float(info.get("trade_bonus", 0.0))
+            penalty = float(info.get("trade_penalty", 0.0))
             duration_bars = int(info.get("trade_bars", 0))
             duration_hours = float(duration_bars) * bar_hours
             reason = str(info.get("trade_reason", ""))
@@ -244,6 +302,20 @@ def main() -> None:
             ml_prob = float(entry_feat.get("ml_prob_up", np.nan)) if not entry_feat.empty else np.nan
             ml_conf = float(entry_feat.get("ml_confidence", np.nan)) if not entry_feat.empty else np.nan
 
+            penalty_components = _expected_penalty_components(
+                env_cfg=env_cfg,
+                size=size,
+                entry_price=entry_price,
+                side=side_int,
+                reason=reason,
+                trend_state=trend_state,
+                trend_strength=float(entry_feat.get("htf_trend_strength", np.nan)) if not entry_feat.empty else np.nan,
+            )
+            penalty_expected = sum(penalty_components.values())
+            penalty_delta = penalty - penalty_expected
+            bonus_expected = _expected_bonus(env_cfg, pnl_gross=pnl_gross, duration_bars=duration_bars)
+            bonus_delta = bonus - bonus_expected
+
             row: Dict[str, Any] = {
                 "trade_id": trade_id,
                 "entry_ts": entry_ts,
@@ -259,6 +331,12 @@ def main() -> None:
                 "pnl_gross": pnl_gross,
                 "cost": cost,
                 "bonus": bonus,
+                "trade_penalty": penalty,
+                "penalty_expected": penalty_expected,
+                "penalty_delta": penalty_delta,
+                "penalty_turnover": penalty_components["turnover"],
+                "penalty_trend": penalty_components["trend"],
+                "penalty_flip": penalty_components["flip"],
                 "entry_price": entry_price,
                 "exit_price": exit_price,
                 "win_flag": win_flag,
@@ -267,6 +345,8 @@ def main() -> None:
                 "vol_bucket": vol_bucket,
                 "ml_prob_up": ml_prob,
                 "ml_confidence": ml_conf,
+                "bonus_expected": bonus_expected,
+                "bonus_delta": bonus_delta,
             }
 
             for idx_expert, label in enumerate(expert_labels):
@@ -307,6 +387,50 @@ def main() -> None:
     trade_enabled = bool(trade_cfg.get("enabled", True))
     gating_enabled = bool(gating_cfg.get("enabled", True))
     regime_enabled = bool(regime_cfg.get("enabled", True))
+
+    penalty_tol = 1e-5
+    bonus_tol = 1e-5
+    penalty_alert_path = Path("src/strategies/exper_corr_pos/reports/train/penalty_alerts.csv")
+    bonus_alert_path = Path("src/strategies/exper_corr_pos/reports/train/bonus_alerts.csv")
+    _emit_delta_alert(
+        ledger_df,
+        column="penalty_delta",
+        tolerance=penalty_tol,
+        path=penalty_alert_path,
+        label="penalidades",
+        include_cols=[
+            "trade_id",
+            "entry_ts",
+            "exit_ts",
+            "side",
+            "reason",
+            "trade_penalty",
+            "penalty_expected",
+            "penalty_delta",
+            "penalty_turnover",
+            "penalty_trend",
+            "penalty_flip",
+        ],
+    )
+    _emit_delta_alert(
+        ledger_df,
+        column="bonus_delta",
+        tolerance=bonus_tol,
+        path=bonus_alert_path,
+        label="bônus",
+        include_cols=[
+            "trade_id",
+            "entry_ts",
+            "exit_ts",
+            "side",
+            "reason",
+            "trade_bonus",
+            "bonus_expected",
+            "bonus_delta",
+            "trade_bars",
+            "trade_gross",
+        ],
+    )
 
     if trade_enabled and not ledger_df.empty:
         trade_path = Path(trade_cfg.get("path", "src/strategies/exper_corr_pos/reports/train/trade_ledger.csv"))
@@ -361,6 +485,35 @@ def main() -> None:
             summary_payload["trend_vol"] = nested
         regime_path.write_text(json.dumps(summary_payload, indent=2))
         print(f"Resumo de regimes salvo em {regime_path}")
+
+
+def _emit_delta_alert(
+    df: pd.DataFrame,
+    *,
+    column: str,
+    tolerance: float,
+    path: Path,
+    label: str,
+    include_cols: List[str],
+) -> None:
+    if column not in df.columns:
+        return
+    alerts = df[df[column].abs() > tolerance]
+    if alerts.empty:
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        print(f"[auditor] {label.capitalize()}: nenhum desvio acima de {tolerance:.1e}.")
+        return
+    subset_cols = [c for c in include_cols if c in alerts.columns]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    alerts.sort_values(by="trade_id")[subset_cols].to_csv(path, index=False)
+    worst = alerts[column].abs().max()
+    print(
+        f"[auditor] {label.capitalize()}: {len(alerts)} desvios > {tolerance:.1e} (máx={worst:.4f}). Detalhes em {path}."
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
