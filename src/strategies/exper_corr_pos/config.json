@@ -44,7 +44,7 @@
     "trend_bonus_coef": 0.0,
     "trend_bonus_coef_pct": 0.005,
     "trend_bonus_entry_mult": 1.0,
-    "trend_bonus_min_bars": 2,
+    "trend_bonus_min_bars": 3,
     "trend_throttle_threshold": 0.55,
     "trend_throttle_cooldown": 6,
     "trend_throttle_idle_penalty": 0.1,
@@ -63,8 +63,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 1.0,
-    "top_k": 1,
+    "temperature": 1.1,
+    "top_k": 2,
     "use_attention": true,
     "attention_dim": 96,
     "attention_heads": 4,
@@ -119,7 +119,7 @@
     "curriculum": {
       "phases": [
         {
-          "until_episode": 5000,
+          "until_episode": 10000,
           "env": {
             "random_start": false,
             "window_bars": 720
@@ -129,7 +129,7 @@
           }
         },
         {
-          "until_episode": 15000,
+          "until_episode": 30000,
           "env": {
             "random_start": true,
             "window_bars": 540
