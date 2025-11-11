@@ -404,7 +404,8 @@ class BTCMixtureEnv(gym.Env):
             else:
                 bonus = raw_bonus
         # adiciona bônus de alinhamento (se configurado) calculado na abertura
-        if getattr(self, "_open_bonus", 0.0) != 0.0:
+        # aplica somente para trades com duração >= 2 barras para desencorajar scalps de 1 barra
+        if duration_bars >= 2 and getattr(self, "_open_bonus", 0.0) != 0.0:
             bonus += float(self._open_bonus)
         flip_penalty = self._flip_exit_penalty_value(notional) if reason == "flip" else 0.0
         # PnL total realizado do trade (inclui custos de entrada, saída, penalidades e bônus)
@@ -622,12 +623,13 @@ class BTCMixtureEnv(gym.Env):
         entry_penalty_total = entry_penalty + turnover_penalty
         self._current_trade_penalty = float(entry_penalty_total)
         self._open_cost = float(cost + entry_penalty_total)
-        # cálculo do bônus por alinhamento com a tendência
+        # cálculo do bônus por alinhamento com a tendência (aplicado somente no fechamento)
         entry_bonus_mult = float(getattr(self.cfg, "trend_bonus_entry_mult", getattr(self.cfg, "trend_penalty_entry_mult", 1.0)))
         entry_bonus = self._trend_alignment_bonus(pos, idx=idx, multiplier=entry_bonus_mult)
         self._open_bonus = float(entry_bonus)
         self._current_trade_bonus = float(entry_bonus)
-        return -(cost + entry_penalty_total) + entry_bonus
+        # Nota: não creditamos o bônus na abertura; será aplicado no fechamento conforme regra de duração
+        return -(cost + entry_penalty_total)
 
     def _maybe_apply_trailing(
         self, next_price: float, next_low: float, next_high: float, next_atr: float

@@ -272,6 +272,7 @@ def test_trend_bonus_pct_awards_on_alignment():
     env = BTCMixtureEnv(price_df, feat_df, cfg)
     env.reset()
     env.step(2)
+    env.step(2)  # garante duração >= 2 barras
     _, _, _, info = env.step(1)
     assert info["trade_closed"] is True
     notional = 200.0 * cfg.position_size

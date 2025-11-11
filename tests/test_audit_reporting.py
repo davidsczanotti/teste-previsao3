@@ -71,7 +71,7 @@ def test_expected_bonus_alignment_component():
     bonus = _expected_bonus(
         cfg,
         pnl_gross=0.0,
-        duration_bars=1,
+        duration_bars=2,
         size=0.5,
         entry_price=100.0,
         side=1,
