@@ -123,7 +123,7 @@ def _expected_bonus(
         else:
             total += raw_bonus
 
-    # Entry alignment bonus (aplicado apenas se duração >= 2 barras)
+    # Entry alignment bonus (aplicado apenas se duração >= trend_bonus_min_bars barras)
     if (
         size is not None
         and entry_price is not None
@@ -131,12 +131,13 @@ def _expected_bonus(
         and trend_state is not None
         and trend_strength is not None
     ):
+        min_bars = int(getattr(env_cfg, "trend_bonus_min_bars", 2))
         if (
             side != 0
             and np.isfinite(trend_state)
             and trend_state != 0.0
             and np.sign(trend_state) == np.sign(side)
-            and int(duration_bars) >= 2
+            and int(duration_bars) >= max(1, min_bars)
         ):
             notional = abs(size * entry_price)
             coef_pct = max(0.0, float(getattr(env_cfg, "trend_bonus_coef_pct", 0.0)))

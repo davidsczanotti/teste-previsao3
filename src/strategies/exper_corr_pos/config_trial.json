@@ -44,6 +44,7 @@
     "trend_bonus_coef": 0.0,
     "trend_bonus_coef_pct": 0.006,
     "trend_bonus_entry_mult": 1.0,
+    "trend_bonus_min_bars": 2,
     "trend_throttle_threshold": 0.55,
     "trend_throttle_cooldown": 6,
     "trend_throttle_idle_penalty": 0.1,
@@ -120,4 +121,3 @@
     "regime_summary": {"enabled": true, "path": "src/strategies/exper_corr_pos/reports/train/trial/regime_summary.json"}
   }
 }
-

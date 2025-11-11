@@ -81,6 +81,7 @@ class EnvConfig:
     trend_bonus_coef: float = 0.0
     trend_bonus_coef_pct: float = 0.0
     trend_bonus_entry_mult: float = 1.0
+    trend_bonus_min_bars: int = 2
     trend_throttle_threshold: float = 0.0  # |htf_trend_strength| mínimo para bloquear trades contra a tendência
     trend_throttle_cooldown: int = 0       # número de barras em que o bloqueio permanece ativo
     trend_throttle_idle_penalty: float = 0.0  # penalidade aplicada quando o throttle impede uma ação
@@ -405,7 +406,8 @@ class BTCMixtureEnv(gym.Env):
                 bonus = raw_bonus
         # adiciona bônus de alinhamento (se configurado) calculado na abertura
         # aplica somente para trades com duração >= 2 barras para desencorajar scalps de 1 barra
-        if duration_bars >= 2 and getattr(self, "_open_bonus", 0.0) != 0.0:
+        min_bars_bonus = int(getattr(self.cfg, "trend_bonus_min_bars", 2))
+        if duration_bars >= max(1, min_bars_bonus) and getattr(self, "_open_bonus", 0.0) != 0.0:
             bonus += float(self._open_bonus)
         flip_penalty = self._flip_exit_penalty_value(notional) if reason == "flip" else 0.0
         # PnL total realizado do trade (inclui custos de entrada, saída, penalidades e bônus)
