@@ -19,36 +19,40 @@
     "accounting_mode": "mtm",
     "init_equity": 1000.0,
     "leverage": 1.0,
-    "equity_floor_pct": 0.25,
-    "max_drawdown_pct": 0.75,
-    "drawdown_kill_bars": 90,
+    "equity_floor_pct": 0.0,
+    "max_drawdown_pct": 1.0,
+    "drawdown_kill_bars": 0,
     "turnover_penalty": 0.0,
-    "turnover_penalty_pct": 0.001,
+    "turnover_penalty_pct": 0.0005,
     "flip_exit_penalty": 0.0,
-    "flip_exit_penalty_pct": 0.004,
+    "flip_exit_penalty_pct": 0.002,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
     "idle_penalty_factor": 0.0,
-    "hold_bonus_alpha": 0.08,
+    "hold_bonus_alpha": 0.01,
     "hold_bonus_positive_only": true,
     "max_trade_notional": 40.0,
-    "profit_trail_pct": 0.05,
+    "profit_trail_pct": 0.04,
     "allow_intrabar_closes": false,
     "adaptive_stop_window": 50,
     "kelly_fraction": 0.1,
     "var_confidence": 0.95,
     "trend_penalty_coef": 0.0,
-    "trend_penalty_coef_pct": 0.0,
+    "trend_penalty_coef_pct": 0.00005,
     "trend_penalty_entry_mult": 1.0,
-    "trend_bonus_coef": 0.005,
-    "trend_bonus_coef_pct": 0.005,
+    "trend_bonus_coef": 0.0,
+    "trend_bonus_coef_pct": 0.0005,
     "trend_bonus_entry_mult": 1.0,
     "trend_bonus_min_bars": 3,
-    "trend_throttle_threshold": 0.55,
-    "trend_throttle_cooldown": 6,
-    "trend_throttle_idle_penalty": 0.1,
-    "trend_throttle_use_divergence_override": true,
+    "short_trade_penalty": 3.0,
+    "short_trade_min_bars": 3,
+    "giveback_threshold_pct": 0.35,
+    "giveback_penalty_pct": 0.08,
+    "trend_throttle_threshold": 0.45,
+    "trend_throttle_cooldown": 4,
+    "trend_throttle_idle_penalty": 0.0,
+    "trend_throttle_use_divergence_override": false,
     "trend_throttle_spread_thr": 1.2,
     "trend_throttle_pattern_thr": 0.6,
     "reward_scale_divisor": 80.0
@@ -95,16 +99,16 @@
     "batch_size": 256
   },
   "train": {
-    "episodes": 10000,
-    "rollout_steps": 400,
+    "episodes": 60000,
+    "rollout_steps": 512,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/train",
     "resume": true,
     "resume_path": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",
     "log_every": 5,
-    "plot_every": 50,
-    "eval_every": 50,
-    "eval_days": 180,
+    "plot_every": 200,
+    "eval_every": 200,
+    "eval_days": 210,
     "seed": 42,
     "usage_window": 100,
     "lb_coef": 0.2,
@@ -119,23 +123,50 @@
     "curriculum": {
       "phases": [
         {
-          "until_episode": 10000,
+          "until_episode": 12000,
           "env": {
             "random_start": false,
-            "window_bars": 1480
+            "window_bars": 900,
+            "short_trade_penalty": 5.0,
+            "short_trade_min_bars": 3,
+            "giveback_threshold_pct": 0.4,
+            "giveback_penalty_pct": 0.1
           },
           "train": {
-            "rollout_steps": 720
+            "rollout_steps": 640,
+            "eval_every": 100
           }
         },
         {
-          "until_episode": 30000,
+          "until_episode": 36000,
           "env": {
             "random_start": true,
-            "window_bars": 1480
+            "window_bars": 900,
+            "short_trade_penalty": 4.0,
+            "giveback_threshold_pct": 0.35,
+            "giveback_penalty_pct": 0.08,
+            "trend_throttle_threshold": 0.5,
+            "trend_throttle_cooldown": 4
           },
           "train": {
-            "rollout_steps": 720
+            "rollout_steps": 720,
+            "eval_every": 150
+          }
+        },
+        {
+          "until_episode": 60000,
+          "env": {
+            "random_start": true,
+            "window_bars": 0,
+            "short_trade_penalty": 3.0,
+            "giveback_threshold_pct": 0.3,
+            "giveback_penalty_pct": 0.06,
+            "trend_throttle_threshold": 0.4,
+            "trend_throttle_cooldown": 3
+          },
+          "train": {
+            "rollout_steps": 768,
+            "eval_every": 200
           }
         }
       ],
@@ -145,7 +176,7 @@
           "window_bars": 0
         },
         "train": {
-          "rollout_steps": 720
+          "rollout_steps": 768
         }
       }
     }
@@ -170,7 +201,7 @@
   "pbt": {
     "pop": 2,
     "rounds": 3,
-    "episodes": 15000,
+    "episodes": 5000,
     "concurrency": 2,
     "threads": 2,
     "seed_checkpoint": "src/strategies/exper_corr_pos/reports/train/moe_policy_final.pt",

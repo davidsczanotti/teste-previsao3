@@ -216,6 +216,61 @@ def test_trend_penalty_pct_scales_with_strength_and_notional():
     assert info["trade_penalty"] == pytest.approx(expected_penalty, rel=1e-6)
 
 
+def test_short_trade_penalty_applies_for_fast_closes():
+    price_df, feat_df = _make_constant_env_inputs(5, price=100.0)
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=5,
+        short_trade_penalty=5.0,
+        short_trade_min_bars=3,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    env.step(2)  # abre long
+    _, _, _, info = env.step(1)  # fecha antes do mínimo
+    assert info["trade_short_penalty"] == pytest.approx(cfg.short_trade_penalty)
+    assert info["trade_penalty"] >= cfg.short_trade_penalty
+
+
+def test_giveback_penalty_triggers_after_large_peak():
+    prices = [100.0, 120.0, 130.0, 101.0, 101.0]
+    price_df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": np.ones(len(prices)),
+        }
+    )
+    feat_df = pd.DataFrame({"atr_14": np.ones(len(prices))})
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=len(prices),
+        giveback_threshold_pct=0.5,
+        giveback_penalty_pct=0.1,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    info = {}
+    for action in (2, 2, 2, 1):
+        _, _, _, info = env.step(action)
+        if info.get("trade_closed"):
+            break
+    peak_pnl = (130.0 - 100.0) * cfg.position_size
+    expected_giveback = peak_pnl * cfg.giveback_penalty_pct
+    assert info["trade_giveback_penalty"] == pytest.approx(expected_giveback)
+    assert info["trade_penalty"] == pytest.approx(info["trade_giveback_penalty"])
+
+
 def test_hold_bonus_matches_alpha_formula():
     price_df = pd.DataFrame(
         {

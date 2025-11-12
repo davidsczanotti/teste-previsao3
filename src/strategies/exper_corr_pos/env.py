@@ -82,6 +82,10 @@ class EnvConfig:
     trend_bonus_coef_pct: float = 0.0
     trend_bonus_entry_mult: float = 1.0
     trend_bonus_min_bars: int = 2
+    short_trade_penalty: float = 0.0
+    short_trade_min_bars: int = 2
+    giveback_threshold_pct: float = 0.0
+    giveback_penalty_pct: float = 0.0
     trend_throttle_threshold: float = 0.0  # |htf_trend_strength| mínimo para bloquear trades contra a tendência
     trend_throttle_cooldown: int = 0       # número de barras em que o bloqueio permanece ativo
     trend_throttle_idle_penalty: float = 0.0  # penalidade aplicada quando o throttle impede uma ação
@@ -213,6 +217,9 @@ class BTCMixtureEnv(gym.Env):
         self._open_cost = 0.0
         self._current_trade_penalty = 0.0
         self._current_trade_bonus = 0.0
+        self._trade_peak_pnl = 0.0
+        self._last_short_penalty = 0.0
+        self._last_giveback_penalty = 0.0
         self._entry_idx = -1
         self._entry_timestamp = None
         self._pending_action = None
@@ -290,6 +297,9 @@ class BTCMixtureEnv(gym.Env):
 
         # mark-to-market PnL
         reward += self._pos * self._pos_size * (next_price - price)
+        if self._pos != 0:
+            current_trade_pnl = self._pos * self._pos_size * (next_price - self._entry_price)
+            self._trade_peak_pnl = max(self._trade_peak_pnl, current_trade_pnl)
 
         # Removido: penalidade por barra contra tendência. Agora aplicamos um custo único na abertura
         # (registrado em _open_position). Mantemos este trecho sem efeito por compatibilidade.
@@ -354,6 +364,9 @@ class BTCMixtureEnv(gym.Env):
             "trade_side": int(self._last_trade_side) if self._just_closed else 0,
             "trade_size": float(self._last_trade_size) if self._just_closed else 0.0,
             "trade_penalty": float(self._last_trade_penalty) if self._just_closed else 0.0,
+            "trade_peak_pnl": float(getattr(self, "_trade_peak_pnl", 0.0)) if self._just_closed else 0.0,
+            "trade_short_penalty": float(getattr(self, "_last_short_penalty", 0.0)) if self._just_closed else 0.0,
+            "trade_giveback_penalty": float(getattr(self, "_last_giveback_penalty", 0.0)) if self._just_closed else 0.0,
             "timestamp": self._format_timestamp(self._resolve_timestamp(self._start_idx + self._step)),
         }
         # reset do marcador de fechamento para o próximo passo
@@ -413,6 +426,25 @@ class BTCMixtureEnv(gym.Env):
         # PnL total realizado do trade (inclui custos de entrada, saída, penalidades e bônus)
         trade_penalty_total = float(self._current_trade_penalty + flip_penalty)
         trade_pnl_total = pnl - self._open_cost - cost - flip_penalty + bonus
+
+        short_penalty_cfg = max(0.0, float(getattr(self.cfg, "short_trade_penalty", 0.0)))
+        short_min_bars = max(1, int(getattr(self.cfg, "short_trade_min_bars", 2)))
+        short_penalty = 0.0
+        if short_penalty_cfg > 0.0 and duration_bars < short_min_bars:
+            short_penalty = short_penalty_cfg
+            trade_penalty_total += short_penalty
+            trade_pnl_total -= short_penalty
+
+        giveback_penalty = 0.0
+        gb_threshold = max(0.0, float(getattr(self.cfg, "giveback_threshold_pct", 0.0)))
+        gb_penalty_pct = max(0.0, float(getattr(self.cfg, "giveback_penalty_pct", 0.0)))
+        peak_pnl = max(0.0, float(getattr(self, "_trade_peak_pnl", 0.0)))
+        if gb_penalty_pct > 0.0 and gb_threshold > 0.0 and peak_pnl > 0.0 and pnl > 0.0:
+            max_allowed = peak_pnl * (1.0 - gb_threshold)
+            if pnl < max_allowed:
+                giveback_penalty = peak_pnl * gb_penalty_pct
+                trade_penalty_total += giveback_penalty
+                trade_pnl_total -= giveback_penalty
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
         self._just_closed = True
         self._last_trade_pnl = float(trade_pnl_total)
@@ -422,6 +454,8 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_bonus = float(bonus)
         self._last_trade_gross = float(pnl)
         self._last_trade_penalty = trade_penalty_total
+        self._last_short_penalty = float(short_penalty)
+        self._last_giveback_penalty = float(giveback_penalty)
         self._last_trade_entry_price = float(entry_price)
         self._last_trade_exit_price = float(price)
         self._last_trade_entry_idx = int(entry_idx)
@@ -605,6 +639,9 @@ class BTCMixtureEnv(gym.Env):
         self._entry_step = self._step
         self._entry_idx = self._start_idx + self._step
         self._entry_timestamp = self._resolve_timestamp(self._entry_idx)
+        self._trade_peak_pnl = 0.0
+        self._last_short_penalty = 0.0
+        self._last_giveback_penalty = 0.0
         # Calcula stops adaptativos
         stop_mult, trail_mult = self._compute_adaptive_atr_mult(atr)
         if pos > 0:

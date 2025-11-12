@@ -63,10 +63,13 @@ def _expected_penalty_components(
     reason: str,
     trend_state: float,
     trend_strength: float,
+    duration_bars: int,
+    peak_pnl: float,
+    pnl_gross: float,
 ) -> Dict[str, float]:
     notional = abs(size * entry_price)
     if notional <= 0.0:
-        return {"turnover": 0.0, "trend": 0.0, "flip": 0.0}
+        return {"turnover": 0.0, "trend": 0.0, "flip": 0.0, "short": 0.0, "giveback": 0.0}
 
     turnover_pct = max(0.0, float(getattr(env_cfg, "turnover_penalty_pct", 0.0)))
     if turnover_pct > 0.0:
@@ -98,7 +101,21 @@ def _expected_penalty_components(
         else:
             flip = max(0.0, float(getattr(env_cfg, "flip_exit_penalty", 0.0)))
 
-    return {"turnover": turnover, "trend": trend, "flip": flip}
+    short_penalty = 0.0
+    short_cfg = max(0.0, float(getattr(env_cfg, "short_trade_penalty", 0.0)))
+    short_min = max(1, int(getattr(env_cfg, "short_trade_min_bars", 2)))
+    if short_cfg > 0.0 and int(duration_bars) < short_min:
+        short_penalty = short_cfg
+
+    giveback = 0.0
+    peak = max(0.0, float(peak_pnl))
+    threshold = max(0.0, float(getattr(env_cfg, "giveback_threshold_pct", 0.0)))
+    giveback_pct = max(0.0, float(getattr(env_cfg, "giveback_penalty_pct", 0.0)))
+    if giveback_pct > 0.0 and threshold > 0.0 and peak > 0.0 and float(pnl_gross) > 0.0:
+        if float(pnl_gross) < peak * (1.0 - threshold):
+            giveback = peak * giveback_pct
+
+    return {"turnover": turnover, "trend": trend, "flip": flip, "short": short_penalty, "giveback": giveback}
 
 
 def _expected_bonus(
@@ -352,6 +369,9 @@ def main() -> None:
                 reason=reason,
                 trend_state=trend_state,
                 trend_strength=float(entry_feat.get("htf_trend_strength", np.nan)) if not entry_feat.empty else np.nan,
+                duration_bars=duration_bars,
+                peak_pnl=float(info.get("trade_peak_pnl", 0.0)),
+                pnl_gross=pnl_gross,
             )
             penalty_expected = sum(penalty_components.values())
             penalty_delta = penalty - penalty_expected
@@ -388,6 +408,11 @@ def main() -> None:
                 "penalty_turnover": penalty_components["turnover"],
                 "penalty_trend": penalty_components["trend"],
                 "penalty_flip": penalty_components["flip"],
+                "penalty_short": penalty_components["short"],
+                "penalty_giveback": penalty_components["giveback"],
+                "peak_pnl": float(info.get("trade_peak_pnl", 0.0)),
+                "short_penalty_actual": float(info.get("trade_short_penalty", 0.0)),
+                "giveback_penalty_actual": float(info.get("trade_giveback_penalty", 0.0)),
                 "entry_price": entry_price,
                 "exit_price": exit_price,
                 "win_flag": win_flag,
@@ -461,6 +486,11 @@ def main() -> None:
             "penalty_turnover",
             "penalty_trend",
             "penalty_flip",
+            "penalty_short",
+            "penalty_giveback",
+            "peak_pnl",
+            "short_penalty_actual",
+            "giveback_penalty_actual",
         ],
     )
     _emit_delta_alert(

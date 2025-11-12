@@ -22,6 +22,9 @@ def test_expected_penalty_components_pct_breakdown():
         reason="flip",
         trend_state=1.0,
         trend_strength=2.0,
+        duration_bars=4,
+        peak_pnl=0.0,
+        pnl_gross=10.0,
     )
     assert comps["turnover"] == pytest.approx(1.0)
     assert comps["trend"] == pytest.approx(1.5)
@@ -47,6 +50,9 @@ def test_expected_penalty_components_fallbacks():
         reason="close",
         trend_state=-1.0,
         trend_strength=0.0,
+        duration_bars=5,
+        peak_pnl=0.0,
+        pnl_gross=5.0,
     )
     # strength zero -> defaults to 1.0 inside helper
     assert comps["turnover"] == pytest.approx(cfg.turnover_penalty)
@@ -80,3 +86,29 @@ def test_expected_bonus_alignment_component():
     )
     # notional=50, coef=0.02 -> base=1.0, *strength=2.0, *mult=1.5 => 3.0
     assert bonus == pytest.approx(3.0)
+
+
+def test_expected_penalty_short_and_giveback_components():
+    cfg = EnvConfig(
+        short_trade_penalty=2.5,
+        short_trade_min_bars=3,
+        giveback_threshold_pct=0.4,
+        giveback_penalty_pct=0.2,
+    )
+    peak_pnl = 10.0
+    pnl_gross = 4.0
+    comps = _expected_penalty_components(
+        env_cfg=cfg,
+        size=0.5,
+        entry_price=100.0,
+        side=1,
+        reason="close",
+        trend_state=0.0,
+        trend_strength=0.0,
+        duration_bars=2,
+        peak_pnl=peak_pnl,
+        pnl_gross=pnl_gross,
+    )
+    assert comps["short"] == pytest.approx(cfg.short_trade_penalty)
+    expected_giveback = peak_pnl * cfg.giveback_penalty_pct
+    assert comps["giveback"] == pytest.approx(expected_giveback)

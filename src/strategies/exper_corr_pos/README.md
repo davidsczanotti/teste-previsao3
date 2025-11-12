@@ -76,6 +76,8 @@ Todos os parâmetros ficam em `src/strategies/exper_corr_pos/config.json`:
   - Novos: `max_trade_notional` (teto em USD por trade; default 1000), `profit_trail_pct` (percentual para trailing por lucro sobre pico/vale). O trailing por lucro complementa o stop/trailing por ATR, mantendo stop loss ativo.
   - `idle_penalty_factor`: fator (0 a 1) para aplicar penalidade automática quando o agente fica em cash. A cada candle flat, o ambiente debita `init_equity × fator / window_bars` do reward; com `factor = 1.0` e `window_bars = 365`, isso equivale a ~US$ 2.74 por dia parado.
   - `hold_bonus_alpha`: fator da “gorjeta” ao fechar uma posição. O bônus (ou malus) adicionado ao reward é `alpha × duração × PnL`, reforçando lucros longos e penalizando prejuízos prolongados.
+  - `short_trade_penalty`/`short_trade_min_bars`: malus fixo aplicado quando o trade é encerrado antes do mínimo de barras definido (útil para garantir “trades longos” durante currículos).
+  - `giveback_threshold_pct`/`giveback_penalty_pct`: se um trade vencedor devolver mais que o percentual configurado do pico de PnL, o ambiente aplica uma penalidade proporcional ao pico (giveback penalty), encorajando realização parcial.
 - `model`: camadas dos experts e do gating, número de experts, nomes didáticos, temperatura e top‑k
 - `ppo`: hiperparâmetros do PPO (gamma, lambda, clip, lr, coeficientes etc.)
 - `train`: episódios, passos por rollout, device, diretório de saída, schedule de entropia, espaçamento de logs/gráficos/avaliações, seed global (`seed`)
