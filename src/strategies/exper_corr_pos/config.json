@@ -29,11 +29,11 @@
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
-    "idle_penalty_factor": 0.0,
+    "idle_penalty_factor": 0.002,
     "hold_bonus_alpha": 0.01,
     "hold_bonus_positive_only": true,
     "max_trade_notional": 40.0,
-    "profit_trail_pct": 0.04,
+    "profit_trail_pct": 0.02,
     "allow_intrabar_closes": false,
     "adaptive_stop_window": 50,
     "kelly_fraction": 0.1,
@@ -57,7 +57,7 @@
     "trend_throttle_pattern_thr": 0.6,
     "reward_scale_divisor": 80.0,
     "min_hold_bars_enabled": true,
-    "min_hold_bars": 3
+    "min_hold_bars": 2
   },
   "model": {
     "expert_hidden": [
@@ -69,8 +69,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 1.1,
-    "top_k": 2,
+    "temperature": 0.7,
+    "top_k": 1,
     "use_attention": true,
     "attention_dim": 96,
     "attention_heads": 4,
@@ -114,13 +114,13 @@
     "seed": 42,
     "usage_window": 100,
     "lb_coef": 0.2,
-    "lb_coef_start": 0.02,
+    "lb_coef_start": 0.01,
     "lb_coef_end": 0.0,
     "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.002,
-    "entropy_coef_end": 0.0005,
+    "entropy_coef_start": 0.0015,
+    "entropy_coef_end": 0.0003,
     "entropy_decay_episodes": 2000,
     "curriculum": {
       "phases": [
@@ -132,7 +132,10 @@
             "short_trade_penalty": 5.0,
             "short_trade_min_bars": 3,
             "giveback_threshold_pct": 0.4,
-            "giveback_penalty_pct": 0.1
+            "giveback_penalty_pct": 0.1,
+            "idle_penalty_factor": 0.001,
+            "profit_trail_pct": 0.03,
+            "max_trade_notional": 60.0
           },
           "train": {
             "rollout_steps": 640,
@@ -144,16 +147,21 @@
           "env": {
             "random_start": true,
             "window_bars": 900,
-            "short_trade_penalty": 5.0,
-            "short_trade_min_bars": 4,
+            "short_trade_penalty": 1.0,
+            "short_trade_min_bars": 3,
             "giveback_threshold_pct": 0.3,
             "giveback_penalty_pct": 0.1,
-            "profit_trail_pct": 0.06,
+            "profit_trail_pct": 0.02,
             "trend_bonus_coef_pct": 0.001,
             "trend_bonus_entry_mult": 1.5,
             "trend_bonus_min_bars": 4,
-            "trend_throttle_threshold": 0.5,
-            "trend_throttle_cooldown": 4
+            "trend_throttle_threshold": 0.35,
+            "trend_throttle_cooldown": 3,
+            "trend_throttle_use_divergence_override": true,
+            "trend_throttle_spread_thr": 1.0,
+            "trend_throttle_pattern_thr": 0.5,
+            "idle_penalty_factor": 0.002,
+            "max_trade_notional": 100.0
           },
           "train": {
             "rollout_steps": 720,
@@ -165,11 +173,15 @@
           "env": {
             "random_start": true,
             "window_bars": 0,
-            "short_trade_penalty": 3.0,
-            "giveback_threshold_pct": 0.3,
-            "giveback_penalty_pct": 0.06,
-            "trend_throttle_threshold": 0.4,
-            "trend_throttle_cooldown": 3
+            "short_trade_penalty": 0.0,
+            "giveback_threshold_pct": 0.25,
+            "giveback_penalty_pct": 0.12,
+            "trend_throttle_threshold": 0.25,
+            "trend_throttle_cooldown": 2,
+            "trend_throttle_use_divergence_override": true,
+            "idle_penalty_factor": 0.003,
+            "max_trade_notional": 150.0,
+            "profit_trail_pct": 0.02
           },
           "train": {
             "rollout_steps": 768,
@@ -180,7 +192,16 @@
       "final": {
         "env": {
           "random_start": true,
-          "window_bars": 0
+          "window_bars": 0,
+          "trend_throttle_threshold": 0.25,
+          "trend_throttle_cooldown": 2,
+          "trend_throttle_use_divergence_override": true,
+          "idle_penalty_factor": 0.003,
+          "max_trade_notional": 150.0,
+          "profit_trail_pct": 0.02,
+          "giveback_threshold_pct": 0.25,
+          "giveback_penalty_pct": 0.12,
+          "short_trade_penalty": 0.0
         },
         "train": {
           "rollout_steps": 768
