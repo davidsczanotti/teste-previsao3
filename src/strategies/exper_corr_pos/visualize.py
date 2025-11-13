@@ -19,6 +19,7 @@ FINAL_MODEL_PATH = Path("src/strategies/exper_corr_pos/reports/train/moe_policy_
 BEST_MODEL_PATH = Path("src/strategies/exper_corr_pos/reports/train/moe_policy_best_eval.pt")
 TRAIN_DIR = Path("src/strategies/exper_corr_pos/reports/train")
 OUT_PATH = Path("src/strategies/exper_corr_pos/reports/train/visual_backtest.png")
+TRADES_OUT_PATH = Path("src/strategies/exper_corr_pos/reports/train/visual_trades.png")
 
 
 def _compute_donchian(high: np.ndarray, low: np.ndarray, period: int = 55) -> Tuple[np.ndarray, np.ndarray]:
@@ -136,6 +137,90 @@ def _run_policy(env: BTCMixtureEnv, policy: MoEPolicy) -> Tuple[np.ndarray, np.n
         weights_hist.append(gate_weights.squeeze(0).cpu().numpy())
         obs = torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)
     return np.asarray(actions), np.asarray(equity), np.asarray(weights_hist)
+
+
+def _run_policy_trades(
+    env: BTCMixtureEnv, policy: MoEPolicy
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    """Executa a política greedy e retorna séries para um gráfico com entradas/saídas reais.
+
+    - positions: posição efetiva por barra (-1/0/+1)
+    - equity: curva de equity
+    - entries_long: índices de entrada long (0 -> +1)
+    - entries_short: índices de entrada short (0 -> -1)
+    - exits: índices em que um trade foi fechado (por stop/flip/close)
+    - exit_reasons: lista textual dos motivos de saída (mesmo tamanho de exits)
+    """
+    obs = torch.tensor(env.reset(), dtype=torch.float32).unsqueeze(0)
+    positions: list[int] = []
+    equity: list[float] = []
+    entries_long: list[int] = []
+    entries_short: list[int] = []
+    exits: list[int] = []
+    exit_reasons: list[str] = []
+
+    prev_pos = 0
+    done = False
+    i = 0
+    while not done:
+        with torch.no_grad():
+            dist, _, _ = policy(obs)
+            action = torch.argmax(dist.probs, dim=-1).item()
+        next_obs, _, done, info = env.step(action)
+        pos = int(info.get("position", 0))
+        positions.append(pos)
+        equity.append(float(info.get("equity", 0.0)))
+
+        if prev_pos == 0 and pos == 1:
+            entries_long.append(i)
+        elif prev_pos == 0 and pos == -1:
+            entries_short.append(i)
+
+        if bool(info.get("trade_closed", False)):
+            exits.append(i)
+            exit_reasons.append(str(info.get("trade_reason", "")))
+
+        prev_pos = pos
+        obs = torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)
+        i += 1
+
+    return (
+        np.asarray(positions),
+        np.asarray(equity),
+        np.asarray(entries_long, dtype=int),
+        np.asarray(entries_short, dtype=int),
+        np.asarray(exits, dtype=int),
+        exit_reasons,
+    )
+
+
+def _render_trade_chart(
+    price_df, positions: np.ndarray, entries_long: np.ndarray, entries_short: np.ndarray, exits: np.ndarray, equity: np.ndarray, *, out: Path
+) -> None:
+    """Gera um gráfico compacto com entradas/saídas executadas pelo ambiente."""
+    closes = price_df["close"].to_numpy()[: len(positions)]
+    idx = np.arange(len(positions))
+    plt.style.use("dark_background")
+    fig, ax = plt.subplots(1, 1, figsize=(14, 5))
+    ax.plot(idx, closes, color="#4da6ff", linewidth=1.0, label="Preço")
+
+    if entries_long.size > 0:
+        ax.scatter(entries_long, closes[entries_long], color="#6cff6c", marker="^", s=40, label="Entry Long")
+    if entries_short.size > 0:
+        ax.scatter(entries_short, closes[entries_short], color="#ff6666", marker="v", s=40, label="Entry Short")
+    if exits.size > 0:
+        ax.scatter(exits, closes[exits], color="#ffd166", marker="x", s=40, label="Exit")
+
+    ax2 = ax.twinx()
+    ax2.plot(idx, equity[: len(idx)], color="#f0c674", linewidth=1.0, label="Equity")
+    ax.set_xlabel("Índice do candle")
+    ax.set_ylabel("Preço")
+    ax2.set_ylabel("Equity")
+    ax.legend(loc="upper left")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
 
 
 def main() -> None:
@@ -283,6 +368,18 @@ def main() -> None:
     print(f"Gráfico salvo em {OUT_PATH}")
     if snapshot_path:
         print(f"Snapshot salvo em {snapshot_path}")
+
+    # Gera um gráfico extra somente com ENTRADAS/SAÍDAS executadas pelo ambiente
+    positions, equity2, eL, eS, ex, _reasons = _run_policy_trades(env, policy)
+    _render_trade_chart(price_df, positions, eL, eS, ex, equity2, out=TRADES_OUT_PATH)
+    snapshot_trades = TRADES_OUT_PATH.parent / f"visual_trades-{ckpt_tag}.png"
+    try:
+        _render_trade_chart(price_df, positions, eL, eS, ex, equity2, out=snapshot_trades)
+    except Exception:
+        snapshot_trades = None
+    print(f"Gráfico (trades) salvo em {TRADES_OUT_PATH}")
+    if snapshot_trades:
+        print(f"Snapshot (trades) salvo em {snapshot_trades}")
 
 
 if __name__ == "__main__":
