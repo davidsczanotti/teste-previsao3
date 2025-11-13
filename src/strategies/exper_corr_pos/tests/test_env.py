@@ -108,6 +108,34 @@ def test_env_turnover_penalty_applies_on_flip():
     assert reward <= 0
 
 
+def test_min_hold_rule_blocks_early_close_and_flip():
+    length = 10
+    price_df = _make_price_df(length)
+    feat_df = _make_features_df(length)
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        min_hold_bars_enabled=True,
+        min_hold_bars=3,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    # Open long at t=0
+    _, _, _, info = env.step(2)
+    assert info["position"] == 1
+    # t=1: try to go flat (should be blocked)
+    _, _, _, info = env.step(1)
+    assert info["position"] == 1
+    assert info["trade_closed"] is False
+    # t=2: try to flip short (should be blocked)
+    _, _, _, info = env.step(0)
+    assert info["position"] == 1
+    assert info["trade_closed"] is False
+    # t=3: now minimum reached; try to go flat (should allow close)
+    _, _, _, info = env.step(1)
+    assert info["position"] == 0
+    assert info["trade_closed"] is True
+
+
 def test_trend_penalty_penalizes_contra_trend_positions():
     length = 5
     base = np.full(length, 100.0)

@@ -93,6 +93,9 @@ class EnvConfig:
     trend_throttle_spread_thr: float = 1.5  # |spread_z_zscore| mínimo para considerar divergência
     trend_throttle_pattern_thr: float = 0.6  # intensidade mínima de padrão (ex.: hammer/shooting_star roll) para liberar
     reward_scale_divisor: float = 1.0   # divisor aplicado na recompensa para evitar explosões numéricas
+    # Regra: segurar posição por N barras após uma entrada (toggle + parâmetro)
+    min_hold_bars_enabled: bool = False
+    min_hold_bars: int = 3
 
 
 class BTCMixtureEnv(gym.Env):
@@ -275,6 +278,14 @@ class BTCMixtureEnv(gym.Env):
                         self._trend_cooldown_sign = int(np.sign(trend_state))
                     if idle_throttle_penalty > 0.0:
                         reward_adjust -= idle_throttle_penalty
+
+        # Regra de hold mínimo: impede fechar/virar antes de N barras
+        if getattr(self.cfg, "min_hold_bars_enabled", False) and self._pos != 0:
+            held_bars = int(self._step - getattr(self, "_entry_step", 0))
+            min_bars = max(0, int(getattr(self.cfg, "min_hold_bars", 3)))
+            if held_bars < min_bars and desired_pos != self._pos:
+                # mantém a posição atual até cumprir o mínimo
+                desired_pos = self._pos
 
         if desired_pos != self._pos:
             # close current position first
@@ -675,6 +686,12 @@ class BTCMixtureEnv(gym.Env):
     ) -> float:
         if self._pos == 0 or self._trailing is None:
             return 0.0
+        # Se houver regra de hold mínimo, não permite fechamento por trailing antes do mínimo
+        if getattr(self.cfg, "min_hold_bars_enabled", False) and self._pos != 0:
+            held_bars = int(self._step - getattr(self, "_entry_step", 0))
+            if held_bars < max(0, int(getattr(self.cfg, "min_hold_bars", 3))):
+                # Atualizações do trailing podem ser mantidas simples: não aplicar fechamento precoce
+                return 0.0
         # evita fechar imediatamente após abrir (mesmo candle) quando desativado
         if (
             not getattr(self.cfg, "allow_intrabar_closes", True)

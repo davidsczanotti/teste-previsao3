@@ -55,7 +55,9 @@
     "trend_throttle_use_divergence_override": false,
     "trend_throttle_spread_thr": 1.2,
     "trend_throttle_pattern_thr": 0.6,
-    "reward_scale_divisor": 80.0
+    "reward_scale_divisor": 80.0,
+    "min_hold_bars_enabled": true,
+    "min_hold_bars": 3
   },
   "model": {
     "expert_hidden": [
