@@ -142,15 +142,20 @@
           "env": {
             "random_start": true,
             "window_bars": 900,
-            "short_trade_penalty": 4.0,
-            "giveback_threshold_pct": 0.35,
-            "giveback_penalty_pct": 0.08,
+            "short_trade_penalty": 5.0,
+            "short_trade_min_bars": 4,
+            "giveback_threshold_pct": 0.3,
+            "giveback_penalty_pct": 0.1,
+            "profit_trail_pct": 0.06,
+            "trend_bonus_coef_pct": 0.001,
+            "trend_bonus_entry_mult": 1.5,
+            "trend_bonus_min_bars": 4,
             "trend_throttle_threshold": 0.5,
             "trend_throttle_cooldown": 4
           },
           "train": {
             "rollout_steps": 720,
-            "eval_every": 150
+            "eval_every": 100
           }
         },
         {
