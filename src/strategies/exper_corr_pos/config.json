@@ -137,6 +137,10 @@
             "profit_trail_pct": 0.03,
             "max_trade_notional": 60.0
           },
+          "model": {
+            "temperature": 1.0,
+            "top_k": 2
+          },
           "train": {
             "rollout_steps": 640,
             "eval_every": 100
@@ -163,6 +167,10 @@
             "idle_penalty_factor": 0.002,
             "max_trade_notional": 100.0
           },
+          "model": {
+            "temperature": 0.9,
+            "top_k": 2
+          },
           "train": {
             "rollout_steps": 720,
             "eval_every": 100
@@ -183,6 +191,10 @@
             "max_trade_notional": 150.0,
             "profit_trail_pct": 0.02
           },
+          "model": {
+            "temperature": 0.7,
+            "top_k": 1
+          },
           "train": {
             "rollout_steps": 768,
             "eval_every": 200
@@ -202,6 +214,10 @@
           "giveback_threshold_pct": 0.25,
           "giveback_penalty_pct": 0.12,
           "short_trade_penalty": 0.0
+        },
+        "model": {
+          "temperature": 0.7,
+          "top_k": 1
         },
         "train": {
           "rollout_steps": 768

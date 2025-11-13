@@ -141,6 +141,7 @@ def _apply_curriculum_phase(
     env: BTCMixtureEnv,
     episode: int,
     default_rollout: int,
+    policy: Optional[torch.nn.Module] = None,
 ) -> int:
     if not curriculum_cfg:
         return default_rollout
@@ -161,6 +162,28 @@ def _apply_curriculum_phase(
     for attr, value in env_overrides.items():
         if hasattr(env.cfg, attr):
             setattr(env.cfg, attr, value)
+
+    # Apply model (policy/gating) overrides if provided in the curriculum phase
+    if policy is not None:
+        model_overrides = (chosen or {}).get("model", {})
+        # temperature for gating softmax
+        if "temperature" in model_overrides:
+            try:
+                temp_val = float(model_overrides["temperature"])
+                if hasattr(policy, "gating") and hasattr(policy.gating, "temperature"):
+                    policy.gating.temperature = temp_val
+            except Exception:
+                pass
+        # top_k sparsity
+        if "top_k" in model_overrides:
+            try:
+                tk_val = int(model_overrides["top_k"])
+                if hasattr(policy, "top_k"):
+                    # clamp to [1, num_experts]
+                    max_k = getattr(policy, "num_experts", 1) or 1
+                    policy.top_k = max(1, min(tk_val, int(max_k)))
+            except Exception:
+                pass
 
     train_overrides = (chosen or {}).get("train", {})
     if "rollout_steps" in train_overrides:
@@ -297,6 +320,8 @@ def train_agent(
                 header.startswith("episode,")
                 and ("entropy_coef" in header)
                 and ("lb_coef" in header)
+                and ("gate_temperature" in header)
+                and ("gate_top_k" in header)
                 and ("greedy_ruined" in header)
             )
             try:
@@ -324,6 +349,8 @@ def train_agent(
                 "entropy",
                 "entropy_coef",
                 "lb_coef",
+                "gate_temperature",
+                "gate_top_k",
                 "load_balance",
                 "avg_reward",
                 "sum_reward",
@@ -339,6 +366,8 @@ def train_agent(
         greedy_ruined: Optional[bool] = None,
         entropy_coef_val: Optional[float] = None,
         lb_coef_val: Optional[float] = None,
+        gate_temp_val: Optional[float] = None,
+        gate_top_k_val: Optional[int] = None,
     ) -> Dict[str, Any]:
         usage = list(m.get("expert_usage") or [])
         row_map: Dict[str, Any] = {
@@ -348,6 +377,8 @@ def train_agent(
             "entropy": m.get("entropy"),
             "entropy_coef": entropy_coef_val if entropy_coef_val is not None else ppo_cfg.entropy_coef,
             "lb_coef": lb_coef_val if lb_coef_val is not None else trainer.lb_coef,
+            "gate_temperature": gate_temp_val,
+            "gate_top_k": gate_top_k_val,
             "load_balance": m.get("load_balance"),
             "avg_reward": m.get("avg_reward"),
             "sum_reward": m.get("sum_reward"),
@@ -366,6 +397,8 @@ def train_agent(
                 row_map["entropy"],
                 row_map["entropy_coef"],
                 row_map["lb_coef"],
+                row_map["gate_temperature"],
+                row_map["gate_top_k"],
                 row_map["load_balance"],
                 row_map["avg_reward"],
                 row_map["sum_reward"],
@@ -548,7 +581,7 @@ def train_agent(
             current_lb_coef = trainer.lb_coef
 
         # Use absolute index to select curriculum phase when resuming
-        rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, actual_episode, base_rollout_steps)
+        rollout_steps = _apply_curriculum_phase(curriculum_cfg, env, actual_episode, base_rollout_steps, policy)
         last_metrics = trainer.train_step(env, rollout_steps)
 
         greedy_equity = None
@@ -574,6 +607,16 @@ def train_agent(
                         wandb_run.log_artifact(artifact)
                         best_artifact_logged = True
 
+        # Capture gate parameters for logging
+        try:
+            gate_temp_current: Optional[float] = float(policy.gating.temperature)  # type: ignore[attr-defined]
+        except Exception:
+            gate_temp_current = None
+        try:
+            gate_top_k_current: Optional[int] = int(getattr(policy, "top_k", None))
+        except Exception:
+            gate_top_k_current = None
+
         row_data = _append_metrics(
             actual_episode,
             last_metrics or {},
@@ -581,6 +624,8 @@ def train_agent(
             greedy_ruined,
             entropy_coef_val=current_entropy_coef,
             lb_coef_val=current_lb_coef,
+            gate_temp_val=gate_temp_current,
+            gate_top_k_val=gate_top_k_current,
         )
         if wandb_run:
             log_payload = {k: v for k, v in row_data.items() if v is not None}
