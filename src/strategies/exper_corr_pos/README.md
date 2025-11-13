@@ -102,6 +102,22 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   Artefatos: `src/strategies/exper_corr_pos/reports/train/`
   - Para enviar métricas/artefatos ao Weights & Biases, edite `logging.wandb.enabled` para `true` no `config.json` (configure também `project/entity/name` conforme sua conta) antes de rodar o treino.
 
+- Treino rápido (smoke test)
+  - Objetivo: materializar rapidamente um checkpoint mínimo para auditoria/visualização, sem alterar o `config.json` principal.
+  - Passo 0 (se necessário): atualize o cache local para os pares/timeframe do `config.json`.
+    ```bash
+    poetry run python -m scripts.populate_cache BTCUSDT 1d --start "2017-01-01 00:00:00"
+    poetry run python -m scripts.populate_cache ETHUSDT 1d --start "2017-01-01 00:00:00"
+    ```
+  - Rodar o smoke:
+    ```bash
+    BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.scripts.quick_train
+    ```
+    Saídas: `src/strategies/exper_corr_pos/reports/train/quickrun/moe_policy_final.pt` (2 episódios × 64 passos). Em seguida, você pode visualizar:
+    ```bash
+    BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.visualize
+    ```
+
 ## Fluxo (Botões do Fliperama)
 
 - Start (começar do zero)
@@ -183,6 +199,14 @@ Edite o JSON e rode os comandos “limpos” abaixo — não há necessidade de 
   BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.visualize
   ```
   Gera `src/strategies/exper_corr_pos/reports/train/visual_backtest.png` com legenda dos experts.
+
+- Backtest rápido (JSON de resultados)
+  ```bash
+  BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.backtest
+  ```
+  - Saída JSON (padrão): `src/strategies/exper_corr_pos/reports/backtest/exper_corr_pos_<SYMBOL>_<TF>.json`
+  - Campos: `strategy`, `symbol`, `interval`, `period{start,end}`, `trades`, `total_pnl`, `win_rate`, `profit_factor`, `avg_win`, `avg_loss`, `chart_path`, `config_path`, `seed`, `run_env`.
+  - Também salva um gráfico compacto em `src/strategies/exper_corr_pos/reports/backtest/charts/exper_corr_pos_backtest_<SYMBOL>_<TF>.png`.
 
 - Análise do gating (pesos/top‑k, drawdown/ruína)
   ```bash

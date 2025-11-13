@@ -10,6 +10,9 @@ import subprocess
 from datetime import datetime, timezone
 from copy import deepcopy
 from typing import Any, Dict, Optional, Tuple
+import sys
+import importlib
+import re
 
 import numpy as np
 import torch
@@ -39,6 +42,39 @@ def _set_seeds(seed: int) -> None:
 
 
 def _record_manifest(config: dict, cfg_path: Path, seed: int) -> None:
+    def _collect_run_env() -> Dict[str, Any]:
+        # Python version
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+        # Poetry version (best-effort)
+        poetry_ver: Optional[str] = None
+        try:
+            out = subprocess.check_output(["poetry", "--version"], stderr=subprocess.DEVNULL).decode().strip()
+            # Examples: "Poetry (version 1.8.3)" or "Poetry version 1.8.3"
+            m = re.search(r"(\d+\.\d+\.\d+)", out)
+            poetry_ver = m.group(1) if m else out
+        except Exception:
+            poetry_ver = None
+
+        # Library versions (best-effort)
+        libs = [
+            "pandas",
+            "numpy",
+            "matplotlib",
+            "torch",
+            "optuna",
+        ]
+        lib_versions: Dict[str, Optional[str]] = {}
+        for name in libs:
+            try:
+                mod = importlib.import_module(name)
+                ver = getattr(mod, "__version__", None)
+                lib_versions[name] = str(ver) if ver is not None else None
+            except Exception:
+                lib_versions[name] = None
+
+        return {"python": py_ver, "poetry": poetry_ver, "lib_versions": lib_versions}
+
     env_cfg = config.get("env", {})
     train_cfg = config.get("train", {})
     entry = {
@@ -47,6 +83,7 @@ def _record_manifest(config: dict, cfg_path: Path, seed: int) -> None:
         "config_hash": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
         "seed": seed,
         "accounting_mode": env_cfg.get("accounting_mode", "mtm"),
+        "run_env": _collect_run_env(),
         "eval": {
             "eval_every": train_cfg.get("eval_every"),
             "eval_days": train_cfg.get("eval_days"),

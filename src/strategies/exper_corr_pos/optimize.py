@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import optuna
 
 from .train import DEFAULT_CONFIG, train_agent
+from .utils_cfg import enabled_expert_names
 
 
 def _parse_args() -> argparse.Namespace:
@@ -59,7 +60,9 @@ def _build_param_overrides(
     search_space: Dict[str, Dict[str, Any]],
     base_config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    num_experts = int(base_config.get("model", {}).get("num_experts", 4))
+    # Use the same criterion as build_policy: number of ENABLED experts
+    enabled = enabled_expert_names(base_config)
+    num_experts = max(1, len(enabled))
     overrides: Dict[str, Any] = {}
     for dotted_key, spec in search_space.items():
         value = _suggest_param(trial, dotted_key, spec, num_experts)
@@ -87,13 +90,15 @@ def main() -> None:
     experiment_id = str(optimize_cfg.get("experiment_id", "exper_corr_pos")).strip()
     apply_best_only = bool(optimize_cfg.get("apply_best_only", False))
 
+    # Derive default bounds respecting enabled experts for top_k
+    n_enabled = max(1, len(enabled_expert_names(config)))
     search_space: Dict[str, Dict[str, Any]] = optimize_cfg.get("parameters") or {
         "ppo.learning_rate": {"type": "loguniform", "low": 1e-5, "high": 5e-4},
         "ppo.gamma": {"type": "uniform", "low": 0.95, "high": 0.999},
         "model.top_k": {
             "type": "int",
             "low": 1,
-            "high": config.get("model", {}).get("num_experts", 4),
+            "high": n_enabled,
         },
     }
 

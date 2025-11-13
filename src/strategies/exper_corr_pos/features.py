@@ -40,27 +40,42 @@ def _online_ridge_predictions(
     y: np.ndarray,
     decay: float = 0.995,
     ridge: float = 1e-3,
+    *,
+    horizon: int = 0,
 ) -> np.ndarray:
-    """Recursive least squares with forgetting factor to mimic an online LightGBM head."""
+    """
+    Recursive least squares with forgetting factor using delayed updates to avoid lookahead.
+
+    For a forward horizon H, the prediction at index t is computed using weights that have
+    only seen targets up to index (t-H). The update using sample i is applied when the
+    target y[i] becomes available at time i+H.
+    """
     n_samples, n_features = X.shape
     weights = np.zeros(n_features, dtype=np.float64)
-    cov = np.eye(n_features, dtype=np.float64) / ridge
-    preds = np.full(n_samples, np.nan, dtype=np.float64)
+    cov = np.eye(n_features, dtype=np.float64) / max(ridge, 1e-12)
+    preds = np.zeros(n_samples, dtype=np.float64)
 
-    for i in range(n_samples):
-        xi = X[i]
-        yi = y[i]
-        if not np.isfinite(yi) or not np.all(np.isfinite(xi)):
-            continue
-        pred = float(np.dot(weights, xi))
-        preds[i] = pred
-        xi_col = xi.reshape(-1, 1)
-        denom = decay + float(xi_col.T @ cov @ xi_col)
-        if denom <= 1e-12:
-            continue
-        gain = (cov @ xi_col) / denom
-        weights = weights + (yi - pred) * gain.ravel()
-        cov = (cov - gain @ xi_col.T @ cov) / decay
+    H = max(0, int(horizon))
+    for t in range(n_samples):
+        xt = X[t]
+        # Always compute a prediction with current weights (before any same-step update)
+        preds[t] = float(np.dot(weights, xt)) if np.all(np.isfinite(xt)) else 0.0
+
+        # Apply delayed update for the sample whose target has just become available
+        i = t - H
+        if i >= 0:
+            xi = X[i]
+            yi = y[i]
+            if np.all(np.isfinite(xi)) and np.isfinite(yi):
+                xi_col = xi.reshape(-1, 1)
+                denom_term = (xi_col.T @ cov @ xi_col).item()
+                denom = float(decay) + float(denom_term)
+                if denom > 1e-12:
+                    gain = (cov @ xi_col) / denom
+                    # use current prediction for residual (consistent RLS)
+                    pred_i = float(np.dot(weights, xi))
+                    weights = weights + (yi - pred_i) * gain.ravel()
+                    cov = (cov - gain @ xi_col.T @ cov) / float(max(decay, 1e-12))
     return preds
 
 
@@ -185,7 +200,7 @@ def compute_features(
     feature_cols = ml_features.columns.tolist()
     X = ml_features.to_numpy(dtype=np.float64)
     y = close.pct_change(ml_horizon).shift(-ml_horizon).to_numpy(dtype=np.float64)
-    preds = _online_ridge_predictions(X, y, decay=ml_decay, ridge=ml_ridge)
+    preds = _online_ridge_predictions(X, y, decay=ml_decay, ridge=ml_ridge, horizon=ml_horizon)
     ml_pred = pd.Series(preds, index=base.index)
     out["ml_pred_return"] = ml_pred
     scale = ml_pred.rolling(200, min_periods=50).std().replace(0.0, np.nan)
