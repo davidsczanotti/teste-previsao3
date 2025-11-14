@@ -29,7 +29,7 @@
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
-    "idle_penalty_factor": 0.002,
+    "idle_penalty_factor": 0.008,
     "hold_bonus_alpha": 0.01,
     "hold_bonus_positive_only": true,
     "max_trade_notional": 40.0,
@@ -39,10 +39,10 @@
     "kelly_fraction": 0.1,
     "var_confidence": 0.95,
     "trend_penalty_coef": 0.0,
-    "trend_penalty_coef_pct": 0.00005,
+    "trend_penalty_coef_pct": 0.0001,
     "trend_penalty_entry_mult": 1.0,
     "trend_bonus_coef": 0.0,
-    "trend_bonus_coef_pct": 0.0005,
+    "trend_bonus_coef_pct": 0.001,
     "trend_bonus_entry_mult": 1.0,
     "trend_bonus_min_bars": 3,
     "short_trade_penalty": 3.0,
@@ -56,6 +56,7 @@
     "trend_throttle_spread_thr": 1.2,
     "trend_throttle_pattern_thr": 0.6,
     "reward_scale_divisor": 80.0,
+    "risk_atr_scale": 5.0,
     "min_hold_bars_enabled": true,
     "min_hold_bars": 2
   },
@@ -70,7 +71,7 @@
     ],
     "num_experts": 4,
     "temperature": 0.7,
-    "top_k": 1,
+    "top_k": 2,
     "use_attention": true,
     "attention_dim": 96,
     "attention_heads": 4,
@@ -119,9 +120,9 @@
     "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.0015,
-    "entropy_coef_end": 0.0003,
-    "entropy_decay_episodes": 2000,
+    "entropy_coef_start": 0.008,
+    "entropy_coef_end": 0.002,
+    "entropy_decay_episodes": 10000,
     "curriculum": {
       "phases": [
         {
@@ -193,7 +194,7 @@
           },
           "model": {
             "temperature": 0.7,
-            "top_k": 1
+            "top_k": 2
           },
           "train": {
             "rollout_steps": 768,
@@ -217,7 +218,7 @@
         },
         "model": {
           "temperature": 0.7,
-          "top_k": 1
+          "top_k": 2
         },
         "train": {
           "rollout_steps": 768

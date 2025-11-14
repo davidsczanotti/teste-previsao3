@@ -93,6 +93,10 @@ class EnvConfig:
     trend_throttle_spread_thr: float = 1.5  # |spread_z_zscore| mínimo para considerar divergência
     trend_throttle_pattern_thr: float = 0.6  # intensidade mínima de padrão (ex.: hammer/shooting_star roll) para liberar
     reward_scale_divisor: float = 1.0   # divisor aplicado na recompensa para evitar explosões numéricas
+    # Ajuste opcional de risco: escala a recompensa de acordo com a volatilidade (ATR relativa).
+    # Se risk_atr_scale > 0, reward é dividido por (1 + risk_atr_scale * ATR_rel), onde
+    # ATR_rel ~= atr_14 / preço. Valores maiores punem mais períodos muito voláteis.
+    risk_atr_scale: float = 0.0
     # Regra: segurar posição por N barras após uma entrada (toggle + parâmetro)
     min_hold_bars_enabled: bool = False
     min_hold_bars: int = 3
@@ -325,6 +329,15 @@ class BTCMixtureEnv(gym.Env):
         if self._pos == 0 and self._idle_penalty_per_step > 0.0:
             reward -= self._idle_penalty_per_step
 
+        # Ajuste de risco baseado em ATR relativo: pune mais recompensas em períodos de alta volatilidade.
+        risk_scale_coef = float(getattr(self.cfg, "risk_atr_scale", 0.0))
+        if risk_scale_coef > 0.0:
+            px_safe = max(next_price, 1e-9)
+            atr_safe = max(next_atr, 0.0)
+            rel_vol = atr_safe / px_safe  # proxy simples de volatilidade percentual
+            risk_scale = 1.0 + risk_scale_coef * rel_vol
+            reward /= risk_scale
+
         reward_scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
         reward /= reward_scale
 
@@ -479,9 +492,15 @@ class BTCMixtureEnv(gym.Env):
         self._entry_timestamp = None
         self._open_bonus = 0.0
         self._current_trade_penalty = 0.0
+        # Recompensa:
+        # - No modo "legacy", mantemos o comportamento antigo: realiza todo o PnL no fechamento.
+        # - No modo "mtm", o PnL já foi contabilizado barra a barra via mark-to-market em step().
+        #   Aqui aplicamos apenas custos de saída e penalidades/bônus adicionais para evitar
+        #   dupla contagem de PnL.
         if mode == "legacy":
             return pnl - cost - flip_penalty
-        return -cost - flip_penalty + pnl + bonus
+        # mtm: apenas ajustes incrementais (custos/penalidades/bônus), sem PnL bruto do trade
+        return -cost - flip_penalty - short_penalty - giveback_penalty + bonus
 
     def _compute_adaptive_atr_mult(self, atr: float) -> Tuple[float, float]:
         """Calcula multiplicadores ATR adaptativos baseados na volatilidade histórica."""

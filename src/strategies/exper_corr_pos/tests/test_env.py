@@ -361,3 +361,197 @@ def test_trend_bonus_pct_awards_on_alignment():
     notional = 200.0 * cfg.position_size
     expected_entry_bonus = notional * cfg.trend_bonus_coef_pct * abs(feat_df.loc[0, "htf_trend_strength"]) * cfg.trend_bonus_entry_mult
     assert info["trade_bonus"] == pytest.approx(expected_entry_bonus, rel=1e-6)
+
+
+def test_idle_penalty_applies_when_flat_and_scales_with_factor():
+    # Ambiente sem custos nem posição; apenas penalidade de ociosidade.
+    length = 5
+    price_df, feat_df = _make_constant_env_inputs(length, price=100.0)
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=0.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        idle_penalty_factor=0.01,
+        reward_scale_divisor=1.0,
+        random_start=False,
+        window_bars=length,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+
+    expected_episode_length = length
+    expected_penalty_per_step = (cfg.init_equity * cfg.idle_penalty_factor) / float(expected_episode_length)
+
+    total_reward = 0.0
+    steps_taken = 0
+    done = False
+    # Mantém sempre flat (ação 1) para acionar apenas a penalidade de ociosidade.
+    while not done:
+        _, reward, done, info = env.step(1)
+        total_reward += reward
+        steps_taken += 1
+        assert info["position"] == 0
+        assert reward == pytest.approx(-expected_penalty_per_step, rel=1e-6)
+
+    # Deve ter percorrido toda a janela
+    assert steps_taken == expected_episode_length
+    assert total_reward == pytest.approx(-expected_penalty_per_step * expected_episode_length, rel=1e-6)
+
+
+def test_trend_alignment_bonus_and_penalty_affect_equity():
+    # Verifica que seguir a tendência HTF rende bônus e ir contra gera penalidade.
+    length = 4
+    price_df_up, feat_df_up = _make_constant_env_inputs(length, price=100.0, trend_state=1.0, trend_strength=1.5)
+    price_df_down, feat_df_down = _make_constant_env_inputs(length, price=100.0, trend_state=-1.0, trend_strength=1.5)
+
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=length,
+        trend_bonus_coef=0.0,
+        trend_bonus_coef_pct=0.01,
+        trend_bonus_entry_mult=1.0,
+        trend_penalty_coef=0.0,
+        trend_penalty_coef_pct=0.01,
+        trend_penalty_entry_mult=1.0,
+        hold_bonus_alpha=0.0,
+    )
+
+    # Caso alinhado: long em tendência de alta
+    env_aligned = BTCMixtureEnv(price_df_up, feat_df_up, cfg)
+    env_aligned.reset()
+    info_aligned = {}
+    for action in (2, 2, 1):  # abre long, mantém, fecha
+        _, _, _, info_aligned = env_aligned.step(action)
+    aligned_equity = info_aligned["equity"]
+
+    # Caso contra tendência: long em tendência de baixa
+    env_contra = BTCMixtureEnv(price_df_down, feat_df_down, cfg)
+    env_contra.reset()
+    info_contra = {}
+    for action in (2, 2, 1):
+        _, _, _, info_contra = env_contra.step(action)
+    contra_equity = info_contra["equity"]
+
+    # Mesmo preço (sem PnL), diferença deve vir apenas de bônus/penalidade de tendência
+    assert aligned_equity > cfg.init_equity
+    assert contra_equity < cfg.init_equity
+    assert aligned_equity > contra_equity
+
+
+def test_risk_atr_scale_reduces_reward_magnitude():
+    # Quando risk_atr_scale > 0, a recompensa em períodos voláteis deve ser menor
+    # do que a mesma recompensa sem ajuste de risco.
+    prices = [100.0, 102.0]
+    price_df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": np.ones(len(prices)),
+        }
+    )
+    feat_df = pd.DataFrame({"atr_14": np.full(len(prices), 1.0)})
+
+    base_cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=len(prices),
+        reward_scale_divisor=1.0,
+        idle_penalty_factor=0.0,
+        profit_trail_pct=0.0,
+        risk_atr_scale=0.0,
+    )
+    env_base = BTCMixtureEnv(price_df, feat_df, base_cfg)
+    env_base.reset()
+    _, reward_base, _, _ = env_base.step(2)  # abre long e anda uma barra
+
+    risk_cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=len(prices),
+        reward_scale_divisor=1.0,
+        idle_penalty_factor=0.0,
+        profit_trail_pct=0.0,
+        risk_atr_scale=10.0,
+    )
+    env_risk = BTCMixtureEnv(price_df, feat_df, risk_cfg)
+    env_risk.reset()
+    _, reward_risk, _, _ = env_risk.step(2)
+
+    assert reward_base > 0.0
+    assert reward_risk > 0.0
+    # Ajuste de risco deve reduzir a magnitude da recompensa
+    assert reward_risk < reward_base
+
+
+def test_mtm_does_not_double_count_pnl_on_close():
+    # Ambiente sem custos nem bônus, posição fixa; no modo "mtm" o PnL deve ser
+    # contabilizado apenas via mark-to-market, e o fechamento não pode adicionar PnL de novo.
+    prices = [100.0, 101.0, 102.0]
+    price_df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": np.ones(len(prices)),
+        }
+    )
+    feat_df = pd.DataFrame({"atr_14": np.ones(len(prices))})
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        random_start=False,
+        window_bars=len(prices),
+        accounting_mode="mtm",
+        hold_bonus_alpha=0.0,
+        giveback_threshold_pct=0.0,
+        giveback_penalty_pct=0.0,
+        short_trade_penalty=0.0,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    obs = env.reset()
+    assert obs is not None
+
+    total_reward = 0.0
+    done = False
+
+    # t=0: abre long
+    _, reward, done, info = env.step(2)
+    total_reward += reward
+    assert not done
+    assert info["position"] == 1
+
+    # t=1: mantém long
+    _, reward, done, info = env.step(2)
+    total_reward += reward
+    assert not done
+    assert info["position"] == 1
+
+    # t=2: fecha posição (vai para flat)
+    _, reward, done, info = env.step(1)
+    total_reward += reward
+    # A posição deve estar fechada neste ponto
+    assert info["trade_closed"] is True
+    assert info["position"] == 0
+
+    # PnL esperado: posição de 1 unidade, entrada em 100, saída em 102
+    expected_pnl = (prices[2] - prices[0]) * cfg.position_size
+    # No modo mtm, equity final - inicial deve coincidir com PnL
+    assert info["equity"] == pytest.approx(cfg.init_equity + expected_pnl, rel=1e-6)
+    # E a soma dos rewards também não pode exceder esse valor (sem PnL em dobro)
+    assert total_reward == pytest.approx(expected_pnl, rel=1e-6)

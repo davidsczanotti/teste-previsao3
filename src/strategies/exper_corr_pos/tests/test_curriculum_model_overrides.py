@@ -4,6 +4,9 @@ import pandas as pd
 from src.strategies.exper_corr_pos.env import BTCMixtureEnv, EnvConfig
 from src.strategies.exper_corr_pos.models import MoEPolicy
 from src.strategies.exper_corr_pos.train import _apply_curriculum_phase
+from src.strategies.exper_corr_pos.utils_cfg import build_policy
+import json
+from pathlib import Path
 
 
 def _make_env(n: int = 10):
@@ -47,3 +50,25 @@ def test_apply_curriculum_phase_updates_model_temperature_and_topk():
     _ = _apply_curriculum_phase(curriculum, env, episode=15, default_rollout=64, policy=policy)
     assert abs(policy.gating.temperature - 0.7) < 1e-6
     assert policy.top_k == 1
+
+
+def test_config_curriculum_final_uses_topk_two():
+    # Garante que o config.json está configurado para usar top_k=2
+    # na fase final (Mario combinando pelo menos dois experts).
+    cfg_path = Path("src/strategies/exper_corr_pos/config.json")
+    cfg = json.loads(cfg_path.read_text())
+
+    # Config global do modelo deve ter top_k=2
+    assert cfg["model"]["top_k"] == 2
+
+    # build_policy deve respeitar esse top_k inicial
+    dummy_env = _make_env()
+    input_dim = 1  # _make_env usa features com 1 coluna
+    policy = build_policy(input_dim, cfg)
+    assert policy.top_k == 2
+
+    # Curriculum final também deve aplicar top_k=2 quando episódio > último until_episode
+    curriculum_cfg = cfg["train"]["curriculum"]
+    last_until = max(phase["until_episode"] for phase in curriculum_cfg["phases"])
+    _ = _apply_curriculum_phase(curriculum_cfg, dummy_env, episode=last_until + 10, default_rollout=64, policy=policy)
+    assert policy.top_k == 2
