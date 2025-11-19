@@ -26,13 +26,13 @@ def main() -> None:
 
     overrides: Dict[str, Any] = {
         "train": {
-            "episodes": 2,
+            "episodes": 600,
             "rollout_steps": 64,
-            "eval_every": 0,
-            "plot_every": 0,
+            "eval_every": 100,
+            "plot_every": 100,
             "ckpt_every": 0,
-            "final_every": 1,
-            "log_every": 1,
+            "final_every": 100,
+            "log_every": 10,
             "resume": False,
             "outdir": "src/strategies/exper_corr_pos/reports/train/quickrun",
         }
@@ -44,7 +44,7 @@ def main() -> None:
         cfg_path=cfg_path,
         overrides=overrides,
         record_manifest=False,
-        enable_plots=False,
+        enable_plots=True,
         trial_id=None,
         disable_wandb=True,
     )
@@ -53,4 +53,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

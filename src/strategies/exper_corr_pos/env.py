@@ -67,6 +67,9 @@ class EnvConfig:
     # Se verdadeiro, o bônus de hold só é aplicado quando o trade tem PnL positivo.
     # Em perdas, não aplica malus adicional.
     hold_bonus_positive_only: bool = False
+    # Coeficiente do bônus de hold por candle usado apenas como shaping de recompensa (potencial baseado em PnL não realizado).
+    # 0 mantém o comportamento original (sem shaping adicional).
+    hold_shaping_alpha: float = 0.0
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
@@ -179,6 +182,8 @@ class BTCMixtureEnv(gym.Env):
         self._pending_action: Optional[int] = None
         self._trend_cooldown: int = 0
         self._trend_cooldown_sign: int = 0
+        # Potencial acumulado do bônus de hold por candle (para shaping neutro)
+        self._hold_bonus_potential: float = 0.0
 
     def reset(self) -> np.ndarray:
         total_len = len(self.df)
@@ -232,6 +237,7 @@ class BTCMixtureEnv(gym.Env):
         self._pending_action = None
         self._trend_cooldown = 0
         self._trend_cooldown_sign = 0
+        self._hold_bonus_potential = 0.0
         self._episode_length = max(1, self._end_idx - self._start_idx)
         if self.cfg.idle_penalty_factor > 0.0:
             self._idle_penalty_per_step = (
@@ -245,6 +251,7 @@ class BTCMixtureEnv(gym.Env):
         done = False
         reward = 0.0
         ruined = False
+        prev_hold_potential = float(getattr(self, "_hold_bonus_potential", 0.0))
 
         cur_idx = self._start_idx + self._step
         price = float(self.df.iloc[cur_idx]["close"])
@@ -328,6 +335,24 @@ class BTCMixtureEnv(gym.Env):
         # Penalidade por ficar flat (sem posição)
         if self._pos == 0 and self._idle_penalty_per_step > 0.0:
             reward -= self._idle_penalty_per_step
+
+        # Bônus de hold escalonado por candle (shaping potencial baseado em PnL não realizado).
+        # A ideia é antecipar parte da recompensa quando o trade caminha a favor e devolver
+        # esse bônus caso o PnL seja devolvido ou o trade feche em perda.
+        hold_alpha = float(getattr(self.cfg, "hold_shaping_alpha", 0.0))
+        if hold_alpha > 0.0:
+            if self._pos != 0:
+                unrealized = self._pos * self._pos_size * (next_price - self._entry_price)
+                if getattr(self.cfg, "hold_bonus_positive_only", False) and unrealized < 0.0:
+                    new_potential = 0.0
+                else:
+                    new_potential = hold_alpha * max(0.0, float(unrealized))
+            else:
+                new_potential = 0.0
+            reward += new_potential - prev_hold_potential
+            self._hold_bonus_potential = float(new_potential)
+        else:
+            self._hold_bonus_potential = 0.0
 
         # Ajuste de risco baseado em ATR relativo: pune mais recompensas em períodos de alta volatilidade.
         risk_scale_coef = float(getattr(self.cfg, "risk_atr_scale", 0.0))

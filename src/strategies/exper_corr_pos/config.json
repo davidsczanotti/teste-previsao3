@@ -30,8 +30,9 @@
     "random_start": true,
     "window_bars": 540,
     "idle_penalty_factor": 0.008,
-    "hold_bonus_alpha": 0.01,
+    "hold_bonus_alpha": 0.0,
     "hold_bonus_positive_only": true,
+    "hold_shaping_alpha": 0.01,
     "max_trade_notional": 40.0,
     "profit_trail_pct": 0.02,
     "allow_intrabar_closes": false,
@@ -58,7 +59,7 @@
     "reward_scale_divisor": 80.0,
     "risk_atr_scale": 5.0,
     "min_hold_bars_enabled": true,
-    "min_hold_bars": 2
+    "min_hold_bars": 3
   },
   "model": {
     "expert_hidden": [
@@ -374,6 +375,7 @@
       "window_bars": "N\u00famero de barras usadas por epis\u00f3dio quando random_start=true (0 = s\u00e9rie inteira).",
       "idle_penalty_factor": "Fator multiplicativo da penalidade por ficar em cash (penalidade por candle = init_equity \u00d7 fator / window_bars).",
       "hold_bonus_alpha": "Fator do b\u00f4nus/malus ao fechar uma posi\u00e7\u00e3o (reward extra = alpha \u00d7 dura\u00e7\u00e3o \u00d7 PnL).",
+      "hold_shaping_alpha": "Coeficiente opcional do b\u00f4nus de hold por candle usado apenas como shaping (potencial em cima do PnL n\u00e3o realizado; 0 desliga).",
       "max_trade_notional": "Teto (USD) por trade quando dynamic_position=true.",
       "profit_trail_pct": "Trailing adicional disparado quando o lucro acumula X%."
     },
