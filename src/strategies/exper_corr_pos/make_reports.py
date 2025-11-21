@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -79,12 +80,29 @@ def plot_usage(outdir: Path, metrics_path: Path, num_experts: int, window: int) 
     plt.close(fig)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Gera métricas/plots consolidados")
+    parser.add_argument(
+        "--metrics",
+        default=None,
+        help="Caminho alternativo para metrics.csv (ex.: quickrun/metrics.csv)",
+    )
+    parser.add_argument(
+        "--outdir",
+        default=None,
+        help="Diretório onde os gráficos serão salvos (default: train.outdir do config)",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     cfg = json.loads(CFG_PATH.read_text())
     train_cfg = cfg.get("train", {})
     model_cfg = cfg.get("model", {})
-    outdir = Path(train_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/train"))
-    metrics_path = outdir / "metrics.csv"
+    default_outdir = Path(train_cfg.get("outdir", "src/strategies/exper_corr_pos/reports/train"))
+    metrics_path = Path(args.metrics) if args.metrics else default_outdir / "metrics.csv"
+    outdir = Path(args.outdir) if args.outdir else (metrics_path.parent if args.metrics else default_outdir)
     if not metrics_path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {metrics_path}")
 

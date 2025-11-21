@@ -288,8 +288,15 @@ def main() -> None:
     cfg = json.loads(Path(args.config).read_text())
     wf_cfg = cfg.get("walk_forward", {})
     env_cfg = EnvConfig(**cfg.get("env", {}))
+    # Overrides específicos para WF: desliga throttle e reduz custos para incentivar trades,
+    # além de aumentar entropia inicial no treino das janelas.
+    env_cfg.trend_throttle_threshold = 0.0
+    env_cfg.turnover_penalty_pct = 0.0025
+    env_cfg.flip_exit_penalty_pct = 0.0025
     data_cfg = cfg.get("data", {})
     ppo_cfg = PPOConfig(**cfg.get("ppo", {}))
+    # Aumenta entropia para WF/treinos curtos (mais exploração)
+    ppo_cfg.entropy_coef = max(ppo_cfg.entropy_coef, 0.01)
 
     primary_df = load_primary_series(cfg)
     confirm_df = load_confirm_series(cfg)

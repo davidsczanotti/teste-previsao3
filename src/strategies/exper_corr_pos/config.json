@@ -23,16 +23,16 @@
     "max_drawdown_pct": 1.0,
     "drawdown_kill_bars": 0,
     "turnover_penalty": 0.0,
-    "turnover_penalty_pct": 0.0005,
+    "turnover_penalty_pct": 0.0025,
     "flip_exit_penalty": 0.0,
-    "flip_exit_penalty_pct": 0.002,
+    "flip_exit_penalty_pct": 0.0025,
     "dynamic_position": false,
     "random_start": true,
     "window_bars": 540,
     "idle_penalty_factor": 0.008,
     "hold_bonus_alpha": 0.0,
     "hold_bonus_positive_only": true,
-    "hold_shaping_alpha": 0.01,
+    "hold_shaping_alpha": 0.0,
     "max_trade_notional": 40.0,
     "profit_trail_pct": 0.02,
     "allow_intrabar_closes": false,
@@ -49,8 +49,8 @@
     "short_trade_penalty": 3.0,
     "short_trade_min_bars": 3,
     "giveback_threshold_pct": 0.35,
-    "giveback_penalty_pct": 0.08,
-    "trend_throttle_threshold": 0.45,
+    "giveback_penalty_pct": 0.0,
+    "trend_throttle_threshold": 0.1,
     "trend_throttle_cooldown": 4,
     "trend_throttle_idle_penalty": 0.0,
     "trend_throttle_use_divergence_override": false,
@@ -71,8 +71,8 @@
       32
     ],
     "num_experts": 4,
-    "temperature": 0.7,
-    "top_k": 2,
+    "temperature": 0.9,
+    "top_k": 3,
     "use_attention": true,
     "attention_dim": 96,
     "attention_heads": 4,
@@ -96,7 +96,7 @@
     "gae_lambda": 0.95,
     "clip_ratio": 0.2,
     "learning_rate": 0.0001460916366797005,
-    "entropy_coef": 0.006,
+    "entropy_coef": 0.008,
     "value_coef": 0.3,
     "max_grad_norm": 0.5,
     "train_iters": 6,
@@ -121,7 +121,7 @@
     "lb_decay_episodes": 2500,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.008,
+    "entropy_coef_start": 0.01,
     "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 10000,
     "curriculum": {
@@ -140,8 +140,8 @@
             "max_trade_notional": 60.0
           },
           "model": {
-            "temperature": 1.0,
-            "top_k": 2
+            "temperature": 1.05,
+            "top_k": 3
           },
           "train": {
             "rollout_steps": 640,
@@ -158,20 +158,20 @@
             "giveback_threshold_pct": 0.3,
             "giveback_penalty_pct": 0.1,
             "profit_trail_pct": 0.02,
-            "trend_bonus_coef_pct": 0.001,
-            "trend_bonus_entry_mult": 1.5,
-            "trend_bonus_min_bars": 4,
-            "trend_throttle_threshold": 0.35,
-            "trend_throttle_cooldown": 3,
-            "trend_throttle_use_divergence_override": true,
-            "trend_throttle_spread_thr": 1.0,
-            "trend_throttle_pattern_thr": 0.5,
-            "idle_penalty_factor": 0.002,
+          "trend_bonus_coef_pct": 0.001,
+          "trend_bonus_entry_mult": 1.5,
+          "trend_bonus_min_bars": 4,
+          "trend_throttle_threshold": 0.1,
+          "trend_throttle_cooldown": 3,
+          "trend_throttle_use_divergence_override": true,
+          "trend_throttle_spread_thr": 1.0,
+          "trend_throttle_pattern_thr": 0.5,
+          "idle_penalty_factor": 0.002,
             "max_trade_notional": 100.0
           },
           "model": {
-            "temperature": 0.9,
-            "top_k": 2
+            "temperature": 1.0,
+            "top_k": 3
           },
           "train": {
             "rollout_steps": 720,
@@ -184,18 +184,18 @@
             "random_start": true,
             "window_bars": 0,
             "short_trade_penalty": 0.0,
-            "giveback_threshold_pct": 0.25,
-            "giveback_penalty_pct": 0.12,
-            "trend_throttle_threshold": 0.25,
-            "trend_throttle_cooldown": 2,
-            "trend_throttle_use_divergence_override": true,
-            "idle_penalty_factor": 0.003,
-            "max_trade_notional": 150.0,
-            "profit_trail_pct": 0.02
+          "giveback_threshold_pct": 0.25,
+          "giveback_penalty_pct": 0.12,
+          "trend_throttle_threshold": 0.1,
+          "trend_throttle_cooldown": 2,
+          "trend_throttle_use_divergence_override": true,
+          "idle_penalty_factor": 0.003,
+          "max_trade_notional": 150.0,
+          "profit_trail_pct": 0.02
           },
           "model": {
-            "temperature": 0.7,
-            "top_k": 2
+            "temperature": 0.9,
+            "top_k": 3
           },
           "train": {
             "rollout_steps": 768,
@@ -207,7 +207,7 @@
         "env": {
           "random_start": true,
           "window_bars": 0,
-          "trend_throttle_threshold": 0.25,
+          "trend_throttle_threshold": 0.1,
           "trend_throttle_cooldown": 2,
           "trend_throttle_use_divergence_override": true,
           "idle_penalty_factor": 0.003,
@@ -218,8 +218,8 @@
           "short_trade_penalty": 0.0
         },
         "model": {
-          "temperature": 0.7,
-          "top_k": 2
+          "temperature": 0.9,
+          "top_k": 3
         },
         "train": {
           "rollout_steps": 768
@@ -257,7 +257,7 @@
     "train_days": 840,
     "val_days": 180,
     "step_days": 300,
-    "episodes": 60,
+    "episodes": 240,
     "rollout_steps": 384,
     "device": "cpu",
     "outdir": "src/strategies/exper_corr_pos/reports/walk_forward",
