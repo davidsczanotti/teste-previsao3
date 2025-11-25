@@ -103,6 +103,8 @@ class EnvConfig:
     # Regra: segurar posição por N barras após uma entrada (toggle + parâmetro)
     min_hold_bars_enabled: bool = False
     min_hold_bars: int = 3
+    # Piso opcional para perdas por trade (ajuda a tornar PF mais realista).
+    min_loss_per_trade: float = 0.0
 
 
 class BTCMixtureEnv(gym.Env):
@@ -494,17 +496,31 @@ class BTCMixtureEnv(gym.Env):
                 giveback_penalty = peak_pnl * gb_penalty_pct
                 trade_penalty_total += giveback_penalty
                 trade_pnl_total -= giveback_penalty
+        # Piso opcional de perda para evitar PF inflado por perdas quase zero
+        loss_floor = max(0.0, float(getattr(self.cfg, "min_loss_per_trade", 0.0)))
+        if loss_floor > 0.0 and trade_pnl_total < 0.0 and abs(trade_pnl_total) < loss_floor:
+            adjust = loss_floor - abs(trade_pnl_total)
+            trade_penalty_total += adjust
+            trade_pnl_total -= adjust
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
+        # Para relatórios coerentes com o reward (que é escalado), também escalonamos o PnL reportado.
+        scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
+        reported_pnl = trade_pnl_total / scale
+        reported_gross = pnl / scale
+        reported_bonus = float(bonus) / scale
+        reported_penalty = trade_penalty_total / scale
+        reported_cost = float(self._open_cost + cost) / scale
+
         self._just_closed = True
-        self._last_trade_pnl = float(trade_pnl_total)
+        self._last_trade_pnl = float(reported_pnl)
         self._last_trade_bars = int(duration_bars)
         self._last_trade_reason = reason
-        self._last_trade_cost = float(self._open_cost + cost)
-        self._last_trade_bonus = float(bonus)
-        self._last_trade_gross = float(pnl)
-        self._last_trade_penalty = trade_penalty_total
-        self._last_short_penalty = float(short_penalty)
-        self._last_giveback_penalty = float(giveback_penalty)
+        self._last_trade_cost = reported_cost
+        self._last_trade_bonus = reported_bonus
+        self._last_trade_gross = float(reported_gross)
+        self._last_trade_penalty = reported_penalty
+        self._last_short_penalty = float(short_penalty) / scale
+        self._last_giveback_penalty = float(giveback_penalty) / scale
         self._last_trade_entry_price = float(entry_price)
         self._last_trade_exit_price = float(price)
         self._last_trade_entry_idx = int(entry_idx)

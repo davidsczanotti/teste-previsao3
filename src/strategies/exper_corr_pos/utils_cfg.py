@@ -101,3 +101,13 @@ def bars_for_days(timeframe: str | None, days: int) -> int:
 def hours_per_bar(timeframe: str | None) -> float:
     delta = timeframe_to_timedelta(timeframe)
     return float(delta / pd.Timedelta(hours=1))
+
+
+def merged_env_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Combine base env config with final curriculum overrides for eval/backtests."""
+    base_env = dict(cfg.get("env", {}))
+    curriculum = cfg.get("train", {}).get("curriculum", {}) if isinstance(cfg.get("train", {}), dict) else {}
+    final_env = (curriculum.get("final") or {}).get("env") or {}
+    if isinstance(final_env, dict):
+        base_env.update(final_env)
+    return base_env

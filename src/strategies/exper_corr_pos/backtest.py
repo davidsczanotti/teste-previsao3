@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
-from .utils_cfg import build_policy, bars_for_days, hours_per_bar
+from .utils_cfg import build_policy, bars_for_days, hours_per_bar, merged_env_config
 from ...utils.metrics import calculate_metrics
 
 
@@ -179,8 +179,9 @@ def run_backtest(config: Dict[str, Any]) -> Dict[str, Any]:
         feat_df = feat_df.tail(eval_bars).reset_index(drop=True)
         timestamps = timestamps[-len(price_df) :]
 
-    env_cfg = EnvConfig(**config.get("env", {}))
-    env_cfg.random_start = False
+    env_cfg_dict = merged_env_config(config)
+    env_cfg = EnvConfig(**env_cfg_dict)
+    env_cfg.random_start = False  # manter avaliação determinística
     env_cfg.window_bars = 0
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
@@ -247,4 +248,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
