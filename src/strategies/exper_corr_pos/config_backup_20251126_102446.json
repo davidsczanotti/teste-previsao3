@@ -69,7 +69,7 @@
     "min_hold_bars_enabled": false,
     "min_hold_bars": 3,
     "min_loss_per_trade": 0.0,
-    "allow_short": true
+    "allow_short": false
   },
   "model": {
     "expert_hidden": [
@@ -102,7 +102,7 @@
     }
   },
   "ppo": {
-    "gamma": 0.9921020385151985,
+    "gamma": 0.996,
     "gae_lambda": 0.95,
     "clip_ratio": 0.2,
     "learning_rate": 0.0001460916366797005,
@@ -131,7 +131,7 @@
     "lb_decay_episodes": 5000,
     "ckpt_every": 10,
     "final_every": 100,
-    "entropy_coef_start": 0.010558523768657853,
+    "entropy_coef_start": 0.01,
     "entropy_coef_end": 0.002,
     "entropy_decay_episodes": 5000,
     "curriculum": {

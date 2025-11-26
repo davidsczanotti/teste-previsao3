@@ -243,7 +243,8 @@ def train_agent(
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     input_dim = feat_df.shape[1]
-    policy = build_policy(input_dim, cfg)
+    num_actions = env.action_space.n if hasattr(env, "action_space") else None
+    policy = build_policy(input_dim, cfg, num_actions_override=num_actions)
     ppo_cfg = PPOConfig(**cfg.get("ppo", {}))
     trainer = PPOTrainer(
         policy,

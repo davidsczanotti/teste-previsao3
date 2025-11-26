@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from .data import load_primary_series, load_confirm_series, prepare_dataset
 from .env import BTCMixtureEnv, EnvConfig
 from .models import MoEPolicy
-from .utils_cfg import build_policy, bars_for_days, hours_per_bar, merged_env_config
+from .utils_cfg import build_policy, bars_for_days, hours_per_bar, merged_env_config, num_actions_from_env
 from ...utils.metrics import calculate_metrics
 
 
@@ -185,7 +185,11 @@ def run_backtest(config: Dict[str, Any]) -> Dict[str, Any]:
     env_cfg.window_bars = 0
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
+    # Garante que o head da policy casa com o espaço de ações do env (suporta long-only)
+    num_actions = env.action_space.n if hasattr(env, "action_space") else None
     policy, ckpt_path = _load_policy_for_eval(feat_df.shape[1], config)
+    if num_actions is not None and getattr(policy, "num_actions", num_actions) != num_actions:
+        policy = build_policy(feat_df.shape[1], config, num_actions_override=num_actions)
 
     # Run greedy and also capture actions/equity for chart
     device = torch.device(config.get("train", {}).get("device", "cpu"))
@@ -194,12 +198,14 @@ def run_backtest(config: Dict[str, Any]) -> Dict[str, Any]:
     actions: List[int] = []
     equity: List[float] = []
     done = False
+    allow_short = bool(getattr(env_cfg, "allow_short", True))
     while not done:
         with torch.no_grad():
             dist, _, _ = policy(obs.unsqueeze(0))
             action = torch.argmax(dist.probs, dim=-1).item()
         next_obs, _, done, info = env.step(action)
-        actions.append(action - 1)
+        pos = (action - 1) if allow_short else action  # map para {-1,0,1} ou {0,1}
+        actions.append(pos)
         equity.append(float(info.get("equity", 0.0)))
         obs = torch.tensor(next_obs, dtype=torch.float32)
 

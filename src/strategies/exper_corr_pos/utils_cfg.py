@@ -11,6 +11,12 @@ from .models import MoEPolicy
 DEFAULT_NAMES = ["TrendML", "MultiFrame", "Spread", "Pattern"]
 
 
+def num_actions_from_env(cfg: Dict[str, Any]) -> int:
+    env_cfg = cfg.get("env", {}) if isinstance(cfg, dict) else {}
+    allow_short = bool(env_cfg.get("allow_short", True))
+    return 3 if allow_short else 2
+
+
 def get_all_expert_names(cfg: Dict[str, Any]) -> List[str]:
     names = cfg.get("model", {}).get("expert_names")
     if isinstance(names, list) and names:
@@ -37,14 +43,15 @@ def enabled_expert_names(cfg: Dict[str, Any]) -> List[str]:
     return [n for n in names if enable.get(n, True)]
 
 
-def build_policy(input_dim: int, cfg: Dict[str, Any]) -> MoEPolicy:
+def build_policy(input_dim: int, cfg: Dict[str, Any], *, num_actions_override: int | None = None) -> MoEPolicy:
     model_cfg = cfg.get("model", {})
     names = enabled_expert_names(cfg)
     num_experts = max(1, len(names))
+    num_actions = num_actions_override if num_actions_override is not None else num_actions_from_env(cfg)
 
     policy = MoEPolicy(
         input_dim=input_dim,
-        num_actions=3,
+        num_actions=num_actions,
         expert_hidden=model_cfg.get("expert_hidden", [64, 32]),
         gating_hidden=model_cfg.get("gating_hidden", [64, 32]),
         num_experts=num_experts,

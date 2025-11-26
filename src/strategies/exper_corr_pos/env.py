@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
+import math
 
 import numpy as np
 import pandas as pd
@@ -73,7 +74,13 @@ class EnvConfig:
     # Novos campos de controle de risco/execução
     max_trade_notional: float = 1000.0  # teto em USD por trade
     profit_trail_pct: float = 0.02      # trailing por pico/vale para perseguir lucro
+    profit_tax_pct: float = 0.0         # imposto/ajuste aplicado em PnL positivo no fechamento
+    living_cost_per_episode: float = 0.0  # custo fixo debitado ao longo do episódio (ex.: despesas do mês)
+    tier_bonus_step_pct: float = 0.1      # step percentual da equity para calcular bônus progressivo (0.1 = 10%)
+    tier_bonus_max_pct: float = 0.5       # teto do fator de bônus (0.5 = 50% da variação recebida como bônus)
+    tier_bonus_cap_pnl_pct: float = 0.3   # bônus total não ultrapassa 30% do PnL do episódio
     allow_intrabar_closes: bool = True  # permite fechar/reabrir na mesma barra
+    allow_short: bool = True            # se falso, limita ações a {flat,long}
     adaptive_stop_window: int = 50      # janela para calcular ATR histórico médio
     kelly_fraction: float = 0.1         # fração Kelly para position sizing
     var_confidence: float = 0.95        # confiança para VaR
@@ -138,7 +145,9 @@ class BTCMixtureEnv(gym.Env):
         if mode not in {"mtm", "legacy"}:
             raise ValueError(f"accounting_mode inválido: {self.cfg.accounting_mode}")
         self.cfg.accounting_mode = mode
-        self.action_space = SpacesDiscrete(3)  # 0 short, 1 flat, 2 long
+        self._allow_short = bool(getattr(self.cfg, "allow_short", True))
+        # Se não permite short, as ações são: 0=flat, 1=long
+        self.action_space = SpacesDiscrete(3 if self._allow_short else 2)
         self.observation_space = SpacesBox(
             low=-np.inf, high=np.inf, shape=(features.shape[1],), dtype=np.float32
         )
@@ -170,6 +179,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_exit_ts: Optional[pd.Timestamp] = None
         self._last_trade_side: int = 0
         self._last_trade_size: float = 0.0
+        self._last_trade_tax: float = 0.0
         self._open_cost: float = 0.0
         self._entry_idx: int = -1
         self._entry_timestamp: Optional[pd.Timestamp] = None
@@ -186,6 +196,7 @@ class BTCMixtureEnv(gym.Env):
         self._trend_cooldown_sign: int = 0
         # Potencial acumulado do bônus de hold por candle (para shaping neutro)
         self._hold_bonus_potential: float = 0.0
+        self._living_penalty_per_step: float = 0.0
 
     def reset(self) -> np.ndarray:
         total_len = len(self.df)
@@ -227,6 +238,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_exit_ts = None
         self._last_trade_side = 0
         self._last_trade_size = 0.0
+        self._last_trade_tax = 0.0
         self._last_trade_penalty = 0.0
         self._open_cost = 0.0
         self._current_trade_penalty = 0.0
@@ -247,6 +259,8 @@ class BTCMixtureEnv(gym.Env):
             )
         else:
             self._idle_penalty_per_step = 0.0
+        living_total = float(getattr(self.cfg, "living_cost_per_episode", 0.0))
+        self._living_penalty_per_step = living_total / float(self._episode_length)
         return self._get_obs()
 
     def step(self, action: Action) -> Tuple[np.ndarray, float, bool, dict]:
@@ -269,7 +283,13 @@ class BTCMixtureEnv(gym.Env):
                     self._pending_action = action
                     action = self._pos + 1
 
-        desired_pos = action - 1  # map {0:-1,1:0,2:+1}
+        if not self._allow_short:
+            # clamp ação inválida para o modo long-only
+            action = min(int(action), 1)
+        if self._allow_short:
+            desired_pos = action - 1  # {0:-1,1:0,2:+1}
+        else:
+            desired_pos = action  # {0:flat,1:long}
         idle_throttle_penalty = float(getattr(self.cfg, "trend_throttle_idle_penalty", 0.0))
         reward_adjust = 0.0
 
@@ -337,6 +357,9 @@ class BTCMixtureEnv(gym.Env):
         # Penalidade por ficar flat (sem posição)
         if self._pos == 0 and self._idle_penalty_per_step > 0.0:
             reward -= self._idle_penalty_per_step
+        # Penalidade de custo de vida (despesa fixa distribuída pelo episódio)
+        if self._living_penalty_per_step > 0.0:
+            reward -= self._living_penalty_per_step
 
         # Bônus de hold escalonado por candle (shaping potencial baseado em PnL não realizado).
         # A ideia é antecipar parte da recompensa quando o trade caminha a favor e devolver
@@ -366,6 +389,9 @@ class BTCMixtureEnv(gym.Env):
             reward /= risk_scale
 
         reward_scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
+        # Bônus/malus de meta de lucro aplicado apenas no fim do episódio (após custos/risco)
+        if done:
+            reward += self._apply_target_settlement(reward)
         reward /= reward_scale
 
         self._cash += reward
@@ -418,6 +444,7 @@ class BTCMixtureEnv(gym.Env):
             "trade_peak_pnl": float(getattr(self, "_trade_peak_pnl", 0.0)) if self._just_closed else 0.0,
             "trade_short_penalty": float(getattr(self, "_last_short_penalty", 0.0)) if self._just_closed else 0.0,
             "trade_giveback_penalty": float(getattr(self, "_last_giveback_penalty", 0.0)) if self._just_closed else 0.0,
+            "trade_tax": float(getattr(self, "_last_trade_tax", 0.0)) if self._just_closed else 0.0,
             "timestamp": self._format_timestamp(self._resolve_timestamp(self._start_idx + self._step)),
         }
         # reset do marcador de fechamento para o próximo passo
@@ -502,6 +529,12 @@ class BTCMixtureEnv(gym.Env):
             adjust = loss_floor - abs(trade_pnl_total)
             trade_penalty_total += adjust
             trade_pnl_total -= adjust
+        profit_tax = 0.0
+        tax_pct = max(0.0, float(getattr(self.cfg, "profit_tax_pct", 0.0)))
+        if tax_pct > 0.0 and trade_pnl_total > 0.0:
+            profit_tax = trade_pnl_total * tax_pct
+            trade_penalty_total += profit_tax
+            trade_pnl_total -= profit_tax
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
         # Para relatórios coerentes com o reward (que é escalado), também escalonamos o PnL reportado.
         scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
@@ -510,6 +543,7 @@ class BTCMixtureEnv(gym.Env):
         reported_bonus = float(bonus) / scale
         reported_penalty = trade_penalty_total / scale
         reported_cost = float(self._open_cost + cost) / scale
+        reported_tax = profit_tax / scale
 
         self._just_closed = True
         self._last_trade_pnl = float(reported_pnl)
@@ -519,6 +553,7 @@ class BTCMixtureEnv(gym.Env):
         self._last_trade_bonus = reported_bonus
         self._last_trade_gross = float(reported_gross)
         self._last_trade_penalty = reported_penalty
+        self._last_trade_tax = reported_tax
         self._last_short_penalty = float(short_penalty) / scale
         self._last_giveback_penalty = float(giveback_penalty) / scale
         self._last_trade_entry_price = float(entry_price)
@@ -539,9 +574,9 @@ class BTCMixtureEnv(gym.Env):
         #   Aqui aplicamos apenas custos de saída e penalidades/bônus adicionais para evitar
         #   dupla contagem de PnL.
         if mode == "legacy":
-            return pnl - cost - flip_penalty
+            return pnl - cost - flip_penalty - short_penalty - giveback_penalty - profit_tax + bonus
         # mtm: apenas ajustes incrementais (custos/penalidades/bônus), sem PnL bruto do trade
-        return -cost - flip_penalty - short_penalty - giveback_penalty + bonus
+        return -cost - flip_penalty - short_penalty - giveback_penalty - profit_tax + bonus
 
     def _compute_adaptive_atr_mult(self, atr: float) -> Tuple[float, float]:
         """Calcula multiplicadores ATR adaptativos baseados na volatilidade histórica."""
@@ -859,3 +894,25 @@ class BTCMixtureEnv(gym.Env):
                 return ts.isoformat()
             return ts.tz_convert("UTC").isoformat()
         return str(ts)
+
+    def _apply_target_settlement(self, reward_current: float) -> float:
+        """Bônus progressivo ao fim do episódio baseado no lucro percentual."""
+        step = max(0.0, float(getattr(self.cfg, "tier_bonus_step_pct", 0.0)))
+        cap = max(step, float(getattr(self.cfg, "tier_bonus_max_pct", step)))
+        if step <= 0.0 or cap <= 0.0:
+            return 0.0
+        projected_equity = self._cash + reward_current
+        delta = projected_equity - self.cfg.init_equity
+        if delta <= 0.0 or self.cfg.init_equity <= 0.0:
+            return 0.0
+        profit_pct = delta / self.cfg.init_equity
+        tier = math.floor(profit_pct / step) * step
+        tier = min(tier, cap)
+        if tier <= 0.0:
+            return 0.0
+        bonus = delta * tier
+        cap_pct = max(0.0, float(getattr(self.cfg, "tier_bonus_cap_pnl_pct", 0.0)))
+        if cap_pct > 0.0:
+            bonus_cap = delta * cap_pct
+            bonus = min(bonus, bonus_cap)
+        return bonus

@@ -229,15 +229,23 @@ def load_policy(cfg: dict, checkpoint: Path | None) -> tuple[MoEPolicy, Path]:
     prefer = cfg.get("visualize", {}).get("prefer", "latest")
     chosen = Path(checkpoint) if checkpoint else _find_checkpoint(prefer)
 
-    # Monta política com o mesmo input_dim das features
-    dummy_base = load_primary_series(cfg)
-    dummy_confirm = load_confirm_series(cfg)
-    dummy_dataset = prepare_dataset(dummy_base.tail(600), config=cfg, confirm_df=dummy_confirm)
-    price_cols = ["open", "high", "low", "close", "volume"]
-    input_dim = dummy_dataset.drop(columns=price_cols).shape[1]
+    # Monta política usando o input_dim inferido do checkpoint (fallback para dataset)
+    state = torch.load(chosen, map_location="cpu")
+    input_dim = None
+    try:
+        first_w = state.get("experts.0.net.0.weight")
+        if first_w is not None and first_w.ndim == 2:
+            input_dim = int(first_w.shape[1])
+    except Exception:
+        input_dim = None
+    if input_dim is None:
+        dummy_base = load_primary_series(cfg)
+        dummy_confirm = load_confirm_series(cfg)
+        dummy_dataset = prepare_dataset(dummy_base.tail(600), config=cfg, confirm_df=dummy_confirm)
+        price_cols = ["open", "high", "low", "close", "volume"]
+        input_dim = dummy_dataset.drop(columns=price_cols).shape[1]
 
     policy = build_policy(input_dim, cfg)
-    state = torch.load(chosen, map_location="cpu")
     model_state = policy.state_dict()
     filtered = {k: v for k, v in state.items() if k in model_state and model_state[k].shape == v.shape}
     policy.load_state_dict(filtered, strict=False)
@@ -285,7 +293,8 @@ def main() -> None:
     env = BTCMixtureEnv(price_df, feat_df, env_cfg, timestamps=timestamps)
 
     obs = torch.tensor(env.reset(), dtype=torch.float32).unsqueeze(0)
-    action_counts = {0: 0, 1: 0, 2: 0}
+    allow_short = bool(getattr(env_cfg, "allow_short", True))
+    action_counts = {0: 0, 1: 0} if not allow_short else {0: 0, 1: 0, 2: 0}
     trade_pnls: List[float] = []
     trade_bars: List[int] = []
 
@@ -443,9 +452,10 @@ def main() -> None:
     print(f"checkpoint: {checkpoint}")
     print(f"dias avaliados: {days}")
     print("contagem de ações:")
+    label_map = {0: "short", 1: "flat", 2: "long"} if allow_short else {0: "flat", 1: "long"}
     for k, v in action_counts.items():
         ratio = v / steps if steps else 0.0
-        label = {0: "short", 1: "flat", 2: "long"}.get(k, str(k))
+        label = label_map.get(k, str(k))
         print(f"  {label:5s}: {v:6d} ({ratio:.2%})")
 
     if trade_pnls:

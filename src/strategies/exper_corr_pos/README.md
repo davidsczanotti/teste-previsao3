@@ -13,6 +13,9 @@ Este experimento implementa um agente de Aprendizagem por Reforço com Mixture o
 - Logging: CSVs e gráficos locais + integração opcional com Weights & Biases (configurar `logging.wandb`) para acompanhar métricas, checkpoints e artefatos em tempo real.
 - Avaliação: Backtest, monitoramento contínuo (`metrics.csv/png`), visualização de ações (`visualize.py`) e análise do gating (`visualize_gating.py`). O Walk‑Forward inclui Monte Carlo (ruído em preço/features), stress de custos (±50%), lags (1–5) e análise de regimes (vol baixa/média/alta).
 - Otimização: bloco `optimize` no `config.json` usa Optuna para varrer `ppo.learning_rate`, `ppo.gamma`, `model.top_k` e entropia inicial, salvando resultados em `reports/optuna/`.
+- Visão temporal do agente: as features incluem `day_progress`/`day_remaining` (0→1 ao longo do episódio). Com `env.window_bars=30` e `random_start=true`, cada episódio simula ~1 mês, permitindo que o agente planeje o mês inteiro.
+- Alinhamento financeiro: custos reais (`fee`, `slippage`, imposto via `profit_tax_pct`), custo de vida distribuído por barra (`living_cost_per_episode`) e bônus progressivo com teto (`tier_bonus_step_pct`, `tier_bonus_max_pct`, `tier_bonus_cap_pnl_pct`) para meses positivos, sem penalidade de meta rígida. Ruína só ocorre por floor/drawdown.
+- EMAs parametrizáveis: períodos das EMAs base e do HTF vêm de `data.ema_fast_period`, `data.ema_slow_period`, `data.htf_ema_fast_period`, `data.htf_ema_slow_period` (default 21/55 e 34/89). Ajuste no `config.json` e rode backtests curtos para selecionar a dupla que melhor performa antes de otimizar PPO/gate.
 
 Observação de avaliação: a avaliação greedy durante o treino é determinística (sem `random_start` e usando a janela fixa do fim dos dados). Isso deixa o `moe_policy_best_eval.pt` reprodutível e coerente com a auditoria.
 

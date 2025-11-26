@@ -119,6 +119,10 @@ def compute_features(
     *,
     higher_tf: Optional[str] = "4h",
     confirm_df: Optional[pd.DataFrame] = None,
+    ema_fast: int = 21,
+    ema_slow: int = 55,
+    htf_ema_fast: int = 34,
+    htf_ema_slow: int = 89,
     ml_horizon: int = 3,
     ml_decay: float = 0.995,
     ml_ridge: float = 1e-3,
@@ -147,13 +151,13 @@ def compute_features(
     out = pd.DataFrame(index=base.index)
 
     # --- TrendML specialist -------------------------------------------------
-    ema_fast = _ema(close, 21)
-    ema_slow = _ema(close, 55)
-    out["ema_fast"] = ema_fast
-    out["ema_slow"] = ema_slow
+    ema_fast_series = _ema(close, max(1, ema_fast))
+    ema_slow_series = _ema(close, max(2, ema_slow))
+    out["ema_fast"] = ema_fast_series
+    out["ema_slow"] = ema_slow_series
     out["ema_cross"] = ema_fast - ema_slow
-    out["ema_ratio"] = ema_fast / (ema_slow + 1e-9)
-    out["trend_strength"] = out["ema_cross"] / (close.rolling(55).std() + 1e-9)
+    out["ema_ratio"] = ema_fast_series / (ema_slow_series + 1e-9)
+    out["trend_strength"] = out["ema_cross"] / (close.rolling(max(ema_slow, 2)).std() + 1e-9)
     out["trend_accel"] = out["ema_cross"].diff()
 
     donchian_up = high.rolling(40, min_periods=40).max()
@@ -215,8 +219,8 @@ def compute_features(
     if higher_tf:
         try:
             higher = _resample_ohlcv(base, higher_tf)
-            higher["ema_fast_htf"] = _ema(higher["close"], 34)
-            higher["ema_slow_htf"] = _ema(higher["close"], 89)
+            higher["ema_fast_htf"] = _ema(higher["close"], max(1, htf_ema_fast))
+            higher["ema_slow_htf"] = _ema(higher["close"], max(2, htf_ema_slow))
             higher["htf_trend_state"] = np.sign(higher["ema_fast_htf"] - higher["ema_slow_htf"])
             higher["htf_trend_strength"] = higher["ema_fast_htf"] - higher["ema_slow_htf"]
             higher["htf_rsi"] = _rsi(higher["close"], 14)

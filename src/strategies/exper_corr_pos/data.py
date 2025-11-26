@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Dict, Any
 
+import numpy as np
 import pandas as pd
 
 from ...utils.data_loader import load_data as _load_cached, load_data_range as _load_range
@@ -74,6 +75,10 @@ def prepare_dataset(
 
     data_cfg = cfg.get("data", {})
     higher_tf = data_cfg.get("higher_timeframe", "4h")
+    ema_fast = int(data_cfg.get("ema_fast_period", 21))
+    ema_slow = int(data_cfg.get("ema_slow_period", 55))
+    htf_ema_fast = int(data_cfg.get("htf_ema_fast_period", 34))
+    htf_ema_slow = int(data_cfg.get("htf_ema_slow_period", 89))
     ml_horizon = int(data_cfg.get("ml_horizon", 3))
     ml_decay = float(data_cfg.get("ml_decay", 0.995))
     ml_ridge = float(data_cfg.get("ml_ridge", 0.001))
@@ -83,6 +88,10 @@ def prepare_dataset(
         base,
         higher_tf=higher_tf,
         confirm_df=confirm,
+        ema_fast=ema_fast,
+        ema_slow=ema_slow,
+        htf_ema_fast=htf_ema_fast,
+        htf_ema_slow=htf_ema_slow,
         ml_horizon=ml_horizon,
         ml_decay=ml_decay,
         ml_ridge=ml_ridge,
@@ -90,6 +99,13 @@ def prepare_dataset(
     )
 
     base_aligned = base.loc[feats.index].copy()
+    # Contexto temporal: progressão diária dentro do dataset (normalizado 0..1)
+    total_len = len(base_aligned)
+    if total_len > 0:
+        day_progress = pd.Series(np.linspace(0.0, 1.0, total_len, endpoint=False), index=base_aligned.index)
+        feats["day_progress"] = day_progress
+        feats["day_remaining"] = 1.0 - day_progress
+
     dataset = base_aligned.copy()
     for col in feats.columns:
         dataset[col] = feats[col]

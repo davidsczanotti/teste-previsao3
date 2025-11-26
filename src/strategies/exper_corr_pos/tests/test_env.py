@@ -299,6 +299,108 @@ def test_giveback_penalty_triggers_after_large_peak():
     assert info["trade_penalty"] == pytest.approx(info["trade_giveback_penalty"])
 
 
+def test_profit_tax_applies_on_winning_trade():
+    prices = [100.0, 110.0, 110.0]
+    price_df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": np.ones(len(prices)),
+        }
+    )
+    feat_df = pd.DataFrame({"atr_14": np.ones(len(prices))})
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        profit_tax_pct=0.15,
+        reward_scale_divisor=1.0,
+        random_start=False,
+        window_bars=len(prices),
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    env.step(2)  # open long
+    env.step(2)  # hold
+    _, _, _, info = env.step(1)  # close to flat
+    assert info["trade_closed"] is True
+    expected_pnl = (prices[2] - prices[0]) * cfg.position_size
+    expected_tax = expected_pnl * cfg.profit_tax_pct
+    expected_net = expected_pnl - expected_tax
+    assert info["trade_tax"] == pytest.approx(expected_tax, rel=1e-6)
+    assert info["trade_pnl"] == pytest.approx(expected_net, rel=1e-6)
+    assert info["trade_penalty"] >= expected_tax
+    assert info["equity"] == pytest.approx(cfg.init_equity + expected_net, rel=1e-6)
+
+
+def test_living_cost_penalty_reduces_equity_over_episode():
+    length = 4
+    living_cost = 40.0
+    price_df, feat_df = _make_constant_env_inputs(length, price=100.0)
+    cfg = EnvConfig(
+        init_equity=1000.0,
+        position_size=0.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        living_cost_per_episode=living_cost,
+        reward_scale_divisor=1.0,
+        random_start=False,
+        window_bars=length,
+    )
+    env = BTCMixtureEnv(price_df, feat_df, cfg)
+    env.reset()
+    total_reward = 0.0
+    done = False
+    while not done:
+        _, reward, done, info = env.step(1)  # sempre flat
+        total_reward += reward
+    expected_penalty = -living_cost
+    assert total_reward == pytest.approx(expected_penalty, rel=1e-6)
+    assert info["equity"] == pytest.approx(cfg.init_equity + expected_penalty, rel=1e-6)
+
+
+def test_tier_bonus_increases_with_profit():
+    price_df, feat_df = _make_constant_env_inputs(3, price=100.0)
+    cfg = EnvConfig(
+        init_equity=100.0,
+        position_size=1.0,
+        fee_pct=0.0,
+        slippage_pct=0.0,
+        reward_scale_divisor=1.0,
+        tier_bonus_step_pct=0.1,
+        tier_bonus_max_pct=0.5,
+        tier_bonus_cap_pnl_pct=0.3,
+        random_start=False,
+        window_bars=3,
+    )
+    # lucro de 20% -> tier 0.2 -> bônus = delta * 0.2
+    price_df_bonus = pd.DataFrame(
+        {
+            "open": [100.0, 120.0, 120.0],
+            "high": [100.0, 120.0, 120.0],
+            "low": [100.0, 120.0, 120.0],
+            "close": [100.0, 120.0, 120.0],
+            "volume": np.ones(3),
+        }
+    )
+    env = BTCMixtureEnv(price_df_bonus, feat_df, cfg)
+    env.reset()
+    env.step(2)
+    total_reward = 0.0
+    done = False
+    while not done:
+        _, reward, done, _ = env.step(1)
+        total_reward += reward
+    delta = (120.0 - 100.0) * cfg.position_size
+    expected_bonus = delta * 0.2
+    cap = delta * cfg.tier_bonus_cap_pnl_pct
+    expected_bonus = min(expected_bonus, cap)
+    assert total_reward >= expected_bonus - 1e-6
+
+
 def test_hold_bonus_matches_alpha_formula():
     price_df = pd.DataFrame(
         {
