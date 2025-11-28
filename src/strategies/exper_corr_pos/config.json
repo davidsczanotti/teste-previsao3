@@ -40,7 +40,7 @@
     "max_trade_notional": 500.0,
     "profit_trail_pct": 0.03,
     "profit_tax_pct": 0.05,
-    "living_cost_per_episode": 200.0,
+    "living_cost_per_episode": 75.0,
     "tier_bonus_step_pct": 0.0,
     "tier_bonus_max_pct": 0.0,
     "allow_intrabar_closes": false,
