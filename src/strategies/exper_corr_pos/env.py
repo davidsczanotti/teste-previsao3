@@ -107,6 +107,10 @@ class EnvConfig:
     # Se risk_atr_scale > 0, reward é dividido por (1 + risk_atr_scale * ATR_rel), onde
     # ATR_rel ~= atr_14 / preço. Valores maiores punem mais períodos muito voláteis.
     risk_atr_scale: float = 0.0
+    # Se verdadeiro, a ação passa a controlar apenas direção (short/flat/long)
+    # e o tamanho é derivado de um orçamento de risco fracionário por trade.
+    use_risk_fraction_sizing: bool = False
+    max_risk_fraction_per_trade: float = 0.02  # fração máxima da equity arriscada por trade (2%)
     # Regra: segurar posição por N barras após uma entrada (toggle + parâmetro)
     min_hold_bars_enabled: bool = False
     min_hold_bars: int = 3
@@ -270,8 +274,8 @@ class BTCMixtureEnv(gym.Env):
         prev_hold_potential = float(getattr(self, "_hold_bonus_potential", 0.0))
 
         cur_idx = self._start_idx + self._step
-        price = float(self.df.iloc[cur_idx]["close"])
-        atr = float(self.features.iloc[cur_idx]["atr_14"])
+        price = float(np.nan_to_num(self.df.iloc[cur_idx]["close"], nan=0.0, posinf=0.0, neginf=0.0))
+        atr = float(np.nan_to_num(self.features.iloc[cur_idx]["atr_14"], nan=0.0, posinf=0.0, neginf=0.0))
         trend_state, trend_strength = self._trend_snapshot(cur_idx)
 
         if not getattr(self.cfg, "allow_intrabar_closes", True):
@@ -334,10 +338,10 @@ class BTCMixtureEnv(gym.Env):
         if next_idx >= self._end_idx:
             done = True
             next_idx = min(next_idx, self._end_idx - 1)
-        next_price = float(self.df.iloc[next_idx]["close"])
-        next_atr = float(self.features.iloc[next_idx]["atr_14"])
-        next_low = float(self.df.iloc[next_idx]["low"])
-        next_high = float(self.df.iloc[next_idx]["high"])
+        next_price = float(np.nan_to_num(self.df.iloc[next_idx]["close"], nan=price, posinf=price, neginf=price))
+        next_atr = float(np.nan_to_num(self.features.iloc[next_idx]["atr_14"], nan=atr, posinf=atr, neginf=atr))
+        next_low = float(np.nan_to_num(self.df.iloc[next_idx]["low"], nan=next_price, posinf=next_price, neginf=next_price))
+        next_high = float(np.nan_to_num(self.df.iloc[next_idx]["high"], nan=next_price, posinf=next_price, neginf=next_price))
 
         # mark-to-market PnL
         reward += self._pos * self._pos_size * (next_price - price)
@@ -392,6 +396,8 @@ class BTCMixtureEnv(gym.Env):
         # Bônus/malus de meta de lucro aplicado apenas no fim do episódio (após custos/risco)
         if done:
             reward += self._apply_target_settlement(reward)
+        # garante reward finito
+        reward = float(np.nan_to_num(reward, nan=0.0, posinf=0.0, neginf=0.0))
         reward /= reward_scale
 
         self._cash += reward
@@ -469,10 +475,12 @@ class BTCMixtureEnv(gym.Env):
         return max(0.0, float(getattr(self.cfg, "flip_exit_penalty", 0.0)))
 
     def _close_position(self, price: float, reason: str = "close") -> float:
-        entry_price = self._entry_price
-        pnl = self._pos * self._pos_size * (price - entry_price)
-        side = self._pos
-        size = self._pos_size
+        # sane defaults to evitar NaNs no ledger
+        price = float(np.nan_to_num(price, nan=self._entry_price if self._entry_price else 0.0))
+        entry_price = float(np.nan_to_num(self._entry_price, nan=price))
+        side = int(self._pos)
+        size = float(np.nan_to_num(self._pos_size, nan=0.0))
+        pnl = side * size * (price - entry_price)
         cost = self._transaction_cost(price, size)
         notional = abs(size * price)
         # duração do trade em barras desde a entrada
@@ -535,6 +543,16 @@ class BTCMixtureEnv(gym.Env):
             profit_tax = trade_pnl_total * tax_pct
             trade_penalty_total += profit_tax
             trade_pnl_total -= profit_tax
+        # Sanitiza NaNs antes de publicar (impacta ledger e métricas downstream)
+        pnl = float(np.nan_to_num(pnl, nan=0.0, posinf=0.0, neginf=0.0))
+        trade_pnl_total = float(np.nan_to_num(trade_pnl_total, nan=0.0, posinf=0.0, neginf=0.0))
+        trade_penalty_total = float(np.nan_to_num(trade_penalty_total, nan=0.0, posinf=0.0, neginf=0.0))
+        bonus = float(np.nan_to_num(bonus, nan=0.0, posinf=0.0, neginf=0.0))
+        profit_tax = float(np.nan_to_num(profit_tax, nan=0.0, posinf=0.0, neginf=0.0))
+        cost = float(np.nan_to_num(cost, nan=0.0, posinf=0.0, neginf=0.0))
+        size = float(np.nan_to_num(size, nan=0.0, posinf=0.0, neginf=0.0))
+        entry_price = float(np.nan_to_num(entry_price, nan=0.0, posinf=0.0, neginf=0.0))
+        price = float(np.nan_to_num(price, nan=entry_price, posinf=entry_price, neginf=entry_price))
         # Sinaliza fechamento para consumo externo (walk-forward/relatórios)
         # Para relatórios coerentes com o reward (que é escalado), também escalonamos o PnL reportado.
         scale = max(1.0, float(getattr(self.cfg, "reward_scale_divisor", 1.0)))
@@ -835,42 +853,65 @@ class BTCMixtureEnv(gym.Env):
 
     def _get_obs(self) -> np.ndarray:
         feats = (self.features.iloc[self._start_idx + self._step] - self._norm_mean) / (self._norm_std + 1e-9)
-        return feats.values.astype(np.float32)
+        feats = feats.fillna(0.0)
+        arr = feats.values.astype(np.float32)
+        arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+        return arr
 
     def _compute_position_size(self, price: float) -> float:
+        if not np.isfinite(price):
+            return 0.0
+
         max_notional = max(0.0, float(getattr(self.cfg, "max_trade_notional", 1000.0)))
         px = max(price, 1e-9)
-        if not self.cfg.dynamic_position:
-            # cap por notional: min(position_size, max_notional/preço)
-            cap_size = max_notional / px if max_notional > 0 else float("inf")
-            return float(min(self.cfg.position_size, cap_size))
-        equity = max(self._equity, 0.0)
-        # Kelly Criterion simplificado: usa volatilidade como proxy para risco
-        kelly_fraction = getattr(self.cfg, "kelly_fraction", 0.1)
-        var_confidence = getattr(self.cfg, "var_confidence", 0.95)
-        # Calcula volatilidade histórica (std de retornos)
-        window = getattr(self.cfg, "adaptive_stop_window", 50)
-        cur_idx = self._start_idx + self._step
-        start_idx = max(0, cur_idx - window)
-        if start_idx < cur_idx:
-            returns = self.df.iloc[start_idx:cur_idx]["close"].pct_change().dropna()
-            if len(returns) > 0:
-                vol = returns.std()
-                # Kelly: f = (expected_return / variance), mas aqui expected_return ~ 0, então f = kelly_fraction / vol
-                kelly_adj = kelly_fraction / max(vol, 0.01)  # evita divisão por zero
-                # VaR: limita exposição para não exceder perda máxima
-                z_score = np.abs(np.percentile(np.random.normal(0, 1, 1000), (1 - var_confidence) * 100))
-                var_limit = equity * 0.1  # assume perda máxima de 10% do equity
-                var_size = var_limit / (px * vol * z_score) if vol > 0 else float("inf")
-                # Combina Kelly e VaR
-                notional = equity * min(kelly_adj, var_size / equity)
+
+        # Modo clássico: tamanho fixo ou dinâmico baseado em Kelly/volatilidade.
+        if not getattr(self.cfg, "use_risk_fraction_sizing", False):
+            if not self.cfg.dynamic_position:
+                # cap por notional: min(position_size, max_notional/preço)
+                cap_size = max_notional / px if max_notional > 0 else float("inf")
+                return float(min(self.cfg.position_size, cap_size))
+
+            equity = max(self._equity, 0.0)
+            # Kelly Criterion simplificado: usa volatilidade como proxy para risco
+            kelly_fraction = getattr(self.cfg, "kelly_fraction", 0.1)
+            var_confidence = getattr(self.cfg, "var_confidence", 0.95)
+            # Calcula volatilidade histórica (std de retornos)
+            window = getattr(self.cfg, "adaptive_stop_window", 50)
+            cur_idx = self._start_idx + self._step
+            start_idx = max(0, cur_idx - window)
+            if start_idx < cur_idx:
+                returns = self.df.iloc[start_idx:cur_idx]["close"].pct_change().dropna()
+                if len(returns) > 0:
+                    vol = returns.std()
+                    kelly_adj = kelly_fraction / max(vol, 0.01)  # evita divisão por zero
+                    # VaR: limita exposição para não exceder perda máxima
+                    z_samples = np.random.normal(0, 1, 1000)
+                    z_score = np.abs(np.percentile(z_samples, (1 - var_confidence) * 100))
+                    var_limit = equity * 0.1  # assume perda máxima de 10% do equity
+                    var_size = var_limit / (px * vol * z_score) if vol > 0 else float("inf")
+                    # Combina Kelly e VaR
+                    notional = equity * min(kelly_adj, var_size / max(equity, 1e-9))
+                else:
+                    notional = equity * kelly_fraction
             else:
                 notional = equity * kelly_fraction
         else:
-            notional = equity * kelly_fraction
-        # Aplica leverage e cap
-        notional = min(notional * max(self.cfg.leverage, 0.0), max_notional) if max_notional > 0 else notional * max(self.cfg.leverage, 0.0)
-        return notional / px
+            # Modo "João escolhe o risco": tamanho é derivado de uma fração da equity
+            # limitada por max_risk_fraction_per_trade e max_trade_notional.
+            equity = max(self._equity, 0.0)
+            # fração alvo de risco (se existir reward de target, pode ser ajustada no currículo)
+            risk_frac = float(
+                max(0.0, min(getattr(self.cfg, "max_risk_fraction_per_trade", 0.02), 1.0))
+            )
+            notional = equity * risk_frac
+
+        # Aplica leverage e cap final de notional
+        lev = max(0.0, float(getattr(self.cfg, "leverage", 1.0)))
+        notional = notional * lev
+        if max_notional > 0.0:
+            notional = min(notional, max_notional)
+        return float(notional / px)
 
     def _resolve_timestamp(self, idx: int) -> Optional[pd.Timestamp]:
         if self._timestamps is None or len(self._timestamps) == 0:
