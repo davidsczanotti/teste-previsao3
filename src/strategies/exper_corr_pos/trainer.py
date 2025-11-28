@@ -49,6 +49,9 @@ class PPOTrainer:
                 _, mask = self.policy.gating(obs.unsqueeze(0), top_k=self.policy.top_k)
                 gate_hist += mask.squeeze(0).detach().cpu().numpy().astype(np.float32)
             next_obs, reward, done, _ = env.step(int(action.item()))
+            # sanitize reward to avoid NaNs propagating
+            if not np.isfinite(reward):
+                reward = 0.0
             obs_list.append(obs.cpu().numpy())
             act_list.append(action.cpu().numpy())
             logp_list.append(log_prob.detach().cpu().numpy())
@@ -61,11 +64,11 @@ class PPOTrainer:
             if done:
                 obs = torch.tensor(env.reset(), dtype=torch.float32, device=self.device)
         return {
-            "obs": torch.tensor(np.array(obs_list), dtype=torch.float32, device=self.device),
+            "obs": torch.nan_to_num(torch.tensor(np.array(obs_list), dtype=torch.float32, device=self.device)),
             "actions": torch.tensor(np.array(act_list), dtype=torch.int64, device=self.device),
             "log_probs": torch.tensor(np.array(logp_list), dtype=torch.float32, device=self.device),
-            "rewards": torch.tensor(np.array(rew_list), dtype=torch.float32, device=self.device),
-            "values": torch.tensor(np.array(val_list), dtype=torch.float32, device=self.device),
+            "rewards": torch.nan_to_num(torch.tensor(np.array(rew_list), dtype=torch.float32, device=self.device)),
+            "values": torch.nan_to_num(torch.tensor(np.array(val_list), dtype=torch.float32, device=self.device)),
             "dones": torch.tensor(np.array(done_list), dtype=torch.float32, device=self.device),
             "load_balance": torch.tensor(np.array(lb_list), dtype=torch.float32, device=self.device),
             "gate_hist": torch.tensor(gate_hist, dtype=torch.float32, device=self.device),
@@ -100,6 +103,11 @@ class PPOTrainer:
         returns, advantages = self.compute_returns(
             batch["rewards"], batch["values"], batch["dones"], self.cfg.gamma, self.cfg.gae_lambda
         )
+        returns = torch.nan_to_num(returns)
+        advantages = torch.nan_to_num(advantages)
+        # evita divisão por std zero/NaN dentro de compute_returns
+        if torch.isnan(advantages).any() or torch.isinf(advantages).any():
+            advantages = torch.zeros_like(advantages)
         dataset = {
             "obs": batch["obs"],
             "actions": batch["actions"],
@@ -115,7 +123,8 @@ class PPOTrainer:
 
         for _ in range(self.cfg.train_iters):
             for minibatch in self.make_batches(dataset, self.cfg.batch_size):
-                dist, value, lb_loss = self.policy(minibatch["obs"])
+                clean_obs = torch.nan_to_num(minibatch["obs"])
+                dist, value, lb_loss = self.policy(clean_obs)
                 new_log_prob = dist.log_prob(minibatch["actions"])
                 ratio = torch.exp(new_log_prob - minibatch["log_probs"])
                 surr1 = ratio * minibatch["advantages"]

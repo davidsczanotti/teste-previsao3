@@ -67,6 +67,8 @@ class GatingNetwork(nn.Module):
 
     def forward(self, x: torch.Tensor, top_k: int = 2) -> Tuple[torch.Tensor, torch.Tensor]:
         logits = self.net(x)
+        logits = torch.nan_to_num(logits)
+        logits = torch.clamp(logits, min=-20.0, max=20.0)
 
         if self.use_attention:
             # Atenção simples: projeta a observação para query e gera chaves/valores dependentes dos experts.
@@ -144,8 +146,12 @@ class MoEPolicy(nn.Module):
 
     def forward(self, obs: torch.Tensor) -> Tuple[Categorical, torch.Tensor, torch.Tensor]:
         expert_logits = torch.stack([expert(obs) for expert in self.experts], dim=1)  # [B, E, A]
+        expert_logits = torch.nan_to_num(expert_logits)
         weights, mask = self.gating(obs, top_k=self.top_k)
+        weights = torch.nan_to_num(weights)
         mixed_logits = (weights.unsqueeze(-1) * expert_logits).sum(dim=1)
+        mixed_logits = torch.nan_to_num(mixed_logits)
+        mixed_logits = torch.clamp(mixed_logits, min=-20.0, max=20.0)  # evita explosões numéricas
         dist = Categorical(logits=mixed_logits)
         value = self.value_net(obs).squeeze(-1)
         # load balancing (variance of weights)

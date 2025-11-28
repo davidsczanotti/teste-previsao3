@@ -903,9 +903,12 @@ class BTCMixtureEnv(gym.Env):
             return 0.0
         projected_equity = self._cash + reward_current
         delta = projected_equity - self.cfg.init_equity
-        if delta <= 0.0 or self.cfg.init_equity <= 0.0:
+        # protege contra NaN/inf ou casos degenerados
+        if not np.isfinite(delta) or delta <= 0.0 or self.cfg.init_equity <= 0.0:
             return 0.0
         profit_pct = delta / self.cfg.init_equity
+        if not np.isfinite(profit_pct):
+            return 0.0
         tier = math.floor(profit_pct / step) * step
         tier = min(tier, cap)
         if tier <= 0.0:
