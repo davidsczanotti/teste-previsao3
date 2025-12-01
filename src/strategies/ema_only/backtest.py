@@ -10,9 +10,14 @@ import pandas as pd
 @dataclass
 class EmaOnlyParams:
     ema_period: int = 8
+    slow_ema_period: int | None = None  # required for ema_cross mode
+    trend_filter_period: int | None = None
+    use_trend_filter: bool = False
+    pullback_pct: float = 0.0  # extra distance below EMA required to consider entry
     lot_size: float = 0.001  # BTC quantity for trades
     fee_rate: float = 0.001  # 0.1% per side
-    use_cross: bool = False  # if True, require crossing events instead of simple above/below
+    use_cross: bool = False  # price/EMA reclaim entry in price_reversion mode
+    signal_mode: str = "price_reversion"  # price_reversion | ema_cross
 
 
 def compute_ema(series: pd.Series, period: int) -> pd.Series:
@@ -37,10 +42,12 @@ def backtest_ema_only(
 
     df = df.sort_values("Date").reset_index(drop=True).copy()
     closes = df["close"].astype(float)
-    ema = compute_ema(closes, params.ema_period)
+    ema_fast = compute_ema(closes, params.ema_period)
+    ema_slow = compute_ema(closes, params.slow_ema_period) if params.slow_ema_period else None
+    ema_trend = compute_ema(closes, params.trend_filter_period) if params.trend_filter_period else None
 
     # Start after EMA warms up
-    start = max(params.ema_period + 1, 2)
+    start = max(params.ema_period + 1, params.slow_ema_period + 1 if params.slow_ema_period else 0, params.trend_filter_period + 1 if params.trend_filter_period else 0, 2)
 
     position = 0  # 0 = flat, 1 = long
     entry_price = 0.0
@@ -50,39 +57,75 @@ def backtest_ema_only(
 
     for i in range(start, len(df)):
         p_prev = float(closes.iloc[i - 1])
-        e_prev = float(ema.iloc[i - 1]) if not np.isnan(ema.iloc[i - 1]) else np.nan
+        e_prev = float(ema_fast.iloc[i - 1]) if not np.isnan(ema_fast.iloc[i - 1]) else np.nan
         p = float(closes.iloc[i])
-        e = float(ema.iloc[i]) if not np.isnan(ema.iloc[i]) else np.nan
+        e = float(ema_fast.iloc[i]) if not np.isnan(ema_fast.iloc[i]) else np.nan
         t = df["Date"].iloc[i]
+        s_prev = float(ema_slow.iloc[i - 1]) if ema_slow is not None and not np.isnan(ema_slow.iloc[i - 1]) else np.nan
+        s = float(ema_slow.iloc[i]) if ema_slow is not None and not np.isnan(ema_slow.iloc[i]) else np.nan
+        tr_prev = (
+            float(ema_trend.iloc[i - 1])
+            if ema_trend is not None and not np.isnan(ema_trend.iloc[i - 1])
+            else np.nan
+        )
+        tr_now = float(ema_trend.iloc[i]) if ema_trend is not None and not np.isnan(ema_trend.iloc[i]) else np.nan
 
         if np.isnan(e) or np.isnan(e_prev):
             equity_curve.append(initial_capital + realized_pnl)
             continue
 
-        # Entry/exit conditions
-        if position == 0:
-            if params.use_cross:
-                enter = (p_prev >= e_prev) and (p < e)
-            else:
-                enter = p < e
-            if enter:
+        if params.signal_mode == "ema_cross":
+            if ema_slow is None:
+                raise ValueError("signal_mode='ema_cross' requer slow_ema_period definido.")
+            cross_up = (e_prev <= s_prev) and (e > s)
+            cross_down = (e_prev >= s_prev) and (e < s)
+
+            if position == 0 and cross_up:
                 position = 1
                 entry_price = p
                 trades.append({"date": t, "action": "BUY", "price": p})
                 realized_pnl -= params.fee_rate * p * params.lot_size
-
-        else:  # position == 1
-            if params.use_cross:
-                exit_ = (p_prev <= e_prev) and (p > e)
-            else:
-                exit_ = p > e
-            if exit_:
+            elif position == 1 and cross_down:
                 pnl = (p - entry_price) * params.lot_size
                 realized_pnl += pnl
                 trades.append({"date": t, "action": "SELL", "price": p, "pnl": pnl})
                 realized_pnl -= params.fee_rate * p * params.lot_size
                 position = 0
                 entry_price = 0.0
+
+        else:  # price_reversion default
+            trend_ok = True
+            if params.use_trend_filter:
+                if ema_trend is None:
+                    raise ValueError("use_trend_filter=True requer trend_filter_period configurado.")
+                if np.isnan(tr_prev) or np.isnan(tr_now):
+                    equity_curve.append(initial_capital + realized_pnl)
+                    continue
+                trend_ok = (e_prev > tr_prev) and (p_prev > tr_prev)
+
+            pullback_level_prev = e_prev * (1 - params.pullback_pct)
+
+            if position == 0:
+                if params.use_cross:
+                    enter = trend_ok and (p_prev <= pullback_level_prev) and (p > e)
+                else:
+                    enter = trend_ok and (p < pullback_level_prev)
+                if enter:
+                    position = 1
+                    entry_price = p
+                    trades.append({"date": t, "action": "BUY", "price": p})
+                    realized_pnl -= params.fee_rate * p * params.lot_size
+
+            else:  # position == 1
+                exit_price = (p < e) if params.use_cross else (p > e)
+                exit_trend = params.use_trend_filter and ema_trend is not None and (e < tr_now)
+                if exit_price or exit_trend:
+                    pnl = (p - entry_price) * params.lot_size
+                    realized_pnl += pnl
+                    trades.append({"date": t, "action": "SELL", "price": p, "pnl": pnl})
+                    realized_pnl -= params.fee_rate * p * params.lot_size
+                    position = 0
+                    entry_price = 0.0
 
         # Mark-to-market equity
         if position == 1:
@@ -124,7 +167,11 @@ def backtest_ema_only(
         "ema_period": params.ema_period,
         "use_cross": params.use_cross,
         "lot_size": params.lot_size,
+        "slow_ema_period": params.slow_ema_period,
+        "trend_filter_period": params.trend_filter_period,
+        "use_trend_filter": params.use_trend_filter,
+        "pullback_pct": params.pullback_pct,
+        "signal_mode": params.signal_mode,
     }
 
     return trades, total_pnl, stats
-

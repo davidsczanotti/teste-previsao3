@@ -1,0 +1,49 @@
+{
+  "data": {
+    "base_symbol": "BTCUSDT",
+    "timeframe": "1h",
+    "lookback_days": 3650,
+    "start": null,
+    "end": null,
+    "label": {
+      "horizon_bars": 6,
+      "up_return_threshold": 0.003,
+      "down_return_threshold": 0.003
+    },
+    "features": {
+      "atr_period": 14,
+      "realized_vol_windows": [
+        24,
+        72
+      ],
+      "range_windows": [
+        14,
+        48
+      ]
+    }
+  },
+  "env": {
+    "fee_pct": 0.001,
+    "slippage_pct": 0.0003
+  },
+  "model": {
+    "type": "hist_gbdt",
+    "learning_rate": 0.05,
+    "max_depth": 5,
+    "max_leaf_nodes": 31,
+    "min_samples_leaf": 50,
+    "max_iter": 300
+  },
+  "train": {
+    "test_fraction": 0.3,
+    "max_samples": 100000,
+    "random_state": 42,
+    "outdir": "src/strategies/exper_hr_bg/reports/train"
+  },
+  "backtest": {
+    "outdir": "src/strategies/exper_hr_bg/reports/backtest",
+    "min_prob": 0.55,
+    "min_margin": 0.05
+  }
+}
+
