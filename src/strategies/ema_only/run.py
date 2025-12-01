@@ -38,15 +38,22 @@ def main() -> None:
     symbol = str(data_cfg.get("symbol", "BTCUSDT"))
     timeframe = str(data_cfg.get("timeframe", "1h"))
     days = int(data_cfg.get("days", 3650))
+    slow_period_raw = strat_cfg.get("slow_ema_period")
+    trend_period_raw = strat_cfg.get("trend_filter_period")
 
     # Carrega dados exclusivamente do cache local
     df = load_data(symbol, timeframe, days=days, use_cache_only=True)
 
     params = EmaOnlyParams(
         ema_period=int(strat_cfg.get("ema_period", 8)),
+        slow_ema_period=int(slow_period_raw) if slow_period_raw is not None else None,
+        trend_filter_period=int(trend_period_raw) if trend_period_raw is not None else None,
+        use_trend_filter=bool(strat_cfg.get("use_trend_filter", False)),
+        pullback_pct=float(strat_cfg.get("pullback_pct", 0.0)),
         lot_size=float(strat_cfg.get("lot_size", 0.001)),
         fee_rate=float(strat_cfg.get("fee_pct", 0.001)),
-        use_cross=bool(strat_cfg.get("use_cross", True)),
+        use_cross=bool(strat_cfg.get("use_cross", False)),
+        signal_mode=str(strat_cfg.get("signal_mode", "price_reversion")),
     )
 
     initial_capital = float(bt_cfg.get("initial_capital", 1000.0))
@@ -54,8 +61,11 @@ def main() -> None:
 
     print("EMA-only Backtest Summary (config-driven):")
     print(
-        f"Symbol={symbol} Interval={timeframe} Days={days} EMA={params.ema_period} "
-        f"UseCross={params.use_cross} Lot={params.lot_size} Fee={params.fee_rate}"
+        f"Symbol={symbol} Interval={timeframe} Days={days} Mode={params.signal_mode} "
+        f"EMA={params.ema_period} SlowEMA={params.slow_ema_period} "
+        f"TrendFilter={params.use_trend_filter}:{params.trend_filter_period} "
+        f"Pullback={params.pullback_pct} UseCross={params.use_cross} "
+        f"Lot={params.lot_size} Fee={params.fee_rate}"
     )
     print(
         "PnL: ${:.2f} | Return: {:.2f}% | Trades: {} | Win rate: {:.2f}% | MDD: {:.2f}%".format(
@@ -84,4 +94,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

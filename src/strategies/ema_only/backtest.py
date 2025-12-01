@@ -46,6 +46,9 @@ def backtest_ema_only(
     ema_slow = compute_ema(closes, params.slow_ema_period) if params.slow_ema_period else None
     ema_trend = compute_ema(closes, params.trend_filter_period) if params.trend_filter_period else None
 
+    if params.signal_mode not in {"price_reversion", "ema_cross"}:
+        raise ValueError(f"signal_mode desconhecido: {params.signal_mode}")
+
     # Start after EMA warms up
     start = max(params.ema_period + 1, params.slow_ema_period + 1 if params.slow_ema_period else 0, params.trend_filter_period + 1 if params.trend_filter_period else 0, 2)
 

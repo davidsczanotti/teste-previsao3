@@ -1,18 +1,22 @@
 {
   "data": {
     "symbol": "BTCUSDT",
-    "timeframe": "1h",
+    "timeframe": "4h",
     "days": 3650
   },
   "strategy": {
-    "ema_period": 8,
-    "use_cross": true,
+    "ema_period": 55,
+    "slow_ema_period": 200,
+    "signal_mode": "ema_cross",
+    "pullback_pct": 0.0,
+    "use_trend_filter": false,
+    "trend_filter_period": null,
+    "use_cross": false,
     "lot_size": 0.001,
-    "fee_pct": 0.001
+    "fee_pct": 0.0004
   },
   "backtest": {
     "initial_capital": 1000.0,
     "outdir": "src/strategies/ema_only/reports/backtest"
   }
 }
-
