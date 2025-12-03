@@ -460,3 +460,144 @@ Formato sugerido por entrada:
   - Se o shaping estiver fraco, aumentar levemente
     `pullback_entry_bonus` e/ou `trend_exit_penalty` (ex.: 0.015–0.02); se
     estiver forte demais (agente fica preso em posições ruins), reduzir.
+
+---
+
+## 2025-12-03 — ema_only_rl_v9_restore_v5_baseline
+
+- **config_sha256**: `7fef0645577c39513cb5ba794a1f8d3d0bbcde883bef3c9b716358cfd5e370f5`
+- **Motivo**: voltar ao comportamento de referência da versão v5 (que já era
+  quase flat com mais trades), agora com as melhorias de logging (`actions_debug.csv`)
+  e o `actions.png` corrigido (mostrando apenas entradas reais), para que os
+  próximos ajustes sejam feitos em cima de um baseline conhecido e com
+  visualização fiel.
+- **Ajustes em `config.json`**:
+  - Em `rl.reward`, removidos os campos introduzidos em v7/v8:
+    - `max_long_entry_dist_fast_pct`
+    - `max_short_entry_dist_fast_pct`
+    - `pullback_entry_bonus`
+    - `trend_exit_penalty`
+  - Restaurados os pesos de shaping de tendência da v5:
+    - `trend_entry_bonus`: `0.5`
+    - `trend_entry_penalty`: `0.5`
+  - Demais campos relevantes permanecem como em v5:
+    - `trade_penalty`: `0.0`
+    - `dd_threshold_pct`: `0.02`, `dd_penalty`: `0.02`
+    - `min_hold_bars`: `3`, `churn_penalty`: `0.005`
+    - `align_bonus`: `0.001`
+    - `atr_risk_scale`: `0.3`
+    - `enforce_ref_bias`: `true`
+    - `reward_scale`: `1.0`
+    - `consensus_bonus`: `0.003`, `consensus_threshold`: `0.6`
+    - `vol_max_atr_rel`: `0.015`, `vol_penalty`: `0.02`
+    - `gating_penalty`: `0.015`
+    - `turnover_penalty`: `0.0`
+    - `living_cost_per_episode`: `10.0`
+    - `use_monthly_reward`: `true`
+    - `data.intraday_min_alignment`: `0.5`
+- **Observação**:
+  - A lógica extra de logging e visualização (arquivo
+    `actions_debug.csv` no `rl_backtest` e `actions.png` marcando apenas
+    0→1/0→−1) permanece ativa, mas ela não altera o ambiente/reward — apenas
+    nossa capacidade de observar o comportamento do agente.
+  - A partir desta versão, novos experimentos de ajuste de tendência/pullback
+    devem ser comparados com os resultados de v5/v9 usando os mesmos gráficos
+    e logs.
+
+---
+
+## 2025-12-03 — ema_only_rl_v10_trend_flip_penalty
+
+- **config_sha256**: `58ae78d6b4747553b58690e659ff57ef1d9c4bd7ab0eefae3c76689c42d68ffa`
+- **Motivo**: reduzir o “vai e volta” de maio em plena tendência de alta,
+  penalizando inversões de posição (long → short, short → long) quando os
+  especialistas de tendência continuam alinhados, ou seja, quando um trader
+  humano provavelmente preferiria apenas segurar a posição atual.
+- **Ajustes em `rl.reward`**:
+  - Adicionado `trend_flip_penalty`: `0.1`.
+    - Valor moderado: mais fraco que o `trend_entry_penalty` (0.5), para
+      desencorajar mas não proibir totalmente as viradas.
+- **Lógica adicionada em `rl_env.py`**:
+  - `RLConfig` ganhou o campo:
+    - `trend_flip_penalty: float`.
+  - No início de `step`, antes de fechar a posição:
+    - Se `desired_pos != 0`, `position != 0` e `desired_pos != position`
+      (tentativa de inverter posição) e `trend_flip_penalty > 0`:
+      - Lê `exp_trend` e `exp_ref` nas features:
+        - Se `exp_trend >= 0.5` e `exp_ref >= 0.5` (regime de **alta forte**):
+          - Se a posição atual é `1` (long) e o alvo é `-1` (short),
+            aplica `trend_flip_penalty` ao reward.
+        - Se `exp_trend < 0.5` e `exp_ref < 0.5` (regime de **baixa forte**):
+          - Se a posição atual é `-1` (short) e o alvo é `1` (long),
+            aplica `trend_flip_penalty`.
+      - Em regimes mistos (ex.: `exp_trend` e `exp_ref` divergentes), nenhuma
+        penalidade é aplicada — o agente é livre para virar a mão.
+- **Intuição**:
+  - Em abril, quando o mercado sobe forte e o agente já está comprado, tentar
+    inverter para short em plena tendência passa a ficar mais caro em termos
+    de reward, incentivando a manter o swing.
+  - Em maio, esperamos menos alternâncias inúteis entre long/short em zonas
+    onde os especialistas ainda apontam para a mesma direção, reduzindo churn
+    e o desgaste de PnL observados no mês.
+- **Próximos passos sugeridos**:
+  - Re-treinar (`train.py`) e comparar o PnL mensal, em especial maio e julho.
+  - Ver no novo `actions.png` se:
+    - há menos viradas de mão em tendências fortes,
+    - o agente tende a “respeitar” mais o trade atual quando `exp_trend` e
+      `exp_ref` concordam.
+  - Ajustar `trend_flip_penalty` para cima (ex.: 0.15–0.2) se ainda houver
+    muitas viradas desnecessárias, ou para baixo se o agente ficar rígido
+    demais em mudanças de regime.
+
+---
+
+## 2025-12-03 — ema_only_rl_v11_atr_trailing_stop
+
+- **config_sha256**: `7be25ed70bccbd081ca6ee3205f95a94149efe83ba73f6e36555bd4a4c9db482`
+- **Motivo**: evitar que trades longos devolvam grande parte do lucro ao
+  ficar “presos” contra a nova tendência, adicionando um stop mecânico
+  baseado em ATR que se movimenta a favor da operação (trailing stop).
+- **Novos parâmetros em `rl.reward`**:
+  - `atr_stop_mult`: `2.0` — múltiplo de ATR para definir o stop inicial:
+    - long: `stop = entry_price - 2 * ATR`
+    - short: `stop = entry_price + 2 * ATR`
+  - `atr_trail_mult`: `1.0` — múltiplo de ATR para o trailing:
+    - long: em cada barra, candidato a novo stop:
+      `trail = price - 1 * ATR`; o stop sobe com o preço (`max`), nunca desce.
+    - short: `trail = price + 1 * ATR`; o stop desce com o preço (`min`),
+      nunca sobe.
+- **Alterações em `rl_env.py`**:
+  - `RLConfig` passou a ter:
+    - `atr_stop_mult: float`
+    - `atr_trail_mult: float`
+  - No `reset`:
+    - inicializa `self.stop_price = 0.0`.
+  - No início de `step`:
+    - calcula `atr_value = atr_rel * close` (quando `atr_rel` está disponível).
+    - se houver posição (`position != 0`) e `atr_trail_mult > 0`:
+      - atualiza `self.stop_price` conforme as fórmulas de trailing acima.
+  - Ao abrir nova posição:
+    - define `self.stop_price` usando `atr_stop_mult` (ou deixa 0.0 se ATR ou
+      o multiplicador não estiverem disponíveis).
+  - Ao fechar posição (qualquer motivo):
+    - zera `self.stop_price`.
+  - Antes do bloco de fechamento normal:
+    - aplica o stop ATR como força de saída:
+      - long: se `price <= stop_price`, força `desired_pos = 0`.
+      - short: se `price >= stop_price`, força `desired_pos = 0`.
+- **Intuição**:
+  - Em tendências fortes, o agente ainda pode segurar posições longas/curtas,
+    mas à medida que o preço anda a favor, o stop “sobe” (ou “desce”) junto,
+    travando parte do lucro.
+  - Quando a reversão passa de um ruído de 1–2 ATRs, o stop é acionado e a
+    posição é fechada, em vez de deixar o PPO decidir sozinho ficar long em
+    plena tendência contrária (como vimos em março).
+- **Próximos passos sugeridos**:
+  - Re-treinar (`train.py`) e observar:
+    - se os períodos de perda prolongada contra a tendência (como março)
+      diminuem,
+    - se o agente passa a realizar mais lucro parcial em swings longos.
+  - Ajustar:
+    - `atr_stop_mult` maior (ex.: 2.5–3.0) para stops mais largos,
+    - ou `atr_trail_mult` menor/maior para trailing mais solto ou mais apertado,
+      conforme o comportamento desejado.

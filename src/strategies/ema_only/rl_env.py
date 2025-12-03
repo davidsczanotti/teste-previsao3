@@ -36,10 +36,13 @@ class RLConfig:
     allow_short: bool = True              # permite posições short (pos=-1)
     trend_entry_bonus: float = 0.0        # bônus ao abrir trade a favor da tendência EMA
     trend_entry_penalty: float = 0.0      # penalidade ao abrir trade contra a tendência EMA
+    trend_flip_penalty: float = 0.0       # penalidade ao inverter posição em plena tendência
     max_long_entry_dist_fast_pct: float = 0.0   # distância máxima acima da ema_fast para abrir long
     max_short_entry_dist_fast_pct: float = 0.0  # distância máxima abaixo da ema_fast para abrir short
     pullback_entry_bonus: float = 0.0     # bônus ao abrir perto/abaixo da ema_fast (long) ou acima (short)
     trend_exit_penalty: float = 0.0       # penalidade ao fechar ainda do lado “bom” da ema_fast
+    atr_stop_mult: float = 0.0            # múltiplo de ATR para stop inicial
+    atr_trail_mult: float = 0.0           # múltiplo de ATR para trailing stop
 
 
 class EmaEnv(gym.Env):
@@ -82,6 +85,7 @@ class EmaEnv(gym.Env):
         self.idx = 0
         self.position = 0  # -1 short, 0 flat, 1 long
         self.entry_price = 0.0
+        self.stop_price = 0.0
         self.equity = self.cfg.init_equity
         self.last_equity = self.equity
         self.trades = 0
@@ -128,6 +132,24 @@ class EmaEnv(gym.Env):
         info = {}
 
         price = self._price(self.idx)
+        # ATR absoluto (a partir de atr_rel) para uso em stops
+        atr_value = None
+        if "atr_rel" in self.features.columns:
+            try:
+                atr_rel = float(self.features["atr_rel"].iloc[self.idx])
+                if np.isfinite(atr_rel):
+                    atr_value = atr_rel * price
+            except Exception:
+                atr_value = None
+
+        # Atualiza trailing stop se já houver posição aberta
+        if self.position != 0 and atr_value is not None and self.cfg.atr_trail_mult > 0.0:
+            if self.position == 1:
+                trail = price - self.cfg.atr_trail_mult * atr_value
+                self.stop_price = trail if self.stop_price == 0.0 else max(self.stop_price, trail)
+            elif self.position == -1:
+                trail = price + self.cfg.atr_trail_mult * atr_value
+                self.stop_price = trail if self.stop_price == 0.0 else min(self.stop_price, trail)
 
         # --- Filtros de viés/ref e consenso ---------------------------------
         ref_price = self._ref_price(self.idx)
@@ -205,6 +227,39 @@ class EmaEnv(gym.Env):
                     reward -= self.cfg.gating_penalty
                     desired_pos = 0
 
+        # Penaliza inversão de posição em plena tendência (1 -> -1 ou -1 -> 1)
+        if (
+            desired_pos != 0
+            and self.position != 0
+            and desired_pos != self.position
+            and self.cfg.trend_flip_penalty != 0.0
+        ):
+            try:
+                exp_trend = float(self.features.get("exp_trend", pd.Series([np.nan])).iloc[self.idx])
+                exp_ref = float(self.features.get("exp_ref", pd.Series([np.nan])).iloc[self.idx])
+            except Exception:
+                exp_trend = np.nan
+                exp_ref = np.nan
+            if np.isfinite(exp_trend) and np.isfinite(exp_ref):
+                # Regime de alta forte: exp_trend=1, exp_ref=1
+                if exp_trend >= 0.5 and exp_ref >= 0.5:
+                    # penaliza sair de long para short
+                    if self.position == 1 and desired_pos == -1:
+                        reward -= float(self.cfg.trend_flip_penalty)
+                # Regime de baixa forte: exp_trend=0, exp_ref=0
+                elif exp_trend < 0.5 and exp_ref < 0.5:
+                    # penaliza sair de short para long
+                    if self.position == -1 and desired_pos == 1:
+                        reward -= float(self.cfg.trend_flip_penalty)
+
+        # Stop ATR: força fechamento se o preço cruzar o stop_price
+        if self.position == 1 and self.stop_price not in (0.0, np.nan):
+            if price <= self.stop_price:
+                desired_pos = 0
+        elif self.position == -1 and self.stop_price not in (0.0, np.nan):
+            if price >= self.stop_price:
+                desired_pos = 0
+
         # --- Fecha posição atual, se necessário -----------------------------
         if desired_pos != self.position and self.position != 0:
             side = self.position
@@ -233,12 +288,21 @@ class EmaEnv(gym.Env):
                     pass
             self.position = 0
             self.entry_price = 0.0
+            self.stop_price = 0.0
             self._entry_idx = -1
 
         # --- Abre nova posição, se desejado ---------------------------------
         if desired_pos != self.position and desired_pos != 0:
             self.position = desired_pos
             self.entry_price = price
+            # Stop ATR inicial para o novo trade
+            if atr_value is not None and self.cfg.atr_stop_mult > 0.0:
+                if self.position == 1:
+                    self.stop_price = price - self.cfg.atr_stop_mult * atr_value
+                elif self.position == -1:
+                    self.stop_price = price + self.cfg.atr_stop_mult * atr_value
+            else:
+                self.stop_price = 0.0
             self._entry_idx = self.idx
             self.trades += 1
             cost = self._apply_cost(price)
