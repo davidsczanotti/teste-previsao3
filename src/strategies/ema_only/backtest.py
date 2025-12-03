@@ -14,6 +14,10 @@ class EmaOnlyParams:
     trend_filter_period: int | None = None
     use_trend_filter: bool = False
     pullback_pct: float = 0.0  # extra distance below EMA required to consider entry
+    ref_filter_enabled: bool = False  # use higher timeframe EMA as bias
+    ref_ema_period: int | None = None  # used for reporting only; values come merged in df
+    ref_buffer_pct: float = 0.0  # tolerance above ref EMA
+    ref_timeframe: str | None = None  # reporting
     lot_size: float = 0.001  # BTC quantity for trades
     fee_rate: float = 0.001  # 0.1% per side
     use_cross: bool = False  # price/EMA reclaim entry in price_reversion mode
@@ -45,6 +49,7 @@ def backtest_ema_only(
     ema_fast = compute_ema(closes, params.ema_period)
     ema_slow = compute_ema(closes, params.slow_ema_period) if params.slow_ema_period else None
     ema_trend = compute_ema(closes, params.trend_filter_period) if params.trend_filter_period else None
+    ref_ema_col = df["ref_ema"].astype(float) if params.ref_filter_enabled and "ref_ema" in df.columns else None
 
     if params.signal_mode not in {"price_reversion", "ema_cross"}:
         raise ValueError(f"signal_mode desconhecido: {params.signal_mode}")
@@ -72,10 +77,20 @@ def backtest_ema_only(
             else np.nan
         )
         tr_now = float(ema_trend.iloc[i]) if ema_trend is not None and not np.isnan(ema_trend.iloc[i]) else np.nan
+        ref_prev = float(ref_ema_col.iloc[i - 1]) if ref_ema_col is not None and not np.isnan(ref_ema_col.iloc[i - 1]) else np.nan
+        ref_now = float(ref_ema_col.iloc[i]) if ref_ema_col is not None and not np.isnan(ref_ema_col.iloc[i]) else np.nan
 
         if np.isnan(e) or np.isnan(e_prev):
             equity_curve.append(initial_capital + realized_pnl)
             continue
+
+        ref_ok = True
+        if params.ref_filter_enabled:
+            if np.isnan(ref_prev) or np.isnan(ref_now):
+                equity_curve.append(initial_capital + realized_pnl)
+                continue
+            buffer = 1.0 + params.ref_buffer_pct
+            ref_ok = (p > ref_now * buffer) and (e > ref_now * buffer)
 
         if params.signal_mode == "ema_cross":
             if ema_slow is None:
@@ -83,12 +98,12 @@ def backtest_ema_only(
             cross_up = (e_prev <= s_prev) and (e > s)
             cross_down = (e_prev >= s_prev) and (e < s)
 
-            if position == 0 and cross_up:
+            if position == 0 and cross_up and ref_ok:
                 position = 1
                 entry_price = p
                 trades.append({"date": t, "action": "BUY", "price": p})
                 realized_pnl -= params.fee_rate * p * params.lot_size
-            elif position == 1 and cross_down:
+            elif position == 1 and (cross_down or (params.ref_filter_enabled and not ref_ok)):
                 pnl = (p - entry_price) * params.lot_size
                 realized_pnl += pnl
                 trades.append({"date": t, "action": "SELL", "price": p, "pnl": pnl})
@@ -110,9 +125,9 @@ def backtest_ema_only(
 
             if position == 0:
                 if params.use_cross:
-                    enter = trend_ok and (p_prev <= pullback_level_prev) and (p > e)
+                    enter = trend_ok and ref_ok and (p_prev <= pullback_level_prev) and (p > e)
                 else:
-                    enter = trend_ok and (p < pullback_level_prev)
+                    enter = trend_ok and ref_ok and (p < pullback_level_prev)
                 if enter:
                     position = 1
                     entry_price = p
@@ -122,10 +137,18 @@ def backtest_ema_only(
             else:  # position == 1
                 exit_price = (p < e) if params.use_cross else (p > e)
                 exit_trend = params.use_trend_filter and ema_trend is not None and (e < tr_now)
+                exit_ref = params.ref_filter_enabled and not ref_ok
                 if exit_price or exit_trend:
                     pnl = (p - entry_price) * params.lot_size
                     realized_pnl += pnl
                     trades.append({"date": t, "action": "SELL", "price": p, "pnl": pnl})
+                    realized_pnl -= params.fee_rate * p * params.lot_size
+                    position = 0
+                    entry_price = 0.0
+                elif exit_ref:
+                    pnl = (p - entry_price) * params.lot_size
+                    realized_pnl += pnl
+                    trades.append({"date": t, "action": "SELL", "price": p, "pnl": pnl, "reason": "ref_filter"})
                     realized_pnl -= params.fee_rate * p * params.lot_size
                     position = 0
                     entry_price = 0.0
@@ -158,6 +181,21 @@ def backtest_ema_only(
     dd = (np.array(equity_curve) - running_max) / running_max * 100.0
     max_dd_pct = float(dd.min()) if len(dd) else 0.0
     avg_pnl = (total_pnl / n_trades) if n_trades else 0.0
+    equity_arr = np.array(equity_curve, dtype=float)
+    rets = np.diff(equity_arr) / equity_arr[:-1] if len(equity_arr) > 1 else np.array([])
+    total_seconds = (df["Date"].iloc[-1] - df["Date"].iloc[0]).total_seconds() if len(df) > 1 else 0.0
+    seconds_per_bar = total_seconds / max(1, len(equity_arr) - 1)
+    bars_per_year = (365 * 24 * 3600) / seconds_per_bar if seconds_per_bar > 0 else 0.0
+    ann_factor = np.sqrt(bars_per_year) if bars_per_year > 0 else 0.0
+    sharpe = (rets.mean() / rets.std() * ann_factor) if len(rets) > 1 and rets.std() > 0 else 0.0
+    neg_rets = rets[rets < 0]
+    downside_std = neg_rets.std() if len(neg_rets) > 0 else 0.0
+    sortino = (rets.mean() / downside_std * ann_factor) if downside_std > 0 else 0.0
+    total_ret_dec = equity_arr[-1] / equity_arr[0] - 1 if len(equity_arr) > 1 else 0.0
+    years = total_seconds / (365 * 24 * 3600) if total_seconds > 0 else 0.0
+    annual_ret = total_ret_dec / years if years > 0 else 0.0
+    max_dd_dec = max_dd_pct / 100.0
+    calmar = (annual_ret / abs(max_dd_dec)) if max_dd_dec != 0 else 0.0
 
     stats = {
         "pnl": total_pnl,
@@ -166,6 +204,9 @@ def backtest_ema_only(
         "return_pct": ret_pct,
         "avg_pnl_per_trade": avg_pnl,
         "max_drawdown_pct": max_dd_pct,
+        "sharpe": float(sharpe),
+        "sortino": float(sortino),
+        "calmar": float(calmar),
         "fee_rate": params.fee_rate,
         "ema_period": params.ema_period,
         "use_cross": params.use_cross,
@@ -175,6 +216,10 @@ def backtest_ema_only(
         "use_trend_filter": params.use_trend_filter,
         "pullback_pct": params.pullback_pct,
         "signal_mode": params.signal_mode,
+        "ref_filter_enabled": params.ref_filter_enabled,
+        "ref_ema_period": params.ref_ema_period,
+        "ref_buffer_pct": params.ref_buffer_pct,
+        "ref_timeframe": params.ref_timeframe,
     }
 
     return trades, total_pnl, stats

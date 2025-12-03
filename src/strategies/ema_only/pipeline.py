@@ -5,9 +5,11 @@ import json
 from datetime import datetime, timedelta
 import argparse
 import numpy as np
+import pandas as pd
 
 from ...utils.data_loader import load_data
-from .backtest import EmaOnlyParams, backtest_ema_only
+from .backtest import EmaOnlyParams, backtest_ema_only, compute_ema
+from .run import prepare_dataset_with_reference
 
 
 def main() -> None:
@@ -28,13 +30,26 @@ def main() -> None:
     parser.add_argument("--trend-filter-period", type=int, default=None, help="EMA lenta para filtrar tendência")
     parser.add_argument("--use-trend-filter", action="store_true", help="Ativa filtro de tendência usando trend_filter_period")
     parser.add_argument("--pullback-pct", type=float, default=0.0, help="Exige distância % abaixo da EMA para entrar")
+    parser.add_argument("--ref-timeframe", type=str, default=None, help="Timeframe de referência (ex.: 4h) para viés de tendência")
+    parser.add_argument("--ref-days", type=int, default=None, help="Dias a carregar para o TF de referência")
+    parser.add_argument("--ref-ema-period", type=int, default=None, help="Período da EMA no TF de referência")
+    parser.add_argument("--ref-buffer-pct", type=float, default=0.0, help="Margem acima da EMA de referência para permitir entradas")
+    parser.add_argument("--use-ref-filter", action="store_true", help="Habilita filtro pelo TF de referência")
     parser.add_argument("--lot-size", type=float, default=0.001)
     parser.add_argument("--fee-rate", type=float, default=0.001)
     parser.add_argument("--cache-only", action="store_true", help="Use only cached data (no network)")
     args = parser.parse_args()
 
-    # Load data (prefer cache-only if requested)
-    df = load_data(args.symbol, args.interval, days=args.days, use_cache_only=args.cache_only)
+    # Load data (prefer cache-only if requested), attaching EMA de referência se configurado
+    df = prepare_dataset_with_reference(
+        symbol=args.symbol,
+        timeframe=args.interval,
+        days=args.days,
+        use_cache_only=args.cache_only,
+        ref_timeframe=args.ref_timeframe,
+        ref_days=args.ref_days,
+        ref_ema_period=args.ref_ema_period,
+    )
 
     params = EmaOnlyParams(
         ema_period=args.ema_period,
@@ -42,6 +57,10 @@ def main() -> None:
         trend_filter_period=args.trend_filter_period,
         use_trend_filter=args.use_trend_filter,
         pullback_pct=args.pullback_pct,
+        ref_filter_enabled=args.use_ref_filter,
+        ref_ema_period=args.ref_ema_period,
+        ref_buffer_pct=args.ref_buffer_pct,
+        ref_timeframe=args.ref_timeframe,
         lot_size=args.lot_size,
         fee_rate=args.fee_rate,
         use_cross=args.use_cross,
@@ -54,6 +73,7 @@ def main() -> None:
     print(
         f"Symbol={args.symbol} Interval={args.interval} Days={args.days} Mode={params.signal_mode} EMA={params.ema_period} "
         f"SlowEMA={params.slow_ema_period} TrendFilter={params.use_trend_filter}:{params.trend_filter_period} "
+        f"RefTF={params.ref_timeframe} RefEMA={params.ref_ema_period} RefBuf={params.ref_buffer_pct} "
         f"Pullback={params.pullback_pct} UseCross={params.use_cross} Lot={params.lot_size} Fee={params.fee_rate}"
     )
     print(
