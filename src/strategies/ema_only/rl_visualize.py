@@ -45,11 +45,18 @@ def plot_actions(df: pd.DataFrame, outdir: Path):
     ax.plot(df["Date"], df["ema_fast"], label="ema_fast", alpha=0.8)
     ax.plot(df["Date"], df["ema_slow"], label="ema_slow", alpha=0.8)
     ax.plot(df["Date"], df["ref_ema"], label="ref_ema", alpha=0.8)
-    # Ações: 1 = alvo long, 2 = alvo short (0=hold, 3=flat)
-    longs = df[df["action"] == 1]
-    shorts = df[df["action"] == 2]
-    ax.scatter(longs["Date"], longs["close"], marker="^", color="green", label="long", s=20)
-    ax.scatter(shorts["Date"], shorts["close"], marker="v", color="red", label="short", s=20)
+    # Marca apenas entradas reais de posição:
+    #  - long: mudança de posição 0 -> 1
+    #  - short: mudança de posição 0 -> -1
+    if "position" in df.columns and "prev_position" in df.columns:
+        entry_long = df[(df["prev_position"] == 0) & (df["position"] == 1)]
+        entry_short = df[(df["prev_position"] == 0) & (df["position"] == -1)]
+    else:
+        # fallback: usa ação alvo (comportamento antigo)
+        entry_long = df[df["action"] == 1]
+        entry_short = df[df["action"] == 2]
+    ax.scatter(entry_long["Date"], entry_long["close"], marker="^", color="green", label="long", s=20)
+    ax.scatter(entry_short["Date"], entry_short["close"], marker="v", color="red", label="short", s=20)
     ax.legend()
     ax.set_title("Ações do agente vs preço/EMAs")
     outdir.mkdir(parents=True, exist_ok=True)
@@ -79,40 +86,50 @@ def main():
         model = PPO.load(model_path, env=None)
         obs, _ = val_env.reset()
         terminated = truncated = False
+        prev_pos = int(getattr(val_env, "position", 0))
         while not (terminated or truncated):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, _ = val_env.step(int(action))
             idx = max(0, val_env.idx - 1)
             base_row = val_env.df.iloc[idx].to_dict()
             feat_row = val_env.features.iloc[idx].to_dict() if hasattr(val_env, "features") else {}
+            cur_pos = int(getattr(val_env, "position", 0))
             base_row.update(
                 {
                     "ema_fast": feat_row.get("ema_fast"),
                     "ema_slow": feat_row.get("ema_slow"),
                     "ref_ema": feat_row.get("ref_ema"),
                     "action": int(action),
+                    "position": cur_pos,
+                    "prev_position": prev_pos,
                 }
             )
             actions.append(base_row)
+            prev_pos = cur_pos
     else:
         # Fallback: política aleatória apenas para gerar estrutura
         obs, _ = val_env.reset()
         terminated = truncated = False
+        prev_pos = int(getattr(val_env, "position", 0))
         while not (terminated or truncated):
             action = val_env.action_space.sample()
             obs, reward, terminated, truncated, _ = val_env.step(int(action))
             idx = max(0, val_env.idx - 1)
             base_row = val_env.df.iloc[idx].to_dict()
             feat_row = val_env.features.iloc[idx].to_dict() if hasattr(val_env, "features") else {}
+            cur_pos = int(getattr(val_env, "position", 0))
             base_row.update(
                 {
                     "ema_fast": feat_row.get("ema_fast"),
                     "ema_slow": feat_row.get("ema_slow"),
                     "ref_ema": feat_row.get("ref_ema"),
                     "action": int(action),
+                    "position": cur_pos,
+                    "prev_position": prev_pos,
                 }
             )
             actions.append(base_row)
+            prev_pos = cur_pos
 
     actions_df = pd.DataFrame(actions)
     if not actions_df.empty:

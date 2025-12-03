@@ -174,12 +174,13 @@ class MetricsCallback(BaseCallback):
 
     def _init_file(self) -> None:
         self.metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.metrics_path.exists():
-            import csv
+        import csv
 
-            with self.metrics_path.open("w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(["step", "reward_mean", "pnl", "trades"])
+        # Sempre recria o arquivo a cada treino para evitar sobreposição
+        # de múltiplas execuções no mesmo metrics.csv.
+        with self.metrics_path.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["step", "reward_mean", "pnl", "trades"])
 
     def _on_step(self) -> bool:
         # Registra no máximo a cada log_every timesteps para evitar arquivos gigantes.

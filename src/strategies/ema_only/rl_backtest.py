@@ -46,6 +46,7 @@ def run_monthly_backtest(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     obs, _ = env.reset()
     records: List[Dict[str, Any]] = []
+    debug_rows: List[Dict[str, Any]] = []
     terminated = False
     truncated = False
 
@@ -54,6 +55,13 @@ def run_monthly_backtest(cfg: Dict[str, Any]) -> Dict[str, Any]:
         obs, reward, terminated, truncated, _info = env.step(int(action))
         idx = max(0, env.idx - 1)
         row = env.df.iloc[idx]
+        feat_row: Dict[str, Any] = {}
+        if hasattr(env, "features"):
+            try:
+                feat_row = env.features.iloc[idx].to_dict()
+            except Exception:
+                feat_row = {}
+        # registro compacto para o resumo mensal
         records.append(
             {
                 "Date": row["Date"],
@@ -61,6 +69,36 @@ def run_monthly_backtest(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "action": int(action),
             }
         )
+        # log detalhado por candle para inspeção de decisões
+        debug_row: Dict[str, Any] = {
+            "Date": row["Date"],
+            "close": float(row.get("close", np.nan)),
+            "action": int(action),
+            "equity": float(getattr(env, "last_equity", env.equity)),
+            "position": int(getattr(env, "position", 0)),
+            "reward": float(reward),
+        }
+        # adiciona principais features, se existirem
+        for key in [
+            "ema_fast",
+            "ema_slow",
+            "ref_ema",
+            "dist_fast",
+            "dist_slow",
+            "dist_ref",
+            "atr_rel",
+            "macd_hist",
+            "exp_trend",
+            "exp_ref",
+            "exp_macd",
+            "exp_slope",
+            "exp_intraday_trend",
+            "intraday_align_ratio",
+            "experts_mean",
+        ]:
+            if key in feat_row:
+                debug_row[key] = float(feat_row[key])
+        debug_rows.append(debug_row)
 
     if not records:
         raise RuntimeError("Backtest RL não gerou registros. Verifique o período e os dados.")
@@ -92,6 +130,14 @@ def run_monthly_backtest(cfg: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
         prev_end_equity = end_equity
+
+    # Salva log detalhado de ações e features para análise
+    debug_df = pd.DataFrame(debug_rows)
+    if not debug_df.empty:
+        debug_df["Date"] = pd.to_datetime(debug_df["Date"])
+        debug_df = debug_df.sort_values("Date").reset_index(drop=True)
+        debug_path = OUTDIR / "actions_debug.csv"
+        debug_df.to_csv(debug_path, index=False)
 
     payload: Dict[str, Any] = {
         "strategy": "ema_only_rl",
@@ -133,4 +179,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
