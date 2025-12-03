@@ -403,3 +403,60 @@ Formato sugerido por entrada:
   - Se o agente ficar conservador demais (poucos trades), considerar subir o
     limite para `0.0075` ou `0.01`; se ainda comprar topo, reduzir para
     `0.003` ou mesmo `0.0` (obriga comprar sempre abaixo/na ema_fast).
+
+---
+
+## 2025-12-03 — ema_only_rl_v8_pullback_and_exit_shaping
+
+- **config_sha256**: `07e0ff53dd9360b4dfc939d6f4c5790507ae777dd3ae7da72502e6f0e4265763`
+- **Motivo**: transformar parte da lógica “não comprar topo / não vender
+  fundo” em **conselhos suaves**, em vez de regras duras, para o agente
+  aprender um comportamento mais humano: comprar pullbacks até a ema rápida,
+  vender em repiques e segurar posição enquanto o preço estiver do lado bom
+  da tendência.
+- **Ajustes em `rl.reward`**:
+  - `max_long_entry_dist_fast_pct`: `0.005` → `0.012`
+  - `max_short_entry_dist_fast_pct`: `0.005` → `0.012`
+    - O gate duro passa a bloquear apenas entradas em extremos muito
+      esticados em relação à `ema_fast`; casos intermediários ficam a cargo
+      do PPO decidir, usando os especialistas e o reward.
+  - `pullback_entry_bonus`: `0.01` (novo)
+  - `trend_exit_penalty`: `0.01` (novo)
+- **Alterações em `rl_env.py`**:
+  - `RLConfig` recebeu:
+    - `pullback_entry_bonus: float`
+    - `trend_exit_penalty: float`
+  - Na abertura de nova posição:
+    - Após calcular `ema_fast`/`ema_slow` e aplicar o shaping de tendência
+      (`trend_entry_bonus/penalty`), é calculado
+      `dist_fast_entry = (price - ema_fast) / ema_fast`.
+    - Se `pullback_entry_bonus > 0`:
+      - long: se `dist_fast_entry <= 0` (preço em/abaixo da `ema_fast`),
+        aplica-se um pequeno bônus de entrada (compra em pullback).
+      - short: se `dist_fast_entry >= 0` (preço em/acima da `ema_fast`),
+        aplica-se o mesmo bônus (venda em repique).
+  - No fechamento de posição:
+    - Ao encerrar um long ou short, calcula-se
+      `dist_fast_close = (price - ema_fast) / ema_fast`.
+    - Se `trend_exit_penalty > 0`:
+      - long: se `dist_fast_close > 0` (preço ainda acima da `ema_fast`),
+        aplica-se uma pequena penalidade (saída “cedo demais”).
+      - short: se `dist_fast_close < 0` (preço ainda abaixo da `ema_fast`),
+        idem (cobertura de short ainda em tendência de baixa).
+- **Intuição**:
+  - Em vez de proibir tudo, o agente recebe **recompensas/penalidades
+    adicionais** que o incentivam a:
+    - abrir posições mais próximas da EMA rápida (pullbacks/repiques),
+    - evitar realizar lucro/perda enquanto o preço ainda está bem posicionado
+      em relação à EMA.
+  - O filtro duro por distância continua existindo, mas só em esticadas
+    maiores (~1,2%), funcionando como “cinto de segurança”, não como piloto
+    automático.
+- **Próximos passos sugeridos**:
+  - Re-treinar (`train.py`) e comparar:
+    - PnL mensal 2025 (`rl_backtest.py`),
+    - padrão de entradas/saídas em `actions.png` (espera-se menos vendas em
+      fundos óbvios e mais compras em volta da ema_fast).
+  - Se o shaping estiver fraco, aumentar levemente
+    `pullback_entry_bonus` e/ou `trend_exit_penalty` (ex.: 0.015–0.02); se
+    estiver forte demais (agente fica preso em posições ruins), reduzir.

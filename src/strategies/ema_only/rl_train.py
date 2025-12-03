@@ -147,6 +147,8 @@ def make_env_from_cfg(cfg: dict, start: str, end: str) -> Tuple[EmaEnv, pd.Serie
         trend_entry_penalty=float(reward_cfg.get("trend_entry_penalty", 0.0)),
         max_long_entry_dist_fast_pct=float(reward_cfg.get("max_long_entry_dist_fast_pct", 0.0)),
         max_short_entry_dist_fast_pct=float(reward_cfg.get("max_short_entry_dist_fast_pct", 0.0)),
+        pullback_entry_bonus=float(reward_cfg.get("pullback_entry_bonus", 0.0)),
+        trend_exit_penalty=float(reward_cfg.get("trend_exit_penalty", 0.0)),
     )
     env = EmaEnv(df=base, features=feats, cfg=rlconf, norm_mean=norm_mean, norm_std=norm_std)
     return env, norm_mean, norm_std

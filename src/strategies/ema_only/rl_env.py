@@ -38,6 +38,8 @@ class RLConfig:
     trend_entry_penalty: float = 0.0      # penalidade ao abrir trade contra a tendência EMA
     max_long_entry_dist_fast_pct: float = 0.0   # distância máxima acima da ema_fast para abrir long
     max_short_entry_dist_fast_pct: float = 0.0  # distância máxima abaixo da ema_fast para abrir short
+    pullback_entry_bonus: float = 0.0     # bônus ao abrir perto/abaixo da ema_fast (long) ou acima (short)
+    trend_exit_penalty: float = 0.0       # penalidade ao fechar ainda do lado “bom” da ema_fast
 
 
 class EmaEnv(gym.Env):
@@ -216,6 +218,19 @@ class EmaEnv(gym.Env):
             self.equity -= self.cfg.trade_penalty + self.cfg.turnover_penalty
             if pnl > 0 and self.cfg.realized_bonus_coef > 0:
                 reward += self.cfg.realized_bonus_coef * pnl
+            # Penaliza sair “cedo demais” enquanto o preço ainda está do lado bom da ema_fast
+            if self.cfg.trend_exit_penalty != 0.0 and "ema_fast" in self.features.columns:
+                try:
+                    ef_close = float(self.features["ema_fast"].iloc[self.idx])
+                    if np.isfinite(ef_close) and ef_close != 0.0:
+                        dist_fast_close = (price - ef_close) / ef_close
+                        # long: preço acima da ema_fast ainda favorável; short: abaixo
+                        if side == 1 and dist_fast_close > 0.0:
+                            reward -= float(self.cfg.trend_exit_penalty)
+                        elif side == -1 and dist_fast_close < 0.0:
+                            reward -= float(self.cfg.trend_exit_penalty)
+                except Exception:
+                    pass
             self.position = 0
             self.entry_price = 0.0
             self._entry_idx = -1
@@ -229,6 +244,8 @@ class EmaEnv(gym.Env):
             cost = self._apply_cost(price)
             self.equity -= self.cfg.trade_penalty
             # Shaping: bônus/penalidade por entrar a favor/contra a tendência EMA
+            ef = np.nan
+            es = np.nan
             try:
                 ef = float(self.features["ema_fast"].iloc[self.idx])
                 es = float(self.features["ema_slow"].iloc[self.idx])
@@ -245,6 +262,13 @@ class EmaEnv(gym.Env):
                     reward += float(self.cfg.trend_entry_bonus)
                 elif align < 0.0 and self.cfg.trend_entry_penalty != 0.0:
                     reward -= float(self.cfg.trend_entry_penalty)
+            # Bônus por entrar em pullback (perto/abaixo da ema_fast para long; acima para short)
+            if self.cfg.pullback_entry_bonus != 0.0 and np.isfinite(ef) and ef != 0.0:
+                dist_fast_entry = (price - ef) / ef
+                if self.position == 1 and dist_fast_entry <= 0.0:
+                    reward += float(self.cfg.pullback_entry_bonus)
+                elif self.position == -1 and dist_fast_entry >= 0.0:
+                    reward += float(self.cfg.pullback_entry_bonus)
 
         # mark-to-market unrealized
         if self.position == 1:

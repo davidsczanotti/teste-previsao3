@@ -60,8 +60,10 @@
       "use_monthly_reward": true,
       "trend_entry_bonus": 0.01,
       "trend_entry_penalty": 0.02,
-      "max_long_entry_dist_fast_pct": 0.005,
-      "max_short_entry_dist_fast_pct": 0.005
+      "max_long_entry_dist_fast_pct": 0.012,
+      "max_short_entry_dist_fast_pct": 0.012,
+      "pullback_entry_bonus": 0.01,
+      "trend_exit_penalty": 0.01
     }
   }
 }
