@@ -216,3 +216,7 @@ Camada RL (experimental)
 
   - `src/strategies/ema_only/reports/rl/metrics.png` (reward, PnL, trades);
   - `src/strategies/ema_only/reports/rl/actions.png` (preço/EMAs + ações do agente).
+
+
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.rl_backtest
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.train

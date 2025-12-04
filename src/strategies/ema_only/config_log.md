@@ -601,3 +601,354 @@ Formato sugerido por entrada:
     - `atr_stop_mult` maior (ex.: 2.5–3.0) para stops mais largos,
     - ou `atr_trail_mult` menor/maior para trailing mais solto ou mais apertado,
       conforme o comportamento desejado.
+
+---
+
+## 2025-12-03 — ema_only_rl_v12_wider_atr_and_free_flip
+
+- **config_sha256**: `99d2acb5647b4ad94910b4e12f1d0eae2e212afe66b014d13d4a3f3b74437cdd`
+- **Motivo**: reduzir a frequência de stops em ruído (especialmente em meses
+  como junho e outubro) e liberar o agente para explorar melhor operações
+  short, removendo a penalidade explícita de virar posição.
+- **Alterações em `rl.reward`**:
+  - `atr_stop_mult`: `2.0` → `3.0`
+    - O stop inicial fica mais largo (3 ATRs) em relação ao preço de entrada,
+      evitando que correções pequenas interrompam trades potencialmente bons.
+  - `atr_trail_mult`: `1.0` → `1.5`
+    - O trailing stop acompanha o preço com uma folga maior (1,5 ATR),
+      reduzindo stops muito apertados em movimentos ainda saudáveis.
+  - `trend_flip_penalty`: `0.1` → `0.0`
+    - Remove a penalização direta por virar de long→short ou short→long em
+      plena tendência, deixando o PPO decidir com base no PnL/experts se vale
+      a pena inverter ou não.
+- **Expectativa de comportamento**:
+  - Menos sequências de pequenos stops negativos em fases laterais ou de transição,
+    já que o stop só é acionado em movimentos mais significativos.
+  - O agente fica mais livre para experimentar shorts quando os experts
+    indicarem tendência de baixa, já que não há mais custo extra específico
+    para a inversão; o gate de consenso/ref continua controlando entradas ruins.
+
+---
+
+## 2025-12-03 — ema_only_rl_v13_strong_trend_gate
+
+- **config_sha256**: `99d2acb5647b4ad94910b4e12f1d0eae2e212afe66b014d13d4a3f3b74437cdd` (mesmo config, lógica alterada apenas em código).
+- **Motivo**: tornar o agente ainda mais seletivo, exigindo confirmação
+  explícita dos especialistas de tendência para abrir posições, de forma a
+  evitar operar em regimes “meio termo” como fevereiro/março/agosto onde o
+  consenso é fraco.
+- **Alterações em `rl_env.py` (gate de entrada)**:
+  - Após calcular `cons` (`experts_mean`) e o limiar de consenso
+    (`consensus_threshold`), passamos a derivar dois flags:
+    - `trend_long_ok`
+    - `trend_short_ok`
+  - Lógica:
+    - Se `exp_trend` e `exp_ref` existirem:
+      - Quando `cons >= 0.5`:
+        - `trend_long_ok = True` somente se `exp_trend >= 0.5` **e**
+          `exp_ref >= 0.5` (ambos apontando para alta).
+        - `trend_short_ok = True` somente se `exp_trend < 0.5` **e**
+          `exp_ref < 0.5` (ambos apontando para baixa).
+        - Caso haja discordância ou valores não finitos, ambos ficam `False`.
+      - Quando `cons < 0.5`:
+        - `trend_long_ok = False` e `trend_short_ok = False` — nenhum lado
+          é considerado “tendência forte”.
+  - No gate (entradas a partir de `position == 0`):
+    - Para long:
+      - condição de entrada passa a ser
+        `ref_long_ok and cons_long_ok and trend_long_ok`
+        (antes não checávamos `trend_long_ok`).
+    - Para short:
+      - condição de entrada passa a ser
+        `ref_short_ok and cons_short_ok and trend_short_ok`.
+    - Se a condição falhar, a ação de entrada é bloqueada (`desired_pos = 0`)
+      e aplica-se `gating_penalty` como antes.
+- **Intuição**:
+  - O agente só entra:
+    - **comprado** quando:
+      - preço está acima da ref_ema (se `enforce_ref_bias`),
+      - consenso dos experts é suficientemente alto (`experts_mean >= threshold`),
+      - e os dois especialistas de tendência (`exp_trend`, `exp_ref`) concordam
+        com a direção de alta.
+    - **vendido** quando o oposto vale para a tendência de baixa.
+  - Em meses como fevereiro/março/agosto, onde `experts_mean` médio é ~0.3–0.4
+    e os especialistas divergem com frequência, o agente tende a operar muito
+    menos, reduzindo a quantidade de pequenos trades negativos nesses regimes.
+
+---
+
+## 2025-12-04 — ema_only_rl_v14_gate_relaxed
+
+- **config_sha256**: `87ec1f537d2a9d0155c21a920b419022b8472f581180f24b74cce46b84f97ff2`
+- **Motivo**: destravar shorts e reduzir o sufocamento do gate, suavizando o
+  shaping/penalidades e encurtando stops para melhorar o balanço win/loss.
+- **Parâmetros alterados (antes → depois)**:
+  - `rl.reward.consensus_threshold`: `0.6` → `0.55`
+  - `rl.reward.gating_penalty`: `0.015` → `0.01`
+  - `rl.reward.trend_entry_bonus` / `trend_entry_penalty`: `0.5`/`0.5` → `0.1`/`0.1`
+  - `rl.reward.trend_flip_penalty`: `0.0` → `0.05`
+  - `rl.reward.atr_stop_mult`: `3.0` → `2.5`
+  - `rl.reward.atr_trail_mult`: `1.5` → `1.0`
+  - Reintroduzidos em `rl.reward`:
+    - `max_long_entry_dist_fast_pct`: `0.0075`
+    - `max_short_entry_dist_fast_pct`: `0.0075`
+    - `pullback_entry_bonus`: `0.01`
+    - `trend_exit_penalty`: `0.01`
+- **Alteração de lógica no gate (código `rl_env.py`)**:
+  - `trend_long_ok = exp_trend >= 0.5 and exp_ref >= 0.5`
+  - `trend_short_ok = exp_trend < 0.5 and exp_ref < 0.5`
+  - Removida a exigência de `cons >= 0.5` para checar tendência, liberando
+    ~32% dos sinais de short que eram bloqueados.
+- **Artefatos**: ainda não re‑treinado/backtestado com esta versão (treinar +
+  `rl_backtest.py` para gerar novos `metrics.csv`/`monthly_pnl_...json`).
+- **Hipótese esperada**:
+  - Mais passes no gate (especialmente shorts), menor custo por bloqueio e
+    stops/trailing mais apertados devem reduzir a razão perda/ganho (antes ~2.3x)
+    e aumentar o número de operações aproveitáveis.
+
+---
+
+## 2025-12-04 — ema_only_rl_v15_entry_bonus_tiers
+
+- **config_sha256**: `89f2c9ecce20e2e64a4d8ac550d3ab8d405e1ccaffa694fa52a17ea492d7956b`
+- **Motivo**: alinhar o comportamento do agente ao “trader humano de EMAs”:
+  privilegiar entradas quando a EMA rápida está acima da média e, melhor ainda,
+  quando a média está acima da lenta, sem usar a ref_ema como bloqueio duro.
+- **Parâmetros alterados**:
+  - `enforce_ref_bias`: `false` (ref_ema vira só indicador de regime, não gate).
+  - `trend_entry_bonus` / `trend_entry_penalty`: `0.0` / `0.0` (shaping antigo desativado).
+  - Novos degraus de bônus na entrada:
+    - `entry_bonus_fast_over_slow`: `0.05` (EMA rápida > EMA média).
+    - `entry_bonus_full_trend`: `0.10` (EMA rápida > EMA média > EMA lenta/ref).
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Ao abrir uma posição:
+    - **Long**: se `ema_fast > ema_slow`, aplica `entry_bonus_fast_over_slow`; se também `ema_slow > ref_ema`, aplica `entry_bonus_full_trend` (patamar cheio).
+    - **Short**: espelho, usando `<` (fast < slow < ref_ema).
+    - Se apenas o primeiro degrau for atendido, recebe só o bônus do degrau 1; se ambos, recebe o patamar cheio.
+  - Mantidos: bônus de pullback (`pullback_entry_bonus`) e filtros de topo/fundo por distância da EMA rápida.
+- **Outros campos mantidos**:
+  - `consensus_threshold`: `0.55`, `gating_penalty`: `0.01`
+  - Stops/trailing: `atr_stop_mult`: `2.5`, `atr_trail_mult`: `1.0`
+  - Proteções de topo/fundo: `max_long_entry_dist_fast_pct` / `max_short_entry_dist_fast_pct`: `0.0075`
+- **Próximos passos**:
+  - Re-treinar (`train.py`) e rodar `rl_backtest.py` para ver se o agente passa a operar mais nas fases de tendência, usando a ref_ema apenas como “plus” (não como bloqueio).
+
+---
+
+## 2025-12-04 — ema_only_rl_v16_looser_short_gate
+
+- **config_sha256**: `6e5be48c63d9793390eda081f64c531d48b33ba82fb5f5fa5e37264225faeee3`
+- **Motivo**: liberar mais operações de venda (short) e sinais em reversões,
+  reduzindo o consenso mínimo e exigindo apenas um dos especialistas apontando
+  para baixa.
+- **Parâmetros alterados**:
+  - `rl.reward.consensus_threshold`: `0.55` → `0.5`.
+- **Lógica no ambiente (`rl_env.py`)**:
+  - `trend_short_ok` passa a ser verdadeiro se **exp_trend < 0.5 OU exp_ref < 0.5**
+    (antes exigia ambos < 0.5). Para long, permanece exp_trend >= 0.5 **e**
+    exp_ref >= 0.5.
+- **Demais campos mantidos**: bônus em degraus de entrada, stops/trailing,
+  filtros de topo/fundo e ref_ema apenas como indicador (sem gate).
+- **Próximo passo**: re-treinar e rodar `rl_backtest.py` para verificar se o
+  volume de shorts aumenta e se o PnL melhora em meses de reversão.
+
+---
+
+## 2025-12-04 — ema_only_rl_v17_cons045_trend_or_tighter_stops
+
+- **config_sha256**: `9edd81c21975704892d3c7f3e644922eb75ddcc3acc5f831080af84e7dd12326`
+- **Motivo**: abrir mais sinais (especialmente em reversões) e reduzir perda média
+  apertando stops/trailing e afrouxando um pouco a distância das EMAs rápidas.
+- **Parâmetros alterados**:
+  - `consensus_threshold`: `0.5` → `0.45`
+  - `atr_stop_mult`: `2.5` → `2.0`
+  - `atr_trail_mult`: `1.0` → `0.8`
+  - `max_long_entry_dist_fast_pct`: `0.0075` → `0.01`
+  - `max_short_entry_dist_fast_pct`: `0.0075` → `0.01`
+- **Lógica no gate (`rl_env.py`)**:
+  - `trend_long_ok` agora aceita **exp_trend >= 0.5 OU exp_ref >= 0.5**
+    (antes precisava dos dois).
+  - `trend_short_ok` permanece como OU para baixa.
+- **Campos mantidos**:
+  - Bônus em degraus de entrada (`entry_bonus_fast_over_slow`, `entry_bonus_full_trend`),
+    pullback/exit, ref_ema apenas como indicador (sem gate).
+- **Próximo passo**: re-treinar e rodar `rl_backtest.py` para ver se:
+  - há mais trades no 2º semestre,
+  - a perda média cai (stops/trailing mais apertados),
+  - o PnL em meses mistos melhora com consenso mais baixo.
+
+---
+
+## 2025-12-05 — ema_only_rl_v18_open_long_gate_cons035
+
+- **config_sha256**: `ebc8688beae91542847fcc6cc9bf2432a2fd4b13affd25fdc93420919cc6a236`
+- **Motivo**: testar um “modo aberto” para entradas long, baixando ainda mais o
+  consenso e removendo o gate de consenso/tendência/distância para compras,
+  enquanto mantém controle para shorts.
+- **Parâmetros alterados**:
+  - `consensus_threshold`: `0.45` → `0.35`
+  - `override_long_gate`: `true` (novo) — não bloqueia entradas long por
+    consenso/tendência/distância; continua aplicando o gating_penalty se bloqueado
+    apenas por distância? (na lógica, override ignora o block inteiro).
+  - `override_short_gate`: `false` (short segue com gate normal).
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Gate:
+    - long: se `override_long_gate=True`, não há bloqueio por consenso/trend/distância.
+    - short: permanece exigindo consenso/tendência/distância (com OR na tendência).
+- **Demais campos mantidos**: stops 2.0/0.8, distâncias 1%, bônus em degraus,
+  ref_ema só como indicador.
+- **Próximo passo**: re-treinar e rodar `rl_backtest.py` para ver se:
+  - o volume de longs aumenta e melhora PnL,
+  - e se manter gate para shorts evita exposição ruim em reversões.
+
+---
+
+## 2025-12-05 — ema_only_rl_v19_bear_regime_stop
+
+- **config_sha256**: `ebc8688beae91542847fcc6cc9bf2432a2fd4b13affd25fdc93420919cc6a236`
+- **Motivo**: evitar devolver lucros em reversões fortes, forçando zerar longs
+  quando os especialistas sinalizam regime de baixa.
+- **Lógica adicionada em `rl_env.py`**:
+  - Calcula `in_bear_regime` se `exp_trend < 0.4` OU `exp_ref < 0.4`.
+  - Se o agente estiver **long** e `in_bear_regime=True`, força `desired_pos=0`
+    (stop de regime), independente do stop ATR.
+- **Demais parâmetros**: mantidos em relação à v18 (consensus 0.35, gate aberto
+  para long, stops 2.0/0.8, distâncias 1%, etc.).
+- **Próximo passo**: rodar `rl_backtest.py` (não precisa retreinar) para medir
+  impacto: redução de perdas em agosto/novembro e saldo final.
+
+---
+
+## 2025-12-05 — ema_only_rl_v20_bear_gate_and_short_cons
+
+- **config_sha256**: `6bf2d958085585ca16ecbc3cf77eb0ef42f536bae50005cbc6f72ce1da5581e9`
+- **Motivo**: reduzir compras em regimes de baixa e dar mais liberdade para shorts nesses regimes.
+- **Parâmetros alterados**:
+  - `bear_regime_threshold`: `0.45` (novo) — define o “bear estrito” quando exp_trend < 0.45 e exp_ref < 0.45.
+  - `block_long_in_bear`: `true` (novo) — bloqueia novas entradas long em bear estrito (aplica gating_penalty).
+  - `bear_consensus_short_threshold`: `0.3` (novo) — em bear estrito, shorts usam consenso especial mais baixo.
+  - `override_long_gate`: permanece `true` (gate liberado), mas o bloqueio de bear tem prioridade.
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Calcula `in_bear_strict` com `bear_regime_threshold`.
+  - Long: se `block_long_in_bear=True` e `in_bear_strict=True`, bloqueia a entrada mesmo com override.
+  - Short: se `in_bear_strict=True`, usa `bear_consensus_short_threshold` para `cons_short_ok`.
+- **Demais campos mantidos**: consenso global 0.35, stops 2.0/0.8, distâncias 1%, bônus em degraus, stop de regime para longs (zera se exp_trend/ref < 0.4).
+- **Próximo passo**: rodar `rl_backtest.py` (modelo atual) para ver se:
+  - reduz compras no meio da queda,
+  - aumenta captura de shorts em regime de baixa,
+  - e melhora o PnL em agosto–novembro.
+
+---
+
+## 2025-12-05 — ema_only_rl_v21_short_gate_open
+
+- **config_sha256**: `fffe7784d94ea410f6860f1c8a1160658ae94041a5981bfb5d13391fd8a93050`
+- **Motivo**: liberar completamente o gate para shorts, a exemplo do long, para medir se capturamos melhor as quedas recentes.
+- **Parâmetro alterado**:
+  - `override_short_gate`: `false` → `true`
+- **Demais campos mantidos**: consenso 0.35, bear regime (block_long_in_bear=true, bear_consensus_short_threshold=0.3), stops 2.0/0.8, distâncias 1%, bônus em degraus.
+- **Próximo passo**: rodar `rl_backtest.py` (modelo atual) para ver impacto no PnL de agosto–novembro.
+
+---
+
+## 2025-12-05 — ema_only_rl_v22_tighter_stops
+
+- **config_sha256**: `e24e3eb2f908a56c82a0cdf672e7b49ef775db3ac60e028ad2405e1cf3886682`
+- **Motivo**: reduzir perdas por trade e proteger melhor lucros em quedas, antes de retreinar.
+- **Parâmetros alterados**:
+  - `atr_stop_mult`: `2.0` → `1.5`
+  - `atr_trail_mult`: `0.8` → `0.5`
+- **Demais campos mantidos**: gate aberto para long/short, bear regime (block_long_in_bear=true, bear_consensus_short_threshold=0.3), consenso 0.35, distâncias 1%, bônus em degraus, stop de regime para longs.
+- **Próximo passo**: rodar `rl_backtest.py` (modelo atual) para efeito imediato e, idealmente, retreinar com o ambiente simplificado.
+
+---
+
+## 2025-12-05 — ema_only_rl_v24_monthly_targets
+
+- **config_sha256**: `50ef1e61dab6238be82a85d81ec01b0d449151768a66c5d8a5b95d1e41e3831d`
+- **Motivo**: dar um norte explícito de retorno mensal (tiers 2%/4%/5%) e punir meses negativos.
+- **Parâmetros adicionados/alterados**:
+  - `monthly_target_tiers`: `[[0.02, 0.5], [0.04, 1.0], [0.05, 1.5]]` — bônus aplicado ao fechar o mês se o retorno >= tier.
+  - `monthly_shortfall_penalty`: `0.5` — penalidade se o retorno mensal for < 0.
+  - `max_long_entry_dist_fast_pct` / `max_short_entry_dist_fast_pct`: `0.0` (sem bloqueio por distância).
+  - `exit_on_fast_slow_cross`: `true` (sai quando fast cruza slow contra a posição).
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Ao fechar o mês (reward mensal agregado), calcula `month_ret` e adiciona o bônus do maior tier atingido; se `month_ret < 0`, aplica `monthly_shortfall_penalty`.
+- **Próximo passo**: retreinar (`poetry run python -m src.strategies.ema_only.train`) e backtestar com o modelo novo para avaliar se o agente passa a perseguir as metas mensais.
+
+---
+
+## 2025-12-05 — ema_only_rl_v25_trend_surfer_gate
+
+- **config_sha256**: `24333a9d50da8b1939a670412dcc8d37639a38c7fa674f8ba6bd0f49d084d19a`
+- **Motivo**: aproximar a lógica do “Trend Surfer” (EMA34/89/200 + ATR 2.5) e sair do modo scalper perdedor.
+- **Parâmetros alterados**:
+  - `consensus_threshold`: `0.45`
+  - `min_hold_bars`: `5`, `churn_penalty`: `0.01`
+  - `atr_stop_mult`: `2.5`, `atr_trail_mult`: `2.5`
+  - `max_long_entry_dist_fast_pct` / `max_short_entry_dist_fast_pct`: `0.0`
+  - `trend_flip_penalty`: `0.05`
+  - `living_cost_per_episode`: `10.0`
+  - `override_long_gate`: `false`, `override_short_gate`: `false` (gates reativados)
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Gate exige alinhamento das EMAs: long só entra com `ema_fast > ema_slow` e `slope_ref > 0`; short só com `ema_fast < ema_slow` e `slope_ref < 0`. O slope da `ref_ema` é calculado para evitar operar em 200 “flat”.
+- **Demais campos mantidos**: metas mensais (tiers 2/4/5), stop de regime (zera long se exp_trend/ref < 0.4), saída fast<slow ativada, bear regime (block_long_in_bear=true, bear_consensus_short_threshold=0.3), bônus em degraus e pullback.
+- **Próximo passo**: retreinar (`train.py`) e rodar `rl_backtest.py` para avaliar se o agente aprende a surfar tendências em vez de scalpar.
+
+---
+
+## 2025-12-05 — ema_only_rl_v26_zero_penalties
+
+- **config_sha256**: `576df136f7201d1ac85c9afb66b7440d2a9de82b203c583b69ecded74a64dbb4`
+- **Motivo**: remover todas as punições do reward para observar o comportamento puro das regras de tendência/stop.
+- **Parâmetros zerados**:
+  - `dd_penalty`, `churn_penalty`, `vol_penalty`, `gating_penalty`, `trend_flip_penalty`, `trend_exit_penalty`, `monthly_shortfall_penalty`
+  - `living_cost_per_episode`: `0.0`
+- **Demais campos mantidos**: filtros de tendência (fast/slow + slope_ref), stops ATR 2.5/2.5, metas mensais (só bônus), min_hold_bars=5, consenso 0.45.
+- **Observação**: com zero penalidades, o reward passa a depender quase só do PnL e dos bônus (consenso, entry tiers, metas mensais). Requer retreino para avaliar efeito real.
+
+---
+
+## 2025-12-05 — ema_only_rl_v27_dynamic_sizing
+
+- **config_sha256**: `576df136f7201d1ac85c9afb66b7440d2a9de82b203c583b69ecded74a64dbb4` (mesmo hash, lógica adicionada no código).
+- **Motivo**: usar position sizing dinâmico baseado em % de risco por trade e stop ATR, em vez de lote fixo.
+- **Lógica adicionada em `rl_env.py`**:
+  - Novos campos em `RLConfig`:
+    - `risk_per_trade_pct` (default 0, opcional; ex. 0.01 = 1% do capital).
+    - `max_position_pct` (default 0.95) para limitar o tamanho da posição em relação ao capital.
+  - Ao abrir posição:
+    - Se `risk_per_trade_pct > 0` e há ATR e `atr_stop_mult > 0`, calcula stop_dist = atr_stop_mult * atr_value.
+    - `risk_amount = equity * risk_per_trade_pct`.
+    - `lot = (risk_amount / stop_dist) / price`, limitado por `max_position_pct * equity / price`.
+    - Se não houver ATR ou risco configurado, usa `cfg.lot_size` como fallback.
+  - Custos, PnL e MTM passam a usar `self.position_size` (por trade) em vez de `cfg.lot_size` fixo.
+- **Parâmetros atuais relacionados**:
+  - `risk_per_trade_pct`: ainda 0.0 no config (ativar definindo, por ex., 0.01).
+  - `max_position_pct`: 0.95 (limite padrão).
+- **Próximo passo**: definir `risk_per_trade_pct` no `config.json` (ex.: 0.01–0.02), retreinar e backtestar para ver o impacto do sizing dinâmico.
+
+---
+
+## 2025-12-05 — ema_only_rl_v28_sizing_on
+
+- **config_sha256**: `e3572e886a17c34c9c6df71beb8665b597d5f079d09ca44683a5417daaacdfbd`
+- **Motivo**: ativar o position sizing dinâmico para arriscar uma fração do capital por trade.
+- **Parâmetros alterados**:
+  - `risk_per_trade_pct`: `0.01` (1% do capital por trade)
+  - `max_position_pct`: `0.95` (limite superior da posição em relação ao capital, para pagar taxas)
+- **Demais campos**: mantidos (penalidades zeradas, stops 2.5/2.5, gates ativos com slope_ref, metas mensais só com bônus).
+- **Próximo passo**: retreinar (`train.py`) e rodar `rl_backtest.py` para avaliar o impacto do sizing dinâmico.
+
+---
+
+## 2025-12-05 — ema_only_rl_v29_symmetric_trend_gate
+
+- **config_sha256**: `e3572e886a17c34c9c6df71beb8665b597d5f079d09ca44683a5417daaacdfbd`
+- **Motivo**: garantir simetria total nas checagens de tendência dos experts para long e short.
+- **Alteração no ambiente (`rl_env.py`)**:
+  - `trend_long_ok` agora exige `exp_trend >= 0.5` **e** `exp_ref >= 0.5`.
+  - `trend_short_ok` agora exige `exp_trend < 0.5` **e** `exp_ref < 0.5`.
+  - Ou seja, ambos os especialistas precisam concordar com a direção, tanto para compras quanto para vendas.
+- **Demais parâmetros**: mantidos (sizing dinâmico, penalidades zeradas, stops 2.5/2.5, gates com slope_ref, metas mensais só bônus).
+- **Próximo passo**: rodar backtest/treino e verificar se a simetria reduz bloqueios só de um lado e melhora a captura de shorts.

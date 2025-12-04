@@ -43,6 +43,19 @@ class RLConfig:
     trend_exit_penalty: float = 0.0       # penalidade ao fechar ainda do lado “bom” da ema_fast
     atr_stop_mult: float = 0.0            # múltiplo de ATR para stop inicial
     atr_trail_mult: float = 0.0           # múltiplo de ATR para trailing stop
+    entry_bonus_fast_over_slow: float = 0.0  # bônus ao abrir com ema_fast > ema_slow (ou < para short)
+    entry_bonus_full_trend: float = 0.0      # bônus extra ao abrir com fast>slow>ref (ou invertido para short)
+    override_long_gate: bool = False         # se True, não bloqueia entradas long por consenso/tendência/distância
+    override_short_gate: bool = False        # se True, não bloqueia entradas short por consenso/tendência/distância
+    bear_regime_threshold: float = 0.45      # limiar para detectar regime de baixa (exp_trend/ref < threshold)
+    block_long_in_bear: bool = False         # se True, bloqueia novas entradas long em regime de baixa
+    bear_consensus_short_threshold: float = 0.3  # limiar especial de consenso para short em regime de baixa
+    exit_on_fast_slow_cross: bool = True     # se True, fecha posição quando ema_fast cruza ema_slow contra a posição
+    risk_per_trade_pct: float = 0.0          # sizing dinâmico: % do capital a arriscar por trade (0 = desliga)
+    max_position_pct: float = 0.95           # limite superior da posição em relação ao capital (para pagar taxas)
+    # Recompensa por metas mensais (tiered)
+    monthly_target_tiers: Optional[list[tuple[float, float]]] = None  # lista de (ret_min, bonus)
+    monthly_shortfall_penalty: float = 0.0   # penalidade se retorno mensal < 0
 
 
 class EmaEnv(gym.Env):
@@ -84,6 +97,7 @@ class EmaEnv(gym.Env):
         super().reset(seed=seed)
         self.idx = 0
         self.position = 0  # -1 short, 0 flat, 1 long
+        self.position_size = 0.0  # tamanho do lote em BTC para o trade atual
         self.entry_price = 0.0
         self.stop_price = 0.0
         self.equity = self.cfg.init_equity
@@ -120,8 +134,8 @@ class EmaEnv(gym.Env):
             return float(self.df["ref_ema"].iloc[i])
         return float(self.df["close"].iloc[i])
 
-    def _apply_cost(self, price: float):
-        cost = (self.cfg.fee_pct + self.cfg.slippage_pct) * price * self.cfg.lot_size
+    def _apply_cost(self, price: float, lot_size: float):
+        cost = (self.cfg.fee_pct + self.cfg.slippage_pct) * price * lot_size
         self.equity -= cost
         return cost
 
@@ -174,6 +188,48 @@ class EmaEnv(gym.Env):
         thr = float(self.cfg.consensus_threshold)
         cons_long_ok = cons >= thr
         cons_short_ok = cons <= (1.0 - thr)
+        # Confirmação extra de tendência: exige que exp_trend e exp_ref concordem
+        # e que o consenso esteja minimamente alto para considerar entradas.
+        trend_long_ok = True
+        trend_short_ok = True
+        if "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
+            try:
+                exp_trend_val = float(self.features["exp_trend"].iloc[self.idx])
+                exp_ref_val = float(self.features["exp_ref"].iloc[self.idx])
+            except Exception:
+                exp_trend_val = np.nan
+                exp_ref_val = np.nan
+            if not (np.isfinite(exp_trend_val) and np.isfinite(exp_ref_val)):
+                trend_long_ok = False
+                trend_short_ok = False
+            else:
+                # Simetria: long se ambos >= 0.5; short se ambos < 0.5
+                trend_long_ok = (exp_trend_val >= 0.5) and (exp_ref_val >= 0.5)
+                trend_short_ok = (exp_trend_val < 0.5) and (exp_ref_val < 0.5)
+        # Flags de regime de baixa
+        in_bear_regime = False
+        in_bear_strict = False
+        try:
+            if "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
+                exp_tr = float(self.features["exp_trend"].iloc[self.idx])
+                exp_rf = float(self.features["exp_ref"].iloc[self.idx])
+                if np.isfinite(exp_tr) and np.isfinite(exp_rf):
+                    in_bear_regime = (exp_tr < 0.4) or (exp_rf < 0.4)
+                    bear_thr = float(getattr(self.cfg, "bear_regime_threshold", 0.45))
+                    in_bear_strict = (exp_tr < bear_thr) and (exp_rf < bear_thr)
+        except Exception:
+            in_bear_regime = False
+            in_bear_strict = False
+        # Slope da ref_ema (EMA longa) para filtrar tendências flat
+        slope_ref = 0.0
+        if "ref_ema" in self.features.columns and self.idx > 0:
+            try:
+                prev_ref = float(self.features["ref_ema"].iloc[self.idx - 1])
+                curr_ref = float(self.features["ref_ema"].iloc[self.idx])
+                if np.isfinite(prev_ref) and np.isfinite(curr_ref):
+                    slope_ref = curr_ref - prev_ref
+            except Exception:
+                slope_ref = 0.0
 
         # --- Decodifica ação em posição alvo --------------------------------
         desired_pos = self.position
@@ -201,20 +257,34 @@ class EmaEnv(gym.Env):
             max_short = float(getattr(self.cfg, "max_short_entry_dist_fast_pct", 0.0))
 
             if desired_pos == 1:
-                block = not (ref_long_ok and cons_long_ok)
-                if (
-                    not block
-                    and max_long > 0.0
-                    and dist_fast is not None
-                    and dist_fast > max_long
-                ):
-                    # preço está esticado demais acima da ema_fast: evita comprar topo
-                    block = True
-                if block:
+                # Long exige tendência de alta: fast > slow e slope_ref > 0
+                fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
+                slow = float(self.features["ema_slow"].iloc[self.idx]) if "ema_slow" in self.features.columns else np.nan
+                fast_above_slow = np.isfinite(fast) and np.isfinite(slow) and fast > slow
+                # Bloqueio extra: regime de baixa estrito
+                if in_bear_strict and getattr(self.cfg, "block_long_in_bear", False):
                     reward -= self.cfg.gating_penalty
                     desired_pos = 0
+                else:
+                    block = False if self.cfg.override_long_gate else not (ref_long_ok and cons_long_ok and trend_long_ok and fast_above_slow and slope_ref > 0.0)
+                    if (
+                        not block
+                        and max_long > 0.0
+                        and dist_fast is not None
+                        and dist_fast > max_long
+                    ):
+                        block = True
+                    if block:
+                        reward -= self.cfg.gating_penalty
+                        desired_pos = 0
             elif desired_pos == -1:
-                block = not (ref_short_ok and cons_short_ok)
+                # Short exige tendência de baixa: fast < slow e slope_ref < 0
+                fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
+                slow = float(self.features["ema_slow"].iloc[self.idx]) if "ema_slow" in self.features.columns else np.nan
+                fast_below_slow = np.isfinite(fast) and np.isfinite(slow) and fast < slow
+                if in_bear_strict and getattr(self.cfg, "bear_consensus_short_threshold", 0.0) > 0.0:
+                    cons_short_ok = cons <= float(self.cfg.bear_consensus_short_threshold)
+                block = False if self.cfg.override_short_gate else not (ref_short_ok and cons_short_ok and trend_short_ok and fast_below_slow and slope_ref < 0.0)
                 if (
                     not block
                     and max_short > 0.0
@@ -259,16 +329,31 @@ class EmaEnv(gym.Env):
         elif self.position == -1 and self.stop_price not in (0.0, np.nan):
             if price >= self.stop_price:
                 desired_pos = 0
+        # Stop de regime: se estamos long e entramos em regime de baixa, forçamos zerar
+        if self.position == 1 and in_bear_regime:
+            desired_pos = 0
+        # Stop técnico: cruza fast/slow contra a posição
+        if self.cfg.exit_on_fast_slow_cross and "ema_fast" in self.features.columns and "ema_slow" in self.features.columns:
+            try:
+                ef_exit = float(self.features["ema_fast"].iloc[self.idx])
+                es_exit = float(self.features["ema_slow"].iloc[self.idx])
+                if np.isfinite(ef_exit) and np.isfinite(es_exit):
+                    if self.position == 1 and ef_exit < es_exit:
+                        desired_pos = 0
+                    elif self.position == -1 and ef_exit > es_exit:
+                        desired_pos = 0
+            except Exception:
+                pass
 
         # --- Fecha posição atual, se necessário -----------------------------
         if desired_pos != self.position and self.position != 0:
             side = self.position
             if side == 1:
-                pnl = (price - self.entry_price) * self.cfg.lot_size
+                pnl = (price - self.entry_price) * self.position_size
             else:  # side == -1
-                pnl = (self.entry_price - price) * self.cfg.lot_size
+                pnl = (self.entry_price - price) * self.position_size
             self.equity += pnl
-            cost = self._apply_cost(price)
+            cost = self._apply_cost(price, self.position_size)
             # custo fixo de turnover/trade (normalmente 0 neste setup)
             self.equity -= self.cfg.trade_penalty + self.cfg.turnover_penalty
             if pnl > 0 and self.cfg.realized_bonus_coef > 0:
@@ -288,12 +373,27 @@ class EmaEnv(gym.Env):
                     pass
             self.position = 0
             self.entry_price = 0.0
+            self.position_size = 0.0
             self.stop_price = 0.0
             self._entry_idx = -1
 
         # --- Abre nova posição, se desejado ---------------------------------
         if desired_pos != self.position and desired_pos != 0:
             self.position = desired_pos
+            # Sizing dinâmico opcional baseado no risco por trade e stop ATR
+            lot = self.cfg.lot_size
+            if atr_value is not None and self.cfg.risk_per_trade_pct > 0 and self.cfg.atr_stop_mult > 0:
+                stop_dist = self.cfg.atr_stop_mult * atr_value
+                if stop_dist > 0:
+                    risk_amount = self.equity * self.cfg.risk_per_trade_pct
+                    max_pos_usd = self.equity * float(getattr(self.cfg, "max_position_pct", 0.95))
+                    lot_est = risk_amount / stop_dist
+                    # converte usd -> lot em BTC dividindo pelo preço
+                    lot = lot_est / price
+                    lot_usd = lot * price
+                    if lot_usd > max_pos_usd:
+                        lot = max_pos_usd / price
+            self.position_size = lot
             self.entry_price = price
             # Stop ATR inicial para o novo trade
             if atr_value is not None and self.cfg.atr_stop_mult > 0.0:
@@ -305,27 +405,39 @@ class EmaEnv(gym.Env):
                 self.stop_price = 0.0
             self._entry_idx = self.idx
             self.trades += 1
-            cost = self._apply_cost(price)
+            cost = self._apply_cost(price, self.position_size)
             self.equity -= self.cfg.trade_penalty
-            # Shaping: bônus/penalidade por entrar a favor/contra a tendência EMA
+            # Shaping de entrada por degraus de alinhamento de EMAs
             ef = np.nan
             es = np.nan
+            ref = np.nan
             try:
                 ef = float(self.features["ema_fast"].iloc[self.idx])
                 es = float(self.features["ema_slow"].iloc[self.idx])
-                if np.isfinite(ef) and np.isfinite(es):
-                    trend = np.sign(ef - es)
-                else:
-                    trend = 0.0
+                ref = float(self.features["ref_ema"].iloc[self.idx]) if "ref_ema" in self.features.columns else np.nan
             except Exception:
-                trend = 0.0
-            pos_sign = float(self.position)
-            if trend != 0.0 and pos_sign != 0.0:
-                align = trend * pos_sign  # >0: com a tendência, <0: contra
-                if align > 0.0 and self.cfg.trend_entry_bonus != 0.0:
-                    reward += float(self.cfg.trend_entry_bonus)
-                elif align < 0.0 and self.cfg.trend_entry_penalty != 0.0:
-                    reward -= float(self.cfg.trend_entry_penalty)
+                pass
+            if np.isfinite(ef) and np.isfinite(es):
+                trend_level = 0
+                if self.position == 1:
+                    if ef > es:
+                        trend_level = 1
+                        if np.isfinite(ref) and es > ref:
+                            trend_level = 2
+                elif self.position == -1:
+                    if ef < es:
+                        trend_level = 1
+                        if np.isfinite(ref) and es < ref:
+                            trend_level = 2
+                if trend_level == 1 and self.cfg.entry_bonus_fast_over_slow != 0.0:
+                    reward += float(self.cfg.entry_bonus_fast_over_slow)
+                elif trend_level == 2:
+                    # pode optar por somar ou substituir; aqui substituímos pelo valor do patamar cheio
+                    bonus = float(self.cfg.entry_bonus_full_trend)
+                    if bonus == 0.0 and self.cfg.entry_bonus_fast_over_slow != 0.0:
+                        # fallback: soma se full_trend não foi configurado
+                        bonus = float(self.cfg.entry_bonus_fast_over_slow)
+                    reward += bonus
             # Bônus por entrar em pullback (perto/abaixo da ema_fast para long; acima para short)
             if self.cfg.pullback_entry_bonus != 0.0 and np.isfinite(ef) and ef != 0.0:
                 dist_fast_entry = (price - ef) / ef
@@ -336,9 +448,9 @@ class EmaEnv(gym.Env):
 
         # mark-to-market unrealized
         if self.position == 1:
-            unreal = (price - self.entry_price) * self.cfg.lot_size
+            unreal = (price - self.entry_price) * self.position_size
         elif self.position == -1:
-            unreal = (self.entry_price - price) * self.cfg.lot_size
+            unreal = (self.entry_price - price) * self.position_size
         else:
             unreal = 0.0
         mtm_equity = self.equity + unreal
@@ -370,9 +482,11 @@ class EmaEnv(gym.Env):
                 reward += self.cfg.align_bonus
 
         # Consensus bonus
-        if self.position == 1 and self.cfg.consensus_bonus > 0 and "experts_mean" in self.features.columns:
+        if self.cfg.consensus_bonus > 0 and "experts_mean" in self.features.columns:
             cons = float(self.features["experts_mean"].iloc[self.idx])
-            if cons >= self.cfg.consensus_threshold:
+            if self.position == 1 and cons >= self.cfg.consensus_threshold:
+                reward += self.cfg.consensus_bonus
+            elif self.position == -1 and cons <= (1.0 - self.cfg.consensus_threshold):
                 reward += self.cfg.consensus_bonus
 
         # Churn penalty: fechar antes de min_hold_bars sem lucro
@@ -410,6 +524,17 @@ class EmaEnv(gym.Env):
             if month_changed or terminated:
                 out_reward = self._month_reward_accum
                 self._month_reward_accum = 0.0
+                # Aplica bônus/penalidade por metas mensais (alvo de retorno)
+                if hasattr(self.cfg, "monthly_target_tiers") and self.cfg.monthly_target_tiers:
+                    month_ret = (self.last_equity - self.cfg.init_equity) / self.cfg.init_equity
+                    bonus = 0.0
+                    # tiers devem estar ordenados por ret_min crescente
+                    for ret_min, tier_bonus in self.cfg.monthly_target_tiers:
+                        if month_ret >= ret_min:
+                            bonus = tier_bonus
+                    out_reward += bonus
+                    if month_ret < 0 and getattr(self.cfg, "monthly_shortfall_penalty", 0.0) != 0.0:
+                        out_reward -= float(self.cfg.monthly_shortfall_penalty)
                 self._current_month = next_month
         else:
             out_reward = reward
