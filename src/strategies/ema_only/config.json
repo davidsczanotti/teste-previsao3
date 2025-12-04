@@ -32,7 +32,7 @@
       "start": "2017-01-01 00:00:00",
       "end": "2025-01-01 00:00:00",
       "val_end": "2025-12-01 00:00:00",
-      "total_timesteps": 1000000,
+      "total_timesteps": 800000,
       "n_steps": 256,
       "batch_size": 256,
       "learning_rate": 0.0003,
@@ -82,7 +82,22 @@
       ],
       "monthly_shortfall_penalty": 0.0,
       "risk_per_trade_pct": 0.01,
-      "max_position_pct": 0.95
+      "max_position_pct": 0.95,
+      "experts_enabled": {
+        "exp_trend": false,
+        "exp_ref": false,
+        "exp_macd": false,
+        "exp_slope": false,
+        "exp_intraday_trend": false,
+        "consensus": false
+      },
+      "ref_slope_enabled": false,
+      "cross_lookback_bars": 0,
+      "cross_bonus_tiers": [
+        [3, 2.0],
+        [4, 1.0],
+        [5, 0.5]
+      ]
     }
   }
 }

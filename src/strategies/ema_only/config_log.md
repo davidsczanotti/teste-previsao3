@@ -952,3 +952,69 @@ Formato sugerido por entrada:
   - Ou seja, ambos os especialistas precisam concordar com a direção, tanto para compras quanto para vendas.
 - **Demais parâmetros**: mantidos (sizing dinâmico, penalidades zeradas, stops 2.5/2.5, gates com slope_ref, metas mensais só bônus).
 - **Próximo passo**: rodar backtest/treino e verificar se a simetria reduz bloqueios só de um lado e melhora a captura de shorts.
+
+---
+
+## 2025-12-05 — ema_only_rl_v30_experts_toggles_off
+
+- **config_sha256**: `4368d021431782a36bfef518d956e2ca6a8a461dd3d80efd8fc19251740fb11a`
+- **Motivo**: permitir ligar/desligar especialistas e consenso via config e, neste experimento, desligar todos.
+- **Parâmetros alterados**:
+  - Adicionado `experts_enabled` em `reward`:
+    ```json
+    {
+      "exp_trend": false,
+      "exp_ref": false,
+      "exp_macd": false,
+      "exp_slope": false,
+      "exp_intraday_trend": false,
+      "consensus": false
+    }
+    ```
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Ignora consenso se `consensus=false` (usa 0.5 neutro).
+  - Só checa `exp_trend`/`exp_ref` se estiverem habilitados; se off, não bloqueia por eles.
+- **Próximo passo**: rodar backtest/treino com todos experts desligados para ver o comportamento “puro” das EMAs/ATR; depois, reativar seletivamente se necessário.
+
+---
+
+## 2025-12-05 — ema_only_rl_v31_cross_only_no_slope
+
+- **config_sha256**: `1e35e6fecc1f41f6f5d178bbe15a8b14f67bbee28cbce8615628853e29270918`
+- **Motivo**: focar só nas EMAs e nos cruzamentos, desligando consenso/experts e o filtro de inclinação da ref_ema.
+- **Parâmetros/config**:
+  - `experts_enabled`: todos `false` (exp_trend, exp_ref, exp_macd, exp_slope, exp_intraday_trend, consensus).
+  - `ref_slope_enabled`: `false` — não usa slope da ref_ema para gate.
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Gate passa a considerar apenas fast>slow (long) ou fast<slow (short) e ref_price (se ref bias ligado), sem checar experts/consenso/slope_ref.
+- **Demais campos**: mantidos (sizing dinâmico 1%, penalidades zeradas, stops ATR 2.5/2.5, metas mensais só bônus, saída fast<slow).
+- **Próximo passo**: treinar/backtestar para ver se o agente volta a operar com base só em cruzamentos de EMAs.
+
+---
+
+## 2025-12-05 — ema_only_rl_v32_cross_lookback_cfg
+
+- **config_sha256**: `83644076672fffbcd4de949d9dbf45d0386c3c7b52496785e159169b1eb46285`
+- **Motivo**: flexibilizar o gatilho de cruzamento fast/slow, permitindo desligar ou configurar a janela via config.
+- **Parâmetros adicionados/alterados**:
+  - `cross_lookback_bars`: `0` (0 = sem exigência de cruzamento recente; se >0, exige fast<=slow (long) ou >= (short) em até N barras passadas).
+  - `ref_slope_enabled`: permanece `false`.
+  - `experts_enabled`: segue com todos `false`.
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Se `cross_lookback_bars` > 0, requer cruzamento fast/slow dentro da janela; se 0, o cruzamento recente é ignorado (basta fast>slow ou fast<slow).
+- **Próximo passo**: rodar backtest com lookback 0 (cruzamento livre) e avaliar; depois, opcionalmente testar lookback curto (ex. 2) se voltar a overtradar.
+
+---
+
+## 2025-12-05 — ema_only_rl_v33_cross_bonus
+
+- **config_sha256**: `3add1ba8b71c3828e6ea32357f1cbd7d6789f6928b989792f956866f110e5f7f`
+- **Motivo**: recompensar cruzamentos recentes sem obrigar o gate a vetar entradas “antigas”.
+- **Parâmetros adicionados**:
+  - `cross_bonus_tiers`: `[[3, 2.0], [4, 1.0], [5, 0.5]]` — bônus no momento da entrada se o cruzamento ocorreu há até 3/4/5 barras.
+  - `cross_lookback_bars`: `0` (continua sem obrigatoriedade de cruzamento recente).
+  - `ref_slope_enabled`: `false`; `experts_enabled`: todos `false`.
+- **Lógica no ambiente (`rl_env.py`)**:
+  - Calcula se houve cruzamento fast/slow nas últimas `cross_lookback_bars`; se `0`, aceita qualquer fast>slow ou fast<slow.
+  - Se encontrar cruzamento recente, aplica o maior bônus configurado (tiers) no reward de entrada.
+- **Demais campos**: mantidos (sizing dinâmico 1%, penalidades zeradas, stops ATR 2.5/2.5, metas mensais só bônus, saída fast<slow).

@@ -53,6 +53,12 @@ class RLConfig:
     exit_on_fast_slow_cross: bool = True     # se True, fecha posição quando ema_fast cruza ema_slow contra a posição
     risk_per_trade_pct: float = 0.0          # sizing dinâmico: % do capital a arriscar por trade (0 = desliga)
     max_position_pct: float = 0.95           # limite superior da posição em relação ao capital (para pagar taxas)
+    # Toggle de especialistas/consenso
+    experts_enabled: Optional[dict] = None   # ex.: {"exp_trend": true, "exp_ref": true, "consensus": true}
+    # Shaping de cruzamento recente
+    cross_lookback_bars: int = 0             # se >0, exige cruzamento fast/slow dentro desta janela (1..N); 0 desliga
+    cross_bonus_tiers: Optional[list[tuple[int, float]]] = None  # ex.: [[3,2.0],[4,1.0],[5,0.5]]
+    cross_lookback_bars: int = 0             # se >0, exige cruzamento fast/slow dentro desta janela (1..N); 0 desliga
     # Recompensa por metas mensais (tiered)
     monthly_target_tiers: Optional[list[tuple[float, float]]] = None  # lista de (ret_min, bonus)
     monthly_shortfall_penalty: float = 0.0   # penalidade se retorno mensal < 0
@@ -143,6 +149,7 @@ class EmaEnv(gym.Env):
         terminated = False
         truncated = False
         reward = 0.0
+        cross_bonus = 0.0
         info = {}
 
         price = self._price(self.idx)
@@ -183,16 +190,19 @@ class EmaEnv(gym.Env):
                 if self.cfg.vol_penalty > 0:
                     reward -= self.cfg.vol_penalty
         cons = 0.5
-        if "experts_mean" in self.features.columns:
+        experts_cfg = getattr(self.cfg, "experts_enabled", {}) or {}
+        consensus_on = experts_cfg.get("consensus", True)
+        if consensus_on and "experts_mean" in self.features.columns:
             cons = float(self.features["experts_mean"].iloc[self.idx])
         thr = float(self.cfg.consensus_threshold)
         cons_long_ok = cons >= thr
         cons_short_ok = cons <= (1.0 - thr)
-        # Confirmação extra de tendência: exige que exp_trend e exp_ref concordem
-        # e que o consenso esteja minimamente alto para considerar entradas.
+        # Confirmação extra de tendência (opcional via experts_enabled)
         trend_long_ok = True
         trend_short_ok = True
-        if "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
+        use_exp_tr = experts_cfg.get("exp_trend", False)
+        use_exp_ref = experts_cfg.get("exp_ref", False)
+        if use_exp_tr and use_exp_ref and "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
             try:
                 exp_trend_val = float(self.features["exp_trend"].iloc[self.idx])
                 exp_ref_val = float(self.features["exp_ref"].iloc[self.idx])
@@ -203,26 +213,25 @@ class EmaEnv(gym.Env):
                 trend_long_ok = False
                 trend_short_ok = False
             else:
-                # Simetria: long se ambos >= 0.5; short se ambos < 0.5
                 trend_long_ok = (exp_trend_val >= 0.5) and (exp_ref_val >= 0.5)
                 trend_short_ok = (exp_trend_val < 0.5) and (exp_ref_val < 0.5)
-        # Flags de regime de baixa
+        # Flags de regime de baixa (se experts ligados)
         in_bear_regime = False
         in_bear_strict = False
-        try:
-            if "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
+        if use_exp_tr and use_exp_ref and "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
+            try:
                 exp_tr = float(self.features["exp_trend"].iloc[self.idx])
                 exp_rf = float(self.features["exp_ref"].iloc[self.idx])
                 if np.isfinite(exp_tr) and np.isfinite(exp_rf):
                     in_bear_regime = (exp_tr < 0.4) or (exp_rf < 0.4)
                     bear_thr = float(getattr(self.cfg, "bear_regime_threshold", 0.45))
                     in_bear_strict = (exp_tr < bear_thr) and (exp_rf < bear_thr)
-        except Exception:
-            in_bear_regime = False
-            in_bear_strict = False
-        # Slope da ref_ema (EMA longa) para filtrar tendências flat
+            except Exception:
+                in_bear_regime = False
+                in_bear_strict = False
+        # Slope da ref_ema (EMA longa) para filtrar tendências flat (pode ser desativado via ref_slope_enabled)
         slope_ref = 0.0
-        if "ref_ema" in self.features.columns and self.idx > 0:
+        if getattr(self.cfg, "ref_slope_enabled", True) and "ref_ema" in self.features.columns and self.idx > 0:
             try:
                 prev_ref = float(self.features["ref_ema"].iloc[self.idx - 1])
                 curr_ref = float(self.features["ref_ema"].iloc[self.idx])
@@ -243,56 +252,73 @@ class EmaEnv(gym.Env):
 
         # Gate só atua em entradas a partir de cash (position == 0)
         if self.position == 0 and desired_pos != 0:
-            # Distância do preço até a ema_fast (para evitar comprar topo/vender fundo)
-            dist_fast = None
-            if "ema_fast" in self.features.columns:
-                try:
-                    ef = float(self.features["ema_fast"].iloc[self.idx])
-                    if np.isfinite(ef) and ef != 0.0:
-                        dist_fast = (price - ef) / ef  # >0: preço acima da ema_fast
-                except Exception:
-                    dist_fast = None
-
-            max_long = float(getattr(self.cfg, "max_long_entry_dist_fast_pct", 0.0))
-            max_short = float(getattr(self.cfg, "max_short_entry_dist_fast_pct", 0.0))
-
             if desired_pos == 1:
-                # Long exige tendência de alta: fast > slow e slope_ref > 0
+                # Long exige tendência de alta: fast > slow (cruzamento recente opcional) e slope_ref > 0 se habilitado
                 fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
                 slow = float(self.features["ema_slow"].iloc[self.idx]) if "ema_slow" in self.features.columns else np.nan
                 fast_above_slow = np.isfinite(fast) and np.isfinite(slow) and fast > slow
+                lookback_n = int(getattr(self.cfg, "cross_lookback_bars", 0) or 0)
+                crossed_recent = True if lookback_n == 0 else False
+                cross_bonus = 0.0
+                if lookback_n > 0 and np.isfinite(fast) and np.isfinite(slow):
+                    max_lb = min(lookback_n + 1, self.idx + 1)
+                    for lookback in range(1, max_lb):
+                        prev_fast = float(self.features["ema_fast"].iloc[self.idx - lookback])
+                        prev_slow = float(self.features["ema_slow"].iloc[self.idx - lookback])
+                        if np.isfinite(prev_fast) and np.isfinite(prev_slow) and prev_fast <= prev_slow:
+                            crossed_recent = True
+                            tiers = getattr(self.cfg, "cross_bonus_tiers", None) or []
+                            for lb_thr, bonus_val in tiers:
+                                if lookback <= lb_thr:
+                                    cross_bonus = max(cross_bonus, float(bonus_val))
+                            break
                 # Bloqueio extra: regime de baixa estrito
                 if in_bear_strict and getattr(self.cfg, "block_long_in_bear", False):
                     reward -= self.cfg.gating_penalty
                     desired_pos = 0
                 else:
-                    block = False if self.cfg.override_long_gate else not (ref_long_ok and cons_long_ok and trend_long_ok and fast_above_slow and slope_ref > 0.0)
-                    if (
-                        not block
-                        and max_long > 0.0
-                        and dist_fast is not None
-                        and dist_fast > max_long
-                    ):
-                        block = True
+                    # Se experts/consensus desligados, ignora trend_long_ok/cons_long_ok
+                    block = False if self.cfg.override_long_gate else not (
+                        ref_long_ok
+                        and (cons_long_ok or not consensus_on)
+                        and (trend_long_ok or not (use_exp_tr and use_exp_ref))
+                        and fast_above_slow
+                        and crossed_recent
+                        and (slope_ref > 0.0 if getattr(self.cfg, "ref_slope_enabled", True) else True)
+                    )
                     if block:
                         reward -= self.cfg.gating_penalty
                         desired_pos = 0
             elif desired_pos == -1:
-                # Short exige tendência de baixa: fast < slow e slope_ref < 0
+                # Short exige tendência de baixa: fast < slow (cruzamento recente opcional) e slope_ref < 0 se habilitado
                 fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
                 slow = float(self.features["ema_slow"].iloc[self.idx]) if "ema_slow" in self.features.columns else np.nan
                 fast_below_slow = np.isfinite(fast) and np.isfinite(slow) and fast < slow
+                lookback_n = int(getattr(self.cfg, "cross_lookback_bars", 0) or 0)
+                crossed_recent = True if lookback_n == 0 else False
+                cross_bonus = 0.0
+                if lookback_n > 0 and np.isfinite(fast) and np.isfinite(slow):
+                    max_lb = min(lookback_n + 1, self.idx + 1)
+                    for lookback in range(1, max_lb):
+                        prev_fast = float(self.features["ema_fast"].iloc[self.idx - lookback])
+                        prev_slow = float(self.features["ema_slow"].iloc[self.idx - lookback])
+                        if np.isfinite(prev_fast) and np.isfinite(prev_slow) and prev_fast >= prev_slow:
+                            crossed_recent = True
+                            tiers = getattr(self.cfg, "cross_bonus_tiers", None) or []
+                            for lb_thr, bonus_val in tiers:
+                                if lookback <= lb_thr:
+                                    cross_bonus = max(cross_bonus, float(bonus_val))
+                            break
                 if in_bear_strict and getattr(self.cfg, "bear_consensus_short_threshold", 0.0) > 0.0:
                     cons_short_ok = cons <= float(self.cfg.bear_consensus_short_threshold)
-                block = False if self.cfg.override_short_gate else not (ref_short_ok and cons_short_ok and trend_short_ok and fast_below_slow and slope_ref < 0.0)
-                if (
-                    not block
-                    and max_short > 0.0
-                    and dist_fast is not None
-                    and dist_fast < -max_short
-                ):
-                    # preço muito abaixo da ema_fast: evita vender fundo
-                    block = True
+                block = False if self.cfg.override_short_gate else not (
+                    ref_short_ok
+                    and (cons_short_ok or not consensus_on)
+                    and (trend_short_ok or not (use_exp_tr and use_exp_ref))
+                    and fast_below_slow
+                    and crossed_recent
+                    and (slope_ref < 0.0 if getattr(self.cfg, "ref_slope_enabled", True) else True)
+                )
                 if block:
                     reward -= self.cfg.gating_penalty
                     desired_pos = 0
@@ -407,6 +433,9 @@ class EmaEnv(gym.Env):
             self.trades += 1
             cost = self._apply_cost(price, self.position_size)
             self.equity -= self.cfg.trade_penalty
+            # Bônus por cruzamento recente, se configurado
+            if cross_bonus != 0.0:
+                reward += cross_bonus
             # Shaping de entrada por degraus de alinhamento de EMAs
             ef = np.nan
             es = np.nan
