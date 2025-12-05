@@ -57,6 +57,7 @@ Exemplo (BTCUSDT 1h, desde 2017‑01‑01):
 
 ```bash
 poetry run python -m scripts.populate_cache BTCUSDT 1h --start "2017-01-01 00:00:00"
+poetry run python -m scripts.populate_cache BTCUSDT 4h --start "2017-01-01 00:00:00"
 ```
 
 Configuração (`config.json`)
@@ -220,3 +221,4 @@ Camada RL (experimental)
 
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.rl_backtest
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.train
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.walk_forward

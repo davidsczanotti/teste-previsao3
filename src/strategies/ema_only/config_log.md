@@ -361,6 +361,24 @@ Formato sugerido por entrada:
 
 ---
 
+## 2025-12-05 — ema_only_rl_v7_flip_gate_short_bonus
+
+- **config_sha256**: `cc487fd747737416afc0c90c8e49b25e9d0e49e798281d3f1586bc004786baff` (JSON sem mudanças; ajuste foi no ambiente).
+- **Motivo**: corrigir assimetria long/short aplicando o gate também em flips de posição e alinhar o bônus de short aos degraus de EMAs (fast < slow = bônus 1x; fast < slow e slow < ref = bônus 2x).
+- **Alterações de lógica no ambiente (`rl_env.py`)**:
+  - O gate de entrada passa a rodar sempre que há tentativa de abrir/flipar posição; se o filtro reprova, a posição atual é mantida (ou permanece flat) e aplica-se `gating_penalty`.
+  - O bônus de short em dois degraus agora checa `ema_slow < ref_ema` para conceder o bônus cheio (em vez de `ema_fast < ref_ema`).
+- **Artefatos do backtest (jan–nov/2025, greedy)**:
+  - Resumo mensal: `src/strategies/ema_only/reports/rl/monthly_pnl_ema_only_rl.json`.
+  - Ações e preço/EMAs: `src/strategies/ema_only/reports/rl/actions.png`.
+  - Log detalhado por candle/ação: `src/strategies/ema_only/reports/rl/actions_debug.csv`.
+- **Resultado do backtest mensal (equity inicial 1000)**:
+  - PnL por mês (%): jan −10.13, fev −10.43, mar +7.09, abr +25.36, mai +21.28, jun −8.68, jul +8.88, ago +7.12, set −3.53, out +1.90, nov +16.46.
+  - Equity final: `1598.03` (+59.8% no período).
+- **Observação qualitativa**: o agente voltou a operar ambos os lados com frequência; os bônus/punições de entrada agora refletem a hierarquia fast/slow/ref, e o gate evita flips “cegos”, resultando em uma curva mais inclinada no ciclo de validação 2025.
+
+---
+
 ## 2025-12-03 — ema_only_rl_v7_avoid_tops_bottoms
 
 - **config_sha256**: `4dcfae9a73f731aaf68e7ee117922dd68945fe032d1ff226f1c5d59f4579b7fb`
@@ -1018,3 +1036,19 @@ Formato sugerido por entrada:
   - Calcula se houve cruzamento fast/slow nas últimas `cross_lookback_bars`; se `0`, aceita qualquer fast>slow ou fast<slow.
   - Se encontrar cruzamento recente, aplica o maior bônus configurado (tiers) no reward de entrada.
 - **Demais campos**: mantidos (sizing dinâmico 1%, penalidades zeradas, stops ATR 2.5/2.5, metas mensais só bônus, saída fast<slow).
+- **Próximo passo**: treinar/backtestar para ver se o agente volta a operar com base só em cruzamentos de EMAs.
+
+---
+
+## 2025-12-05 — ema_only_rl_v34_experts_back_on
+
+- **config_sha256**: `current_hash_placeholder`
+- **Motivo**: reativar o gate de especialistas (Trend + Ref + Consensus) e o bônus de tendência, pois os resultados sem gate mostraram volatilidade excessiva (-9% jan, +27% jul). O objetivo é filtrar o ruído e estabilizar o retorno mensal em 2-5%.
+- **Parâmetros alterados**:
+  - `experts_master_enable`: `true` (reativado).
+  - `experts_enabled`: `exp_trend=true`, `exp_ref=true`, `consensus=true`.
+  - `trend_entry_bonus`: `0.2` (aumentado de 0.1 para reforçar o sinal).
+  - `risk_per_trade_pct`: `0.01` (confirmado 1% para evitar drawdown excessivo).
+- **Ajuste de Código (`rl_env.py`)**:
+  - Corrigida a lógica do bônus "Short Level 2" para `fast < ref` (simetria correta com o texto do usuário), facilitando a detecção de reversões de baixa.
+- **Próximo passo**: **Retreinar** obrigatoriamente para que o agente aprenda a nova política de risco e bônus.

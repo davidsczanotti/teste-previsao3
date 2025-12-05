@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Tuple
 
@@ -75,17 +76,22 @@ def main():
     cfg = load_cfg()
     rl_cfg = cfg.get("rl", {})
     train_cfg = rl_cfg.get("train", {})
-    # Métricas de treino (se existirem)
-    metrics_path = Path("src/strategies/ema_only/reports/rl/metrics.csv")
+
+    # --- Caminhos parametrizáveis ------------------------------------------
+    model_path_env = os.getenv("EMA_ONLY_MODEL_PATH")
+    model_path = Path(model_path_env) if model_path_env else Path("src/strategies/ema_only/reports/rl/ppo_ema_only.zip")
+    outdir = model_path.parent
+
+    # Métricas de treino (se existirem) na mesma pasta do modelo
+    metrics_path = outdir / "metrics.csv"
     metrics_df = _load_metrics(metrics_path)
-    plot_metrics(metrics_df, Path("src/strategies/ema_only/reports/rl"))
+    plot_metrics(metrics_df, outdir)
 
     # Rollout de validação curto para gerar actions.png
-    start = train_cfg.get("end", "2025-01-01 00:00:00")
-    val_end = train_cfg.get("val_end", "2025-12-01 00:00:00")
+    start = os.getenv("EMA_ONLY_VAL_START", train_cfg.get("end", "2025-01-01 00:00:00"))
+    val_end = os.getenv("EMA_ONLY_VAL_END", train_cfg.get("val_end", "2025-12-01 00:00:00"))
     val_env, _, _ = make_env_from_cfg(cfg, start, val_end)
 
-    model_path = Path("src/strategies/ema_only/reports/rl/ppo_ema_only.zip")
     actions = []
     if model_path.exists():
         # Usa o modelo treinado para gerar as ações
@@ -140,7 +146,7 @@ def main():
     actions_df = pd.DataFrame(actions)
     if not actions_df.empty:
         actions_df["Date"] = pd.to_datetime(actions_df["Date"])
-    plot_actions(actions_df, Path("src/strategies/ema_only/reports/rl"))
+    plot_actions(actions_df, outdir)
 
 
 if __name__ == "__main__":

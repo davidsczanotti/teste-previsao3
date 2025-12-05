@@ -19,6 +19,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from .backtest import compute_ema
 from .rl_env import EmaEnv, RLConfig
 from .rl_features import build_features
+from .regime_sampler import attach_regime, concat_blocks, label_regime_daily, make_blocks, sample_blocks
 from ...utils.data_loader import load_data_range  # type: ignore
 
 CFG_PATH = Path("src/strategies/ema_only/config.json")
@@ -28,7 +29,14 @@ def load_cfg():
     return json.loads(CFG_PATH.read_text())
 
 
-def make_env_from_cfg(cfg: dict, start: str, end: str) -> Tuple[EmaEnv, pd.Series, pd.Series]:
+def make_env_from_cfg(
+    cfg: dict,
+    start: str,
+    end: str,
+    *,
+    use_regime_sampling: bool | None = None,
+    seed: int | None = None,
+) -> Tuple[EmaEnv, pd.Series, pd.Series]:
     data_cfg = cfg.get("data", {})
     strat_cfg = cfg.get("strategy", {})
     rl_cfg = cfg.get("rl", {})
@@ -110,6 +118,29 @@ def make_env_from_cfg(cfg: dict, start: str, end: str) -> Tuple[EmaEnv, pd.Serie
             feats["intraday_align_ratio"] = 0.0
         if "exp_intraday_trend" not in feats.columns:
             feats["exp_intraday_trend"] = 0.0
+    # --- Amostragem por regime (opcional) -----------------------------------
+    rs_cfg = rl_cfg.get("train", {}).get("regime_sampling") or {}
+    if use_regime_sampling is None:
+        use_regime_sampling = bool(rs_cfg.get("enabled", False))
+    if use_regime_sampling:
+        block_months = int(rs_cfg.get("block_months", 6))
+        num_blocks = int(rs_cfg.get("num_blocks", 4))
+        thresholds = rs_cfg.get("regime_thresholds", {}) or {}
+        bull_thr = float(thresholds.get("bull", 0.01))
+        bear_thr = float(thresholds.get("bear", -0.01))
+        rs_seed = rs_cfg.get("seed", seed)
+
+        ref_reg = label_regime_daily(ref.copy(), bull=bull_thr, bear=bear_thr, lookback=30)
+        base_with_reg = attach_regime(base, ref_reg)
+        blocks = make_blocks(base_with_reg, block_months=block_months)
+        sampled = sample_blocks(blocks, num_blocks=num_blocks, seed=rs_seed)
+        base, feats = concat_blocks(base_with_reg, feats, sampled)
+
+    # Garante coluna block_reset no vetor de features
+    if "block_reset" not in feats.columns:
+        feats = feats.copy()
+        feats["block_reset"] = 0.0
+
     norm_mean, norm_std = feats.mean(), feats.std().replace(0.0, 1.0)
 
     # Custos e tamanho de posição: por padrão herdam da estratégia/backtest,
@@ -217,11 +248,18 @@ class MetricsCallback(BaseCallback):
         return True
 
 
-def train_from_config(cfg: dict) -> None:
+def train_from_config(
+    cfg: dict,
+    *,
+    start_override: str | None = None,
+    end_override: str | None = None,
+    use_regime_sampling: bool | None = None,
+    run_name: str | None = None,
+) -> None:
     rl_cfg = cfg.get("rl", {})
     train_cfg = rl_cfg.get("train", {})
-    start = str(train_cfg.get("start", "2019-01-01 00:00:00"))
-    end = str(train_cfg.get("end", "2025-01-01 00:00:00"))
+    start = str(start_override or train_cfg.get("start", "2019-01-01 00:00:00"))
+    end = str(end_override or train_cfg.get("end", "2025-01-01 00:00:00"))
     total_timesteps = int(train_cfg.get("total_timesteps", 800_000))
     n_steps = int(train_cfg.get("n_steps", 256))
     batch_size = int(train_cfg.get("batch_size", 256))
@@ -230,7 +268,13 @@ def train_from_config(cfg: dict) -> None:
     n_epochs = int(train_cfg.get("n_epochs", 5))
 
     def _make_env():
-        env, _, _ = make_env_from_cfg(cfg, start=start, end=end)
+        env, _, _ = make_env_from_cfg(
+            cfg,
+            start=start,
+            end=end,
+            use_regime_sampling=use_regime_sampling,
+            seed=int(train_cfg.get("seed", 42)),
+        )
         return env
 
     vec_env = DummyVecEnv([_make_env])
@@ -246,6 +290,8 @@ def train_from_config(cfg: dict) -> None:
     )
 
     metrics_dir = Path("src/strategies/ema_only/reports/rl")
+    if run_name:
+        metrics_dir = metrics_dir / run_name
     metrics_cb = MetricsCallback(metrics_dir / "metrics.csv")
     model.learn(total_timesteps=total_timesteps, callback=metrics_cb)
 

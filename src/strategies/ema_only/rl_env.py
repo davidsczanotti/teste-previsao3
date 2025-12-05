@@ -54,6 +54,7 @@ class RLConfig:
     risk_per_trade_pct: float = 0.0          # sizing dinâmico: % do capital a arriscar por trade (0 = desliga)
     max_position_pct: float = 0.95           # limite superior da posição em relação ao capital (para pagar taxas)
     # Toggle de especialistas/consenso
+    experts_master_enable: bool = True       # se False, ignora todos os experts/consenso (isola EMAs)
     experts_enabled: Optional[dict] = None   # ex.: {"exp_trend": true, "exp_ref": true, "consensus": true}
     # Shaping de cruzamento recente
     cross_lookback_bars: int = 0             # se >0, exige cruzamento fast/slow dentro desta janela (1..N); 0 desliga
@@ -163,6 +164,25 @@ class EmaEnv(gym.Env):
             except Exception:
                 atr_value = None
 
+        # Se iniciou um novo bloco amostrado, força zerar posição para evitar gaps
+        try:
+            is_block_reset = bool(self.features.get("block_reset", pd.Series([0])).iloc[self.idx] == 1.0)
+        except Exception:
+            is_block_reset = False
+        if is_block_reset and self.idx > 0 and self.position != 0:
+            desired_pos = 0
+            if self.position == 1:
+                pnl = (price - self.entry_price) * self.position_size
+            else:
+                pnl = (self.entry_price - price) * self.position_size
+            self.equity += pnl
+            self._apply_cost(price, self.position_size)
+            self.position = 0
+            self.entry_price = 0.0
+            self.position_size = 0.0
+            self.stop_price = 0.0
+            self._entry_idx = -1
+
         # Atualiza trailing stop se já houver posição aberta
         if self.position != 0 and atr_value is not None and self.cfg.atr_trail_mult > 0.0:
             if self.position == 1:
@@ -191,7 +211,8 @@ class EmaEnv(gym.Env):
                     reward -= self.cfg.vol_penalty
         cons = 0.5
         experts_cfg = getattr(self.cfg, "experts_enabled", {}) or {}
-        consensus_on = experts_cfg.get("consensus", True)
+        master_on = bool(getattr(self.cfg, "experts_master_enable", True))
+        consensus_on = master_on and experts_cfg.get("consensus", True)
         if consensus_on and "experts_mean" in self.features.columns:
             cons = float(self.features["experts_mean"].iloc[self.idx])
         thr = float(self.cfg.consensus_threshold)
@@ -200,8 +221,8 @@ class EmaEnv(gym.Env):
         # Confirmação extra de tendência (opcional via experts_enabled)
         trend_long_ok = True
         trend_short_ok = True
-        use_exp_tr = experts_cfg.get("exp_trend", False)
-        use_exp_ref = experts_cfg.get("exp_ref", False)
+        use_exp_tr = master_on and experts_cfg.get("exp_trend", False)
+        use_exp_ref = master_on and experts_cfg.get("exp_ref", False)
         if use_exp_tr and use_exp_ref and "exp_trend" in self.features.columns and "exp_ref" in self.features.columns:
             try:
                 exp_trend_val = float(self.features["exp_trend"].iloc[self.idx])
@@ -250,8 +271,9 @@ class EmaEnv(gym.Env):
             desired_pos = 0
         # action == 0 => hold
 
-        # Gate só atua em entradas a partir de cash (position == 0)
-        if self.position == 0 and desired_pos != 0:
+        # Gate atua para qualquer tentativa de entrada (inclusive flip de posição)
+        is_entry_attempt = desired_pos != 0 and (self.position == 0 or desired_pos != self.position)
+        if is_entry_attempt:
             if desired_pos == 1:
                 # Long exige tendência de alta: fast > slow (cruzamento recente opcional) e slope_ref > 0 se habilitado
                 fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
@@ -288,7 +310,7 @@ class EmaEnv(gym.Env):
                     )
                     if block:
                         reward -= self.cfg.gating_penalty
-                        desired_pos = 0
+                        desired_pos = self.position if self.position != 0 else 0
             elif desired_pos == -1:
                 # Short exige tendência de baixa: fast < slow (cruzamento recente opcional) e slope_ref < 0 se habilitado
                 fast = float(self.features["ema_fast"].iloc[self.idx]) if "ema_fast" in self.features.columns else np.nan
@@ -321,7 +343,7 @@ class EmaEnv(gym.Env):
                 )
                 if block:
                     reward -= self.cfg.gating_penalty
-                    desired_pos = 0
+                    desired_pos = self.position if self.position != 0 else 0
 
         # Penaliza inversão de posição em plena tendência (1 -> -1 ou -1 -> 1)
         if (
@@ -456,6 +478,7 @@ class EmaEnv(gym.Env):
                 elif self.position == -1:
                     if ef < es:
                         trend_level = 1
+                        # bônus cheio se média (lenta) também estiver abaixo da longa
                         if np.isfinite(ref) and es < ref:
                             trend_level = 2
                 if trend_level == 1 and self.cfg.entry_bonus_fast_over_slow != 0.0:

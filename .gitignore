@@ -56,7 +56,6 @@ venv.bak/
 # Diretórios do projeto
 
 live_charts/
-reports/
 historico/  # Ignorar dados históricos gerados (ajustar conforme necessidade)
 trascricao-estrategias/  # Ignorar transcrições temporárias
 
@@ -75,3 +74,7 @@ klines_cache.db
 # Arquivos temporários
 .DS_Store
 Thumbs.db
+moe_policy*.pt
+metrics.csv
+*.png
+reports/
