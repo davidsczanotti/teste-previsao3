@@ -1052,3 +1052,18 @@ Formato sugerido por entrada:
 - **Ajuste de Código (`rl_env.py`)**:
   - Corrigida a lógica do bônus "Short Level 2" para `fast < ref` (simetria correta com o texto do usuário), facilitando a detecção de reversões de baixa.
 - **Próximo passo**: **Retreinar** obrigatoriamente para que o agente aprenda a nova política de risco e bônus.
+
+---
+
+## 2025-12-05 — ema_only_rl_v35_trend_surfer_tuning
+
+- **config_sha256**: `4cc703bbb04b11a15068ca84d0d95f9f75b4a31cb7d8427742ca9e59d12c8797`
+- **Motivo**: reduzir a volatilidade extrema (-17% / +40%) e estabilizar o retorno na faixa de 2-5% ao mês, ajustando o risco e exigindo maior consenso para filtrar o ruído em mercados laterais.
+- **Parâmetros alterados**:
+  - `consensus_threshold`: `0.5` (aumentado de 0.35 para 0.5) — exige metade dos experts a favor, filtrando sinais fracos.
+  - `atr_stop_mult`: `2.5` (aumentado de 2.0) — stop inicial mais largo para evitar violinos em volatilidade normal.
+  - `atr_trail_mult`: `1.5` (aumentado de 1.0) — trailing mais suave para capturar tendências longas sem sair prematuramente.
+- **Demais campos mantidos**:
+  - `risk_per_trade_pct`: `0.01` (mantido em 1% por enquanto, mas monitorando).
+  - `vol_max_atr_rel`: `0.03`.
+- **Próximo passo**: re-treinar e backtestar. Se a volatilidade persistir alta, o próximo ajuste será reduzir o risco para 0.5%.

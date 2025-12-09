@@ -1,72 +1,38 @@
 from __future__ import annotations
 
 import json
-import os
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-import numpy as np
-import pandas as pd
-
-from ...utils.data_loader import load_data
-from .backtest import EmaOnlyParams, backtest_ema_only, compute_ema
-
-
-CFG_PATH = Path("src/strategies/ema_only/config.json")
-
-
-def _default(o: Any) -> Any:
-    try:
-        if isinstance(o, (np.floating,)):
-            return float(o)
-        if isinstance(o, (np.integer,)):
-            return int(o)
-        import pandas as pd  # type: ignore
-
-        if isinstance(o, (pd.Timestamp,)):
-            return o.isoformat()
-    except Exception:
-        pass
-    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
-
-
-def prepare_dataset_with_reference(
-    symbol: str,
-    timeframe: str,
-    days: int,
-    use_cache_only: bool,
-    ref_timeframe: Optional[str],
-    ref_days: Optional[int],
-    ref_ema_period: Optional[int],
-) -> pd.DataFrame:
-    df = load_data(symbol, timeframe, days=days, use_cache_only=use_cache_only).sort_values("Date").reset_index(drop=True)
-
-    if ref_timeframe and ref_ema_period:
-        ref_df = load_data(symbol, ref_timeframe, days=ref_days or days, use_cache_only=use_cache_only)
-        ref_df = ref_df.sort_values("Date").reset_index(drop=True).copy()
-        ref_df["ref_ema"] = compute_ema(ref_df["close"].astype(float), int(ref_ema_period))
-        ref_df = ref_df[["Date", "ref_ema"]]
-        df = pd.merge_asof(df, ref_df, on="Date", direction="backward")
-
-    return df
+from .backtest import backtest_ema_only
+from .optimize import prepare_dataset_with_reference, _build_params_from_config
 
 
 def main() -> None:
-    cfg = json.loads(CFG_PATH.read_text())
+    """
+    Executa um backtest único da estratégia EMA-only lendo `config.json`.
+
+    Uso recomendado (offline, consumindo apenas o cache SQLite):
+        BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.run
+    """
+    cfg_path = Path(__file__).with_name("config.json")
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+
     data_cfg: Dict[str, Any] = cfg.get("data", {})
     strat_cfg: Dict[str, Any] = cfg.get("strategy", {})
-    bt_cfg: Dict[str, Any] = cfg.get("backtest", {})
+    backtest_cfg: Dict[str, Any] = cfg.get("backtest", {})
 
-    symbol = str(data_cfg.get("symbol", "BTCUSDT"))
-    timeframe = str(data_cfg.get("timeframe", "1h"))
-    days = int(data_cfg.get("days", 3650))
+    symbol = data_cfg["symbol"]
+    timeframe = data_cfg["timeframe"]
+    days = int(data_cfg.get("days", 365))
     ref_timeframe = data_cfg.get("ref_timeframe")
     ref_days = data_cfg.get("ref_days")
     ref_ema_period = strat_cfg.get("ref_ema_period")
-    slow_period_raw = strat_cfg.get("slow_ema_period")
-    trend_period_raw = strat_cfg.get("trend_filter_period")
 
-    # Carrega dados exclusivamente do cache local, opcionalmente com EMA de referência de TF superior
+    monthly_target_pct = float(backtest_cfg.get("monthly_target_pct", 0.01))
+    initial_capital = float(backtest_cfg.get("initial_capital", 1_000.0))
+
     df = prepare_dataset_with_reference(
         symbol=symbol,
         timeframe=timeframe,
@@ -77,57 +43,113 @@ def main() -> None:
         ref_ema_period=ref_ema_period,
     )
 
-    params = EmaOnlyParams(
-        ema_period=int(strat_cfg.get("ema_period", 8)),
-        slow_ema_period=int(slow_period_raw) if slow_period_raw is not None else None,
-        trend_filter_period=int(trend_period_raw) if trend_period_raw is not None else None,
-        use_trend_filter=bool(strat_cfg.get("use_trend_filter", False)),
-        pullback_pct=float(strat_cfg.get("pullback_pct", 0.0)),
-        ref_filter_enabled=bool(strat_cfg.get("ref_filter_enabled", False)),
-        ref_ema_period=int(ref_ema_period) if ref_ema_period is not None else None,
-        ref_buffer_pct=float(strat_cfg.get("ref_buffer_pct", 0.0)),
-        ref_timeframe=str(ref_timeframe) if ref_timeframe else None,
-        lot_size=float(strat_cfg.get("lot_size", 0.001)),
-        fee_rate=float(strat_cfg.get("fee_pct", 0.001)),
-        use_cross=bool(strat_cfg.get("use_cross", False)),
-        signal_mode=str(strat_cfg.get("signal_mode", "price_reversion")),
+    params = _build_params_from_config(strat_cfg)
+
+    trades, total_pnl, stats = backtest_ema_only(
+        df,
+        params=params,
+        initial_capital=initial_capital,
+        monthly_target_pct=monthly_target_pct,
     )
 
-    initial_capital = float(bt_cfg.get("initial_capital", 1000.0))
-    trades, total_pnl, stats = backtest_ema_only(df, params=params, initial_capital=initial_capital)
+    # Resumo didático com meta mensal explícita (para auditoria).
+    avg_m = stats.get("avg_monthly_return_pct", 0.0)
+    hit_ratio = stats.get("monthly_target_hit_ratio", 0.0)
+    total_ret = stats.get("total_return_pct", 0.0)
+    max_dd = stats.get("max_drawdown_pct", 0.0)
+    win_rate = stats.get("win_rate", 0.0)
 
-    print("EMA-only Backtest Summary (config-driven):")
+    period_start = df["Date"].iloc[0]
+    period_end = df["Date"].iloc[-1]
+
+    print(f"[ema_only.run] Símbolo: {symbol}  Timeframe: {timeframe}  Dias: {days}")
     print(
-        f"Symbol={symbol} Interval={timeframe} Days={days} Mode={params.signal_mode} "
-        f"EMA={params.ema_period} SlowEMA={params.slow_ema_period} "
-        f"TrendFilter={params.use_trend_filter}:{params.trend_filter_period} "
-        f"RefTF={params.ref_timeframe} RefEMA={params.ref_ema_period} RefBuf={params.ref_buffer_pct} "
-        f"Pullback={params.pullback_pct} UseCross={params.use_cross} "
-        f"Lot={params.lot_size} Fee={params.fee_rate}"
+        f"[ema_only.run] Período: {period_start.isoformat()} -> "
+        f"{period_end.isoformat()}"
+    )
+    print(f"[ema_only.run] Objetivo mensal: {monthly_target_pct:.2%}")
+    print(
+        f"[ema_only.run] Retorno médio mensal: {avg_m:.2%}  | "
+        f"Meses >= objetivo: {hit_ratio:.1%}"
     )
     print(
-        "PnL: ${:.2f} | Return: {:.2f}% | Trades: {} | Win rate: {:.2f}% | MDD: {:.2f}%".format(
-            stats["pnl"],
-            stats["return_pct"],
-            stats["num_trades"],
-            stats["win_rate"],
-            stats["max_drawdown_pct"],
+        f"[ema_only.run] Retorno total: {total_ret:.2%}  | "
+        f"PnL: {total_pnl:.2f}  | Max DD: {max_dd:.2%}"
+    )
+    print(
+        f"[ema_only.run] Trades: {stats.get('num_trades', 0)}  | "
+        f"Win rate: {win_rate:.1%}  | Sharpe: {stats.get('sharpe', 0.0):.3f}"
+    )
+
+    # Tabela mensal detalhada (para auditoria).
+    monthly = stats.get("monthly_breakdown", {}) or {}
+    if monthly:
+        print("\n[ema_only.run] Backtest mensal — resumo:")
+        print("Mês     | StartEq  | EndEq    |   PnL   | Ret%")
+        print("--------+----------+----------+---------+--------")
+        for month in sorted(monthly.keys()):
+            row = monthly[month]
+            se = row["start_equity"]
+            ee = row["end_equity"]
+            pnl_m = row["pnl"]
+            ret_m = row["return_pct"]
+            print(
+                f"{month} | "
+                f"{se:8.2f} | "
+                f"{ee:8.2f} | "
+                f"{pnl_m:7.2f} | "
+                f"{ret_m*100:6.2f}"
+            )
+
+    # Marca significância estatística mínima (para evidenciar quando o experimento é frágil).
+    min_trades = int(backtest_cfg.get("min_trades_for_significance", 30))
+    min_candles = int(backtest_cfg.get("min_candles_for_significance", 2000))
+    sig_flags: Dict[str, Any] = {
+        "is_significant": (
+            stats.get("num_trades", 0) >= min_trades and len(df) >= min_candles
+        ),
+        "num_trades": int(stats.get("num_trades", 0)),
+        "num_candles": len(df),
+        "min_trades_for_significance": min_trades,
+        "min_candles_for_significance": min_candles,
+    }
+    if not sig_flags["is_significant"]:
+        print(
+            "[ema_only.run] AVISO: amostra com baixa significância "
+            f"(trades={sig_flags['num_trades']}, candles={sig_flags['num_candles']})."
         )
-    )
 
-    outdir = Path(bt_cfg.get("outdir", "src/strategies/ema_only/reports/backtest"))
+    # Persistência em JSON (orientado à auditoria).
+    outdir = Path(backtest_cfg.get("outdir", "src/strategies/ema_only/reports/backtest"))
     outdir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
-    out_path = outdir / f"ema_only_{symbol}_{timeframe}.json"
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(
-            {"params": params.__dict__, "stats": stats, "trades": trades},
-            f,
-            ensure_ascii=False,
-            indent=2,
-            default=_default,
-        )
-    print(f"Saved summary to {out_path}")
+    period = {
+        "start": df["Date"].iloc[0].isoformat(),
+        "end": df["Date"].iloc[-1].isoformat(),
+    }
+
+    result = {
+        "strategy": "ema_only",
+        "symbol": symbol,
+        "interval": timeframe,
+        "period": period,
+        "initial_capital": initial_capital,
+        "objective": {
+            "monthly_target_pct": monthly_target_pct,
+        },
+        "stats": stats,
+        "significance": sig_flags,
+        "trades": len(trades),
+        "total_pnl": total_pnl,
+        "config_path": str(cfg_path),
+        "run_timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    json_path = outdir / f"ema_only_backtest_{symbol}_{timeframe}_{ts}.json"
+    json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(f"[ema_only.run] Resultado salvo em: {json_path}")
 
 
 if __name__ == "__main__":

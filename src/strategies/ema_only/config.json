@@ -10,9 +10,18 @@
     "intraday_min_alignment": 0.5
   },
   "strategy": {
-    "ema_period": 21,
-    "slow_ema_period": 55,
-    "signal_mode": "ema_cross",
+    "__comment_ma_block": "Definição das 6 médias móveis: 3 SMAs + 3 EMAs. Os campos ema_period/slow_ema_period permanecem para compatibilidade e espelham ema_fast_period/ema_slow_period.",
+        "sma_fast_period": 13,
+        "sma_mid_period": 15,
+        "sma_slow_period": 198,
+        "ema_fast_period": 5,
+        "ema_mid_period": 50,
+        "ema_slow_period": 196,
+        "ema_period": 5,
+        "slow_ema_period": 196,
+
+    "__comment_entries": "Parâmetros legados de entrada/filtragem — mantidos para compatibilidade e para futuros modos de sinal.",
+        "signal_mode": "simple_ref_ema",
     "pullback_pct": 0.0,
     "use_trend_filter": false,
     "trend_filter_period": null,
@@ -20,19 +29,69 @@
     "ref_filter_enabled": true,
     "ref_ema_period": 200,
     "ref_buffer_pct": 0.0025,
-    "lot_size": 0.02,
-    "fee_pct": 0.0004
+        "lot_size": 0.0005008700769235808,
+    "fee_pct": 0.0004,
+
+    "__comment_trailing": "Configuração de stop móvel. trailing_stop_type pode ser: atr_trailing, percent_trailing ou ma_trailing.",
+    "trailing_stop_type": "none",
+        "atr_period": 11,
+        "atr_stop_mult": 3.945334086689052,
+        "atr_trail_mult": 0.5011952523193226,
+        "breakeven_rr": 1.9007561443076055,
+        "percent_trailing_pct": 0.01778321907408524,
+    "ma_trail_source": "ema_slow",
+    "ma_trail_offset_atr_mult": 1.0,
+    "allow_short": true
   },
   "backtest": {
     "initial_capital": 1000.0,
-    "outdir": "src/strategies/ema_only/reports/backtest"
+    "outdir": "src/strategies/ema_only/reports/backtest",
+    "monthly_target_pct": 0.01,
+    "min_trades_for_significance": 30,
+    "min_candles_for_significance": 2000
+  },
+  "visualize": {
+    "zoom_days": 60
+  },
+  "optimize": {
+    "enabled": true,
+    "trials": 5000,
+    "seed": 123,
+    "train_frac": 0.7,
+    "wfa_splits": 3,
+    "objective": "monthly",
+    "penalty_per_trade": 0.0,
+    "dd_penalty": 10.0,
+    "outdir": "src/strategies/ema_only/reports/optimize",
+    "search_space": {
+      "ema_fast_period": { "type": "int", "low": 5, "high": 21 },
+      "ema_mid_period": { "type": "int", "low": 10, "high": 55 },
+      "ema_slow_period": { "type": "int", "low": 55, "high": 200 },
+
+      "sma_fast_period": { "type": "int", "low": 5, "high": 21 },
+      "sma_mid_period": { "type": "int", "low": 10, "high": 55 },
+      "sma_slow_period": { "type": "int", "low": 55, "high": 200 },
+
+      "lot_size": { "type": "float", "low": 0.0005, "high": 0.005 },
+      "percent_trailing_pct": { "type": "float", "low": 0.01, "high": 0.05 },
+
+      "atr_period": { "type": "int", "low": 7, "high": 50 },
+      "atr_stop_mult": { "type": "float", "low": 1.0, "high": 4.0 },
+      "atr_trail_mult": { "type": "float", "low": 0.5, "high": 4.0 },
+      "breakeven_rr": { "type": "float", "low": 0.5, "high": 2.0 },
+
+      "trailing_stop_type": {
+        "type": "categorical",
+        "choices": ["atr_trailing", "percent_trailing", "ma_trailing"]
+      }
+    }
   },
   "rl": {
     "train": {
       "start": "2017-01-01 00:00:00",
-      "end": "2024-01-01 00:00:00",
-      "val_end": "2025-01-01 00:00:00",
-      "total_timesteps": 800000,
+      "end": "2025-01-01 00:00:00",
+      "val_end": "2026-01-01 00:00:00",
+      "total_timesteps": 300000,
       "n_steps": 256,
       "batch_size": 256,
       "learning_rate": 0.0003,
@@ -55,14 +114,14 @@
       "dd_threshold_pct": 0.02,
       "dd_penalty": 0.0,
       "min_hold_bars": 5,
-      "churn_penalty": 0.0,
-      "align_bonus": 0.02,
+      "churn_penalty": 0.02,
+      "align_bonus": 0.0029838948304784178,
       "realized_bonus_coef": 0.0,
       "atr_risk_scale": 0.3,
       "enforce_ref_bias": false,
       "reward_scale": 1.0,
       "consensus_bonus": 0.003,
-      "consensus_threshold": 0.35,
+      "consensus_threshold": 0.45,
       "vol_max_atr_rel": 0.03,
       "vol_penalty": 0.0,
       "gating_penalty": 0.0,
@@ -74,10 +133,10 @@
       "trend_flip_penalty": 0.0,
       "atr_stop_mult": 2.0,
       "atr_trail_mult": 1.0,
-      "max_long_entry_dist_fast_pct": 0.0,
-      "max_short_entry_dist_fast_pct": 0.0,
-      "pullback_entry_bonus": 0.01,
-      "trend_exit_penalty": 0.0,
+      "max_long_entry_dist_fast_pct": 0.01,
+      "max_short_entry_dist_fast_pct": 0.01,
+      "pullback_entry_bonus": 0.04385722446796245,
+      "trend_exit_penalty": 0.03980442553304314,
       "entry_bonus_fast_over_slow": 0.1,
       "entry_bonus_full_trend": 0.2,
       "override_long_gate": false,
@@ -91,8 +150,8 @@
         [0.04, 1.0],
         [0.05, 1.5]
       ],
-      "monthly_shortfall_penalty": 0.0,
-      "risk_per_trade_pct": 0.01,
+      "monthly_shortfall_penalty": 0.5,
+      "risk_per_trade_pct": 0.015,
       "max_position_pct": 0.95,
       "experts_master_enable": true,
       "experts_enabled": {
@@ -110,6 +169,18 @@
         [4, 1.0],
         [5, 0.5]
       ]
+    },
+    "optimize": {
+      "trials": 5,
+      "total_timesteps": 150000,
+      "seed": 123,
+      "search_space": {
+        "entry_bonus_fast_over_slow": [0.0, 0.1],
+        "entry_bonus_full_trend": [0.0, 0.2],
+        "pullback_entry_bonus": [0.0, 0.1],
+        "align_bonus": [0.0, 0.05],
+        "trend_exit_penalty": [0.0, 0.1]
+      }
     }
   },
   "walk_forward": {

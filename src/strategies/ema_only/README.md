@@ -222,3 +222,7 @@ Camada RL (experimental)
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.rl_backtest
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.train
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.walk_forward
+
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.optimize
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.run
+

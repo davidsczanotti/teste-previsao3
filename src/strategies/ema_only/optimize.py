@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import argparse
 import json
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 import numpy as np
 import optuna
@@ -15,7 +14,7 @@ from .backtest import backtest_ema_only, EmaOnlyParams, compute_ema
 
 
 def _time_splits(df: pd.DataFrame, k: int) -> List[Tuple[int, int]]:
-    """Return k contiguous [start, end) index ranges covering df without overlap."""
+    """Divide o dataset em k blocos contíguos [start, end) sem sobreposição."""
     n = len(df)
     if k <= 0:
         return [(0, n)]
@@ -40,7 +39,14 @@ def prepare_dataset_with_reference(
     ref_days: Optional[int],
     ref_ema_period: Optional[int],
 ) -> pd.DataFrame:
-    base = load_data(symbol, timeframe, days=days, use_cache_only=use_cache_only).sort_values("Date").reset_index(drop=True)
+    """
+    Carrega o timeframe base e (opcionalmente) anexa uma EMA de referência (TF superior).
+    """
+    base = (
+        load_data(symbol, timeframe, days=days, use_cache_only=use_cache_only)
+        .sort_values("Date")
+        .reset_index(drop=True)
+    )
     if ref_timeframe and ref_ema_period:
         ref_df = load_data(symbol, ref_timeframe, days=ref_days or days, use_cache_only=use_cache_only)
         ref_df = ref_df.sort_values("Date").reset_index(drop=True).copy()
@@ -49,248 +55,315 @@ def prepare_dataset_with_reference(
     return base
 
 
-def make_objective(
+def _build_params_from_config(strategy_cfg: Dict[str, Any]) -> EmaOnlyParams:
+    """Monta EmaOnlyParams a partir do bloco strategy do config.json."""
+    return EmaOnlyParams(
+        ema_period=int(strategy_cfg.get("ema_period", strategy_cfg.get("ema_fast_period", 21))),
+        slow_ema_period=int(strategy_cfg.get("slow_ema_period", strategy_cfg.get("ema_slow_period", 55))),
+        signal_mode=strategy_cfg.get("signal_mode", "ema_cross"),
+        pullback_pct=float(strategy_cfg.get("pullback_pct", 0.0)),
+        use_trend_filter=bool(strategy_cfg.get("use_trend_filter", False)),
+        trend_filter_period=strategy_cfg.get("trend_filter_period"),
+        use_cross=bool(strategy_cfg.get("use_cross", False)),
+        ref_filter_enabled=bool(strategy_cfg.get("ref_filter_enabled", False)),
+        ref_ema_period=strategy_cfg.get("ref_ema_period"),
+        ref_buffer_pct=float(strategy_cfg.get("ref_buffer_pct", 0.0)),
+        lot_size=float(strategy_cfg.get("lot_size", 0.001)),
+        fee_rate=float(strategy_cfg.get("fee_pct", 0.0004)),
+        sma_fast_period=strategy_cfg.get("sma_fast_period"),
+        sma_mid_period=strategy_cfg.get("sma_mid_period"),
+        sma_slow_period=strategy_cfg.get("sma_slow_period"),
+        ema_fast_period=strategy_cfg.get("ema_fast_period"),
+        ema_mid_period=strategy_cfg.get("ema_mid_period"),
+        ema_slow_period=strategy_cfg.get("ema_slow_period"),
+        trailing_stop_type=strategy_cfg.get("trailing_stop_type", "none"),
+        atr_period=int(strategy_cfg.get("atr_period", 14)),
+        atr_stop_mult=float(strategy_cfg.get("atr_stop_mult", 2.0)),
+        atr_trail_mult=float(strategy_cfg.get("atr_trail_mult", 1.0)),
+        breakeven_rr=float(strategy_cfg.get("breakeven_rr", 1.0)),
+        percent_trailing_pct=float(strategy_cfg.get("percent_trailing_pct", 0.01)),
+        ma_trail_source=strategy_cfg.get("ma_trail_source", "ema_slow"),
+        ma_trail_offset_atr_mult=float(strategy_cfg.get("ma_trail_offset_atr_mult", 1.0)),
+        allow_short=bool(strategy_cfg.get("allow_short", False)),
+    )
+
+
+def _sample_from_search_space(
+    trial: optuna.Trial,
+    search_space: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Interpreta o bloco optimize.search_space do config.json (int/float/categorical)."""
+    sampled: Dict[str, Any] = {}
+    for name, spec in search_space.items():
+        spec_type = spec.get("type")
+        if spec_type == "int":
+            sampled[name] = trial.suggest_int(name, int(spec["low"]), int(spec["high"]))
+        elif spec_type == "float":
+            sampled[name] = trial.suggest_float(name, float(spec["low"]), float(spec["high"]))
+        elif spec_type == "categorical":
+            sampled[name] = trial.suggest_categorical(name, list(spec["choices"]))
+        else:
+            raise ValueError(f"Tipo de search_space não suportado para {name}: {spec_type}")
+    return sampled
+
+
+def _enforce_ma_order(params: Dict[str, Any]) -> bool:
+    """Garante fast < mid < slow para SMAs/EMAs, quando os três existirem."""
+
+    def _check(prefix: str) -> bool:
+        f = params.get(f"{prefix}_fast_period")
+        m = params.get(f"{prefix}_mid_period")
+        s = params.get(f"{prefix}_slow_period")
+        if f is None or m is None or s is None:
+            return True
+        return f < m < s
+
+    return _check("ema") and _check("sma")
+
+
+def _make_objective_from_config(
     df_train: pd.DataFrame,
-    signal_mode: str,
-    slow_ema_period: Optional[int],
-    slow_ema_grid: Tuple[int, int] | None,
-    ref_filter_enabled: bool,
-    ref_timeframe: Optional[str],
-    ref_ema_period: Optional[int],
-    lot_size: float,
-    fee_rate: float,
-    wfa_splits: int,
-    penalty_per_trade: float,
-    objective: str,
-    dd_penalty: float,
-    ref_buffer_grid: Tuple[float, float] | None = None,
-):
+    base_params: EmaOnlyParams,
+    backtest_cfg: Dict[str, Any],
+    opt_cfg: Dict[str, Any],
+) -> Callable[[optuna.Trial], float]:
+    monthly_target_pct = float(backtest_cfg.get("monthly_target_pct", 0.01))
+    search_space = opt_cfg.get("search_space", {})
+    wfa_splits = max(1, int(opt_cfg.get("wfa_splits", 1)))
+    penalty_per_trade = float(opt_cfg.get("penalty_per_trade", 0.0))
+    dd_penalty = float(opt_cfg.get("dd_penalty", 0.0))
+    objective_mode = opt_cfg.get("objective", "combo")
+    initial_capital = float(backtest_cfg.get("initial_capital", 1_000.0))
+
     def objective(trial: optuna.Trial) -> float:
-        ema_period = trial.suggest_int("ema_period", 5, 200)
-        slow_period = trial.suggest_int("slow_ema_period", slow_ema_grid[0], slow_ema_grid[1]) if slow_ema_grid else slow_ema_period
-        use_cross = trial.suggest_categorical("use_cross", [False, True])
-        ref_buffer = 0.0
-        if ref_buffer_grid:
-            ref_buffer = trial.suggest_float("ref_buffer_pct", ref_buffer_grid[0], ref_buffer_grid[1])
+        # Copia dos parâmetros base para este trial
+        params_dict = dict(base_params.__dict__)
+        sampled = _sample_from_search_space(trial, search_space)
+        params_dict.update(sampled)
 
-        try:
-            total_pnl = 0.0
-            n_trades_total = 0
-            max_dds: List[float] = []
-            sharpes: List[float] = []
-            calmars: List[float] = []
-            for s, e in _time_splits(df_train, max(1, wfa_splits)):
-                seg = df_train.iloc[s:e].copy()
-                # Guard for too-small segments
-                if len(seg) < ema_period + 5:
-                    continue
-                use_cross_param = use_cross if signal_mode != "ema_cross" else False
-                _, pnl, stats = backtest_ema_only(
-                    seg,
-                    params=EmaOnlyParams(
-                        ema_period=ema_period,
-                        slow_ema_period=slow_period,
-                        signal_mode=signal_mode,
-                        lot_size=lot_size,
-                        fee_rate=fee_rate,
-                        use_cross=use_cross_param,
-                        ref_filter_enabled=ref_filter_enabled or bool(ref_buffer_grid),
-                        ref_buffer_pct=ref_buffer,
-                        ref_timeframe=ref_timeframe,
-                        ref_ema_period=ref_ema_period,
-                    ),
-                    initial_capital=1_000.0,
-                )
-                total_pnl += float(pnl)
-                n_trades_total += int(stats.get("num_trades", 0))
-                max_dds.append(abs(float(stats.get("max_drawdown_pct", 0.0))))
-                sharpes.append(float(stats.get("sharpe", 0.0)))
-                calmars.append(float(stats.get("calmar", 0.0)))
-
-            # If no trades at all across splits, discourage solution
-            if n_trades_total == 0:
-                return -1e12
-
-            dd_pen = dd_penalty * max(max_dds) if max_dds else 0.0
-
-            if objective == "pnl":
-                score = total_pnl - penalty_per_trade * n_trades_total - dd_pen
-            elif objective == "sharpe":
-                score = float(np.nanmean(sharpes)) if sharpes else -1e12
-            elif objective == "calmar":
-                score = float(np.nanmean(calmars)) if calmars else -1e12
-            else:  # combo
-                score = (
-                    total_pnl
-                    - penalty_per_trade * n_trades_total
-                    - dd_pen
-                    + 50.0 * float(np.nanmean(sharpes)) if sharpes else total_pnl
-                )
-            return score
-        except Exception:
+        # Regras de ordem para fast/mid/slow
+        if not _enforce_ma_order(params_dict):
             return -1e12
+
+        params = EmaOnlyParams(**params_dict)
+
+        total_pnl = 0.0
+        n_trades_total = 0
+        max_dds: List[float] = []
+        sharpes: List[float] = []
+        calmars: List[float] = []
+        avg_monthlies: List[float] = []
+        target_hits: List[float] = []
+
+        for s_idx, e_idx in _time_splits(df_train, wfa_splits):
+            seg = df_train.iloc[s_idx:e_idx].copy()
+            if len(seg) < params.ema_period + 5:
+                continue
+
+            _, pnl, stats = backtest_ema_only(
+                seg,
+                params=params,
+                initial_capital=initial_capital,
+                monthly_target_pct=monthly_target_pct,
+            )
+            total_pnl += float(pnl)
+            n_trades_total += int(stats.get("num_trades", 0))
+            max_dds.append(abs(float(stats.get("max_drawdown_pct", 0.0))))
+            sharpes.append(float(stats.get("sharpe", 0.0)))
+            calmars.append(float(stats.get("calmar", 0.0)))
+            avg_monthlies.append(float(stats.get("avg_monthly_return_pct", 0.0)))
+            target_hits.append(float(stats.get("monthly_target_hit_ratio", 0.0)))
+
+        if n_trades_total == 0:
+            return -1e12
+
+        dd_pen = dd_penalty * max(max_dds) if max_dds else 0.0
+        avg_sharpe = float(np.nanmean(sharpes)) if sharpes else 0.0
+        avg_calmar = float(np.nanmean(calmars)) if calmars else 0.0
+        avg_monthly = float(np.nanmean(avg_monthlies)) if avg_monthlies else 0.0
+        avg_hit_ratio = float(np.nanmean(target_hits)) if target_hits else 0.0
+
+        if objective_mode == "pnl":
+            score = total_pnl - penalty_per_trade * n_trades_total - dd_pen
+        elif objective_mode == "sharpe":
+            score = avg_sharpe
+        elif objective_mode == "calmar":
+            score = avg_calmar
+        elif objective_mode == "monthly":
+            # Foca na diferença para a meta mensal.
+            score = (avg_monthly - monthly_target_pct) * 100.0 - dd_pen
+        else:  # "combo"
+            score = (
+                total_pnl
+                - penalty_per_trade * n_trades_total
+                - dd_pen
+                + 50.0 * avg_sharpe
+                + 100.0 * max(0.0, avg_monthly - monthly_target_pct)
+                + 20.0 * avg_hit_ratio
+            )
+        return float(score)
 
     return objective
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Optuna optimization for EMA-only strategy with time-split CV")
-    ap.add_argument("--symbol", default="BTCUSDT")
-    ap.add_argument("--interval", default="1m")
-    ap.add_argument("--days", type=int, default=120)
-    ap.add_argument("--train-frac", type=float, default=0.8)
-    ap.add_argument("--wfa-splits", type=int, default=5)
-    ap.add_argument("--trials", type=int, default=100)
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--signal-mode", type=str, default="ema_cross", choices=["ema_cross", "price_reversion"])
-    ap.add_argument("--slow-ema-period", type=int, default=None, help="usado em ema_cross")
-    ap.add_argument("--slow-ema-min", type=int, default=None, help="se informado junto com --slow-ema-max, otimiza slow_ema_period")
-    ap.add_argument("--slow-ema-max", type=int, default=None, help="se informado junto com --slow-ema-min, otimiza slow_ema_period")
-    ap.add_argument("--lot-size", type=float, default=0.001)
-    ap.add_argument("--fee-rate", type=float, default=0.001)
-    ap.add_argument("--penalty-per-trade", type=float, default=0.0)
-    ap.add_argument("--objective", type=str, default="pnl", choices=["pnl", "sharpe", "calmar", "combo"])
-    ap.add_argument("--dd-penalty", type=float, default=0.0, help="penaliza drawdown absoluto (%) nas metas pnl/combo")
-    ap.add_argument("--ref-timeframe", type=str, default=None, help="timeframe de referência para viés (ex.: 1d)")
-    ap.add_argument("--ref-days", type=int, default=None, help="dias para carregar no TF de referência")
-    ap.add_argument("--ref-ema-period", type=int, default=None, help="período da EMA no TF de referência")
-    ap.add_argument("--ref-buffer-min", type=float, default=None, help="limite inferior para ref_buffer_pct (ativa otimização de buffer)")
-    ap.add_argument("--ref-buffer-max", type=float, default=None, help="limite superior para ref_buffer_pct (ativa otimização de buffer)")
-    ap.add_argument("--cache-only", action="store_true")
-    ap.add_argument("--outdir", default="reports")
-    args = ap.parse_args()
+def optimize_from_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Fluxo principal de otimização Optuna guiado por config.json.
 
-    # Load dataset with optional reference EMA
+    - Lê data/strategy/backtest/optimize do config.
+    - Executa Optuna com search_space tipado.
+    - Salva JSON de resultado + config "ativo" com melhores parâmetros.
+    """
+    if config_path is None:
+        config_path = Path(__file__).with_name("config.json")
+
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    data_cfg = cfg.get("data", {})
+    strat_cfg = cfg.get("strategy", {})
+    backtest_cfg = cfg.get("backtest", {})
+    opt_cfg = cfg.get("optimize", {})
+
+    if not opt_cfg.get("enabled", True):
+        print("optimize.enabled == false; nada a otimizar.")
+        return {}
+
+    symbol = data_cfg["symbol"]
+    timeframe = data_cfg["timeframe"]
+    days = int(data_cfg.get("days", 365))
+    ref_timeframe = data_cfg.get("ref_timeframe")
+    ref_days = data_cfg.get("ref_days")
+    ref_ema_period = strat_cfg.get("ref_ema_period")
+
     df_all = prepare_dataset_with_reference(
-        symbol=args.symbol,
-        timeframe=args.interval,
-        days=args.days,
-        use_cache_only=args.cache_only,
-        ref_timeframe=args.ref_timeframe,
-        ref_days=args.ref_days,
-        ref_ema_period=args.ref_ema_period,
+        symbol=symbol,
+        timeframe=timeframe,
+        days=days,
+        use_cache_only=True,
+        ref_timeframe=ref_timeframe,
+        ref_days=ref_days,
+        ref_ema_period=ref_ema_period,
     )
+
     n = len(df_all)
-    split = int(n * args.train_frac)
+    train_frac = float(opt_cfg.get("train_frac", 0.7))
+    split = int(n * train_frac)
     df_train = df_all.iloc[:split].copy()
     df_valid = df_all.iloc[split:].copy()
 
-    print(f"EMA-only optimize: {args.symbol} {args.interval} days={args.days} | N={n} train={len(df_train)} valid={len(df_valid)}")
-
-    sampler = optuna.samplers.TPESampler(seed=args.seed)
-    study = optuna.create_study(direction="maximize", sampler=sampler)
-    study.optimize(
-        make_objective(
-            df_train=df_train,
-            signal_mode=args.signal_mode,
-            slow_ema_period=args.slow_ema_period,
-            slow_ema_grid=(args.slow_ema_min, args.slow_ema_max) if args.slow_ema_min is not None and args.slow_ema_max is not None else None,
-            ref_filter_enabled=bool(args.ref_timeframe and args.ref_ema_period),
-            ref_timeframe=args.ref_timeframe,
-            ref_ema_period=args.ref_ema_period,
-            lot_size=args.lot_size,
-            fee_rate=args.fee_rate,
-            wfa_splits=args.wfa_splits,
-            penalty_per_trade=args.penalty_per_trade,
-            objective=args.objective,
-            dd_penalty=args.dd_penalty,
-            ref_buffer_grid=(args.ref_buffer_min, args.ref_buffer_max) if args.ref_buffer_min is not None and args.ref_buffer_max is not None else None,
-        ),
-        n_trials=args.trials,
+    print(
+        f"[ema_only.optimize] {symbol} {timeframe} days={days} | "
+        f"N={n} train={len(df_train)} valid={len(df_valid)}"
     )
+
+    base_params = _build_params_from_config(strat_cfg)
+    objective = _make_objective_from_config(df_train, base_params, backtest_cfg, opt_cfg)
+
+    sampler = optuna.samplers.TPESampler(seed=int(opt_cfg.get("seed", 123)))
+    study = optuna.create_study(direction="maximize", sampler=sampler)
+    study.optimize(objective, n_trials=int(opt_cfg.get("trials", 50)))
 
     print("Best params (train splits):", study.best_params)
     print("Best objective:", study.best_value)
 
-    bp = study.best_params
+    # Reavalia melhor solução em train/full + valid.
+    best_params_dict = dict(base_params.__dict__)
+    best_params_dict.update(study.best_params)
+    best_params = EmaOnlyParams(**best_params_dict)
 
-    # Evaluate on full train and holdout valid
-    slow_eval = int(bp["slow_ema_period"]) if "slow_ema_period" in bp else args.slow_ema_period
+    monthly_target_pct = float(backtest_cfg.get("monthly_target_pct", 0.01))
+    initial_capital = float(backtest_cfg.get("initial_capital", 1_000.0))
 
-    _, pnl_tr, stats_tr = backtest_ema_only(
+    _, _, stats_tr = backtest_ema_only(
         df_train.copy(),
-        params=EmaOnlyParams(
-            ema_period=int(bp["ema_period"]),
-            slow_ema_period=slow_eval,
-            signal_mode=args.signal_mode,
-            lot_size=args.lot_size,
-            fee_rate=args.fee_rate,
-            use_cross=bool(bp["use_cross"]) if args.signal_mode != "ema_cross" else False,
-            ref_filter_enabled=bool(args.ref_timeframe and args.ref_ema_period),
-            ref_buffer_pct=float(bp["ref_buffer_pct"]) if "ref_buffer_pct" in bp else 0.0,
-            ref_timeframe=args.ref_timeframe,
-            ref_ema_period=args.ref_ema_period,
-        ),
-        initial_capital=1_000.0,
+        params=best_params,
+        initial_capital=initial_capital,
+        monthly_target_pct=monthly_target_pct,
     )
-    _, pnl_val, stats_val = backtest_ema_only(
+    _, _, stats_val = backtest_ema_only(
         df_valid.copy(),
-        params=EmaOnlyParams(
-            ema_period=int(bp["ema_period"]),
-            slow_ema_period=slow_eval,
-            signal_mode=args.signal_mode,
-            lot_size=args.lot_size,
-            fee_rate=args.fee_rate,
-            use_cross=bool(bp["use_cross"]) if args.signal_mode != "ema_cross" else False,
-            ref_filter_enabled=bool(args.ref_timeframe and args.ref_ema_period),
-            ref_buffer_pct=float(bp["ref_buffer_pct"]) if "ref_buffer_pct" in bp else 0.0,
-            ref_timeframe=args.ref_timeframe,
-            ref_ema_period=args.ref_ema_period,
+        params=best_params,
+        initial_capital=initial_capital,
+        monthly_target_pct=monthly_target_pct,
+    )
+
+    # Sinalização de significância.
+    min_trades = int(backtest_cfg.get("min_trades_for_significance", 30))
+    min_candles = int(backtest_cfg.get("min_candles_for_significance", 2000))
+    sig_flags: Dict[str, Any] = {
+        "train_is_significant": (
+            stats_tr.get("num_trades", 0) >= min_trades and len(df_train) >= min_candles
         ),
-        initial_capital=1_000.0,
+        "valid_is_significant": (
+            stats_val.get("num_trades", 0) >= min_trades and len(df_valid) >= min_candles
+        ),
+        "train_num_trades": int(stats_tr.get("num_trades", 0)),
+        "valid_num_trades": int(stats_val.get("num_trades", 0)),
+        "train_num_candles": len(df_train),
+        "valid_num_candles": len(df_valid),
+        "min_trades_for_significance": min_trades,
+        "min_candles_for_significance": min_candles,
+    }
+
+    # Resumo de objetivo mensal para auditoria.
+    print(
+        "[ema_only.optimize] Objetivo mensal: "
+        f"{monthly_target_pct:.2%} | "
+        f"Train avg: {stats_tr.get('avg_monthly_return_pct', 0.0):.2%} "
+        f"(hit {stats_tr.get('monthly_target_hit_ratio', 0.0):.1%}) | "
+        f"Valid avg: {stats_val.get('avg_monthly_return_pct', 0.0):.2%} "
+        f"(hit {stats_val.get('monthly_target_hit_ratio', 0.0):.1%})"
     )
 
     rec = {
         "strategy": "ema_only",
-        "symbol": args.symbol,
-        "interval": args.interval,
-        "days": args.days,
-        "train_frac": args.train_frac,
-        "wfa_splits": args.wfa_splits,
-        "lot_size": args.lot_size,
-        "fee_rate": args.fee_rate,
-        "penalty_per_trade": args.penalty_per_trade,
-        "objective": args.objective,
-        "dd_penalty": args.dd_penalty,
-        "signal_mode": args.signal_mode,
-        "slow_ema_period": args.slow_ema_period,
-        "slow_ema_min": args.slow_ema_min,
-        "slow_ema_max": args.slow_ema_max,
-        "ref_timeframe": args.ref_timeframe,
-        "ref_days": args.ref_days,
-        "ref_ema_period": args.ref_ema_period,
-        "ref_buffer_min": args.ref_buffer_min,
-        "ref_buffer_max": args.ref_buffer_max,
-        "best_params": {
-            "ema_period": int(bp["ema_period"]),
-            "use_cross": bool(bp["use_cross"]),
-            "ref_buffer_pct": float(bp.get("ref_buffer_pct")) if "ref_buffer_pct" in bp else None,
-            "slow_ema_period": int(bp.get("slow_ema_period")) if "slow_ema_period" in bp else args.slow_ema_period,
+        "symbol": symbol,
+        "interval": timeframe,
+        "days": days,
+        "train_frac": train_frac,
+        "wfa_splits": int(opt_cfg.get("wfa_splits", 1)),
+        "objective": opt_cfg.get("objective", "combo"),
+        "monthly_target_pct": monthly_target_pct,
+        "search_space": opt_cfg.get("search_space", {}),
+        "best_trial_value": study.best_value,
+        "best_trial_params": study.best_params,
+        "best_strategy_params": {
+            k: getattr(best_params, k)
+            for k in best_params.__dict__.keys()
+            if not k.startswith("_")
         },
         "train_metrics": stats_tr,
         "valid_metrics": stats_val,
+        "significance": sig_flags,
     }
 
-    outdir = Path(args.outdir)
+    outdir = Path(opt_cfg.get("outdir", "src/strategies/ema_only/reports/optimize"))
     outdir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    base = f"ema_only_optuna_{args.symbol}_{args.interval}_{ts}"
-    json_path = outdir / f"{base}.json"
+    base_name = f"ema_only_optuna_{symbol}_{timeframe}_{ts}"
+    json_path = outdir / f"{base_name}.json"
     json_path.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Save lightweight active config
+    # Config "ativa" resumida (para backtests futuros).
     active_dir = outdir / "active"
     active_dir.mkdir(parents=True, exist_ok=True)
-    active_path = active_dir / f"ema_only_{args.symbol}_{args.interval}.json"
-    active_path.write_text(json.dumps({
+    active_path = active_dir / f"ema_only_{symbol}_{timeframe}.json"
+    active_payload = {
         "strategy": "ema_only",
-        "symbol": args.symbol,
-        "interval": args.interval,
-        "best_params": rec["best_params"],
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+        "symbol": symbol,
+        "interval": timeframe,
+        "monthly_target_pct": monthly_target_pct,
+        "best_strategy_params": rec["best_strategy_params"],
+    }
+    active_path.write_text(json.dumps(active_payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"Saved: {json_path}")
+    print(f"Saved optimize result: {json_path}")
     print(f"Active config updated: {active_path}")
+
+    return rec
+
+
+def main() -> None:
+    optimize_from_config()
 
 
 if __name__ == "__main__":
