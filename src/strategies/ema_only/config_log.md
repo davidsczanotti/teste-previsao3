@@ -73,6 +73,57 @@ Formato sugerido por entrada:
 
 ---
 
+## 2025-12-10 — ema_only_rule_v1_BTCUSDT_4h_baseline
+
+- **config_sha256**: `7f26af0530521270feb3006adeb9f30e99a41f1a8af408e204e083c2d36c6127`
+- **Motivo**: congelar um baseline determinístico e auditável da estratégia EMA-only
+  em BTCUSDT 4h, para servir de referência estável antes de adicionar mais
+  complexidade (novos filtros, intraday experts ou ajustes de RL).
+- **Parâmetros relevantes (subset rule-based)**:
+  - `data.symbol`: `"BTCUSDT"`
+  - `data.timeframe`: `"4h"`
+  - `data.days`: `3650`
+  - `data.ref_timeframe`: `"1d"`
+  - `data.ref_days`: `3650`
+  - `strategy.ema_fast_period`: `5`
+  - `strategy.ema_mid_period`: `37`
+  - `strategy.ema_slow_period`: `55`
+  - `strategy.ref_filter_enabled`: `true`
+  - `strategy.ref_ema_period`: `200`
+  - `strategy.ref_buffer_pct`: `0.0025`
+  - `strategy.lot_size`: `0.004999991369280771`
+  - `strategy.fee_pct`: `0.0004`
+  - `strategy.trailing_stop_type`: `"percent_trailing"` (ainda não aplicado no
+    loop de backtest; mantido apenas como metadata para futuras versões).
+  - `backtest.initial_capital`: `1000.0`
+  - `backtest.monthly_target_pct`: `0.01` (meta de 1% ao mês, usada apenas como
+    referência, não como regra de controle).
+- **Especificação da v1 (regra de trading)**:
+  - Universo: BTCUSDT em candles de 4h, janela de ~10 anos (`data.days=3650`),
+    com EMA de referência calculada no diário (`ref_timeframe="1d"`).
+  - Entrada long: abre 1 posição fixa (`lot_size`) quando:
+    - EMA rápida (`ema_fast_period=5`) cruza **para cima** da EMA lenta
+      (`ema_slow_period=55`), e
+    - o preço de fechamento está acima da EMA de referência diária
+      (`ref_ema_period=200`) com buffer de `ref_buffer_pct` (viés de bull).
+  - Saída: fecha a posição long no cruzamento **para baixo** (sinal -1). Shorts
+    ainda **não** são implementados no loop de backtest da v1.
+  - Custos: `fee_pct` aplicado em cada trade de forma simplificada via PnL
+    (slippage e taxas mais detalhadas ficam para versões futuras).
+- **Artefatos associados**:
+  - Backtest congelado: `src/strategies/ema_only/reports/backtest/ema_only_BTCUSDT_4h.json`
+    (usa esta configuração, com equity/trades e métricas agregadas).
+  - Visualização estilo TradingView: será gerada em
+    `src/strategies/ema_only/reports/charts/ema_only_backtest_BTCUSDT_4h.png`
+    via `BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.visualize`.
+- **Observação**:
+  - Este baseline **não** será modificado; qualquer nova hipótese (novos filtros,
+    trailing stop efetivo, intraday ou RL) deve ser registrada como nova entrada
+    neste log e/ou como nova variante de estratégia, mantendo esta v1 intacta
+    para comparação.
+
+---
+
 ## 2025-12-02 — ema_only_rl_v2_monthly_reward
 
 - **config_sha256**: `4e642fb9b2394be22730093181933b56909cbf6fc34f9aa301803293aa617fd5`

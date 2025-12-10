@@ -225,4 +225,5 @@ BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.walk_forward
 
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.optimize
 BINANCE_OFFLINE=1 poetry run python -m src.strategies.ema_only.run
+BINANCE_OFFLINE=1 poetry run python -m src.strategies.exper_corr_pos.app_tv
 

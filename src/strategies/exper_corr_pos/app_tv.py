@@ -66,9 +66,12 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _load_dataset(config: Dict[str, Any]) -> pd.DataFrame:
     data_cfg = config.get("data", {})
-    symbol = data_cfg.get("base_symbol", "BTCUSDT")
+    # Suporta formatos de config diferentes entre estratégias:
+    # - exper_corr_pos: base_symbol + lookback_days
+    # - ema_only e outras: symbol + days
+    symbol = data_cfg.get("base_symbol") or data_cfg.get("symbol", "BTCUSDT")
     timeframe = data_cfg.get("timeframe", "1d")
-    days = int(data_cfg.get("lookback_days", 365))
+    days = int(data_cfg.get("lookback_days") or data_cfg.get("days", 365))
     df = _load_cached(symbol, timeframe, days=days, use_cache_only=True)
     if df.empty:
         raise RuntimeError(f"Nenhum dado disponível no cache para {symbol}@{timeframe}. Rode populate_cache.")
@@ -252,7 +255,7 @@ def create_app() -> Flask:
 
 def main() -> None:
     app = create_app()
-    port = int(os.environ.get("PORT", "8000"))
+    port = int(os.environ.get("PORT", "8001"))
     app.run(host="0.0.0.0", port=port, debug=False)
 
 
