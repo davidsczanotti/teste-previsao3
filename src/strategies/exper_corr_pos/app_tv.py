@@ -78,6 +78,87 @@ def _load_dataset(config: Dict[str, Any]) -> pd.DataFrame:
     return df
 
 
+def _build_ema_only_payload(cfg: Dict[str, Any], progress: float) -> Dict[str, Any]:
+    """
+    Gera payload TV para a estratégia ema_only:
+    - candles 4h (ou timeframe configurado)
+    - EMAs (fast/mid/slow) + ref_ema
+    - trades long-only reconstruídos a partir dos sinais.
+    """
+    # Import tardio para evitar dependência circular em contextos de teste
+    from src.strategies.ema_only.backtest import (
+        load_data_with_ref as ema_load_data_with_ref,
+        calculate_mas as ema_calculate_mas,
+        generate_signals as ema_generate_signals,
+    )
+
+    data_cfg = cfg.get("data", {})
+    symbol = str(data_cfg.get("symbol", "BTCUSDT"))
+    timeframe = str(data_cfg.get("timeframe", "4h"))
+
+    df = ema_load_data_with_ref(cfg)
+    df = ema_calculate_mas(df, cfg)
+    df = ema_generate_signals(df, cfg)
+    df = df.sort_values("Date")
+    df = df.set_index(pd.to_datetime(df["Date"], utc=True)).drop(columns=["Date"])
+
+    cutoff_ts: Optional[pd.Timestamp] = None
+    if progress < 1.0 and not df.empty:
+        total = len(df)
+        upto = max(1, int(total * progress))
+        cutoff_ts = df.index[upto - 1]
+        df = df.iloc[:upto]
+
+    candles_df = df[["open", "high", "low", "close"]]
+
+    trades = _build_ema_only_trades(df, cfg)
+    if cutoff_ts is not None:
+        trades = [t for t in trades if t.get("time", 0) <= int(cutoff_ts.timestamp())]
+
+    init_eq = float(cfg.get("backtest", {}).get("initial_capital", 1000.0))
+    pnl_sum = sum(t.get("pnl", 0.0) for t in trades)
+    cash = init_eq + pnl_sum
+
+    payload = {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "candles": _candles_payload(candles_df),
+        # Mantém chaves existentes para o front, mas vazias
+        "bb_upper": [],
+        "bb_middle": [],
+        "bb_lower": [],
+        "hma": [],
+        # Overlays específicos da ema_only
+        "ema_fast": _overlay_payload(df, "ema_fast") if "ema_fast" in df.columns else [],
+        "ema_mid": _overlay_payload(df, "ema_mid") if "ema_mid" in df.columns else [],
+        "ema_slow": _overlay_payload(df, "ema_slow") if "ema_slow" in df.columns else [],
+        "ref_ema": _overlay_payload(df, "ref_ema") if "ref_ema" in df.columns else [],
+        "trades": trades,
+        "stats": {
+            "init_equity": init_eq,
+            "cash": cash,
+            "pnl": pnl_sum,
+            "living_cost": 300.0,
+            "debt_remaining": max(0.0, 300.0 - pnl_sum),
+            "bonus_value": 0.0,
+            "bonus_pct": 0.0,
+            "bonus_cap_pct": 0.0,
+            "days_remaining": 0,
+            "days_total": len(df),
+            "mood": "neutral",
+            "mood_count": {"happy": 0, "sad": 0, "neutral": len(trades)},
+            "experts": [],
+            "gate_top_k": None,
+            "allow_short": False,
+            "life_unit": 100.0,
+            "lives_total": 10,
+            "lives_remaining": 10,
+            "lives_lost": 0,
+        },
+    }
+    return payload
+
+
 def _load_trades(config: Dict[str, Any], strategy_dir: Path) -> List[Dict[str, Any]]:
     trade_cfg = config.get("reports", {}).get("trade_ledger", {}) if isinstance(config.get("reports"), dict) else {}
     ledger_path = trade_cfg.get("path") or strategy_dir / "reports" / "train" / "trade_ledger.csv"
@@ -129,6 +210,46 @@ def _overlay_payload(df: pd.DataFrame, col: str) -> List[Dict[str, Any]]:
     return out
 
 
+def _build_ema_only_trades(df: pd.DataFrame, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Reconstrói trades long-only para ema_only a partir da coluna 'signal'.
+
+    - Entrada: signal == 1 e posição zerada.
+    - Saída: signal == -1 e posição > 0.
+    """
+    strat = cfg.get("strategy", {})
+    lot = float(strat.get("lot_size", 1.0))
+    trades: List[Dict[str, Any]] = []
+    position = 0.0
+    entry_price = 0.0
+    entry_ts: Optional[int] = None
+
+    for ts, row in df.iterrows():
+        sig = row.get("signal", 0)
+        close = float(row["close"])
+        if sig == 1 and position == 0.0:
+            position = lot
+            entry_price = close
+            entry_ts = int(ts.timestamp())
+        elif sig == -1 and position > 0.0:
+            exit_price = close
+            pnl = (exit_price - entry_price) * position
+            trades.append(
+                {
+                    "time": entry_ts or int(ts.timestamp()),
+                    "entry": entry_price,
+                    "exit": exit_price,
+                    "side": "long",
+                    "pnl": pnl,
+                }
+            )
+            position = 0.0
+            entry_price = 0.0
+            entry_ts = None
+
+    return trades
+
+
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -160,6 +281,12 @@ def create_app() -> Flask:
         cfg = _load_config(meta.config_path)
         if timeframe:
             cfg.setdefault("data", {})["timeframe"] = timeframe
+
+        # Caminho específico para ema_only: EMAs + trades long-only
+        if strategy == "ema_only":
+            payload = _build_ema_only_payload(cfg, progress)
+            return jsonify(payload)
+
         df = _load_dataset(cfg)
         df = df.set_index(pd.to_datetime(df["Date"], utc=True)).drop(columns=["Date"])
         df = _compute_indicators(df)

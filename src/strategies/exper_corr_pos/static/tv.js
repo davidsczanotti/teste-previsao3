@@ -57,6 +57,12 @@
   const bbLower = chart.addLineSeries({ color: "#5de2c6", lineWidth: 2, priceLineVisible: false });
   const hmaSeries = chart.addLineSeries({ color: "#f4c95d", lineWidth: 2, priceLineVisible: false });
 
+  // EMAs para estratégias como ema_only
+  const emaFast = chart.addLineSeries({ color: "#4da6ff", lineWidth: 2, priceLineVisible: false });
+  const emaMid = chart.addLineSeries({ color: "#ffd54f", lineWidth: 2, priceLineVisible: false });
+  const emaSlow = chart.addLineSeries({ color: "#ef5350", lineWidth: 2, priceLineVisible: false });
+  const refEma = chart.addLineSeries({ color: "#9e9e9e", lineWidth: 1, priceLineVisible: false });
+
   function setMarkers(trades) {
     if (!trades || !trades.length) {
       candleSeries.setMarkers([]);
@@ -85,6 +91,10 @@
     bbMiddle.setData(data.bb_middle || []);
     bbLower.setData(data.bb_lower || []);
     hmaSeries.setData(data.hma || []);
+    emaFast.setData(data.ema_fast || []);
+    emaMid.setData(data.ema_mid || []);
+    emaSlow.setData(data.ema_slow || []);
+    refEma.setData(data.ref_ema || []);
     setMarkers(data.trades || []);
     const last = (data.candles || []).at(-1);
     if (last) {
