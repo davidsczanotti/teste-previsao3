@@ -9,33 +9,45 @@ from pathlib import Path
 import optuna
 import pandas as pd
 
-# Adicionar src ao path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Adicionar src ao path (Project Root)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from .backtest import backtest_ema_only, load_data_with_ref
+from src.strategies.ema_only.backtest import backtest_ema_only, load_data_with_ref
 
 def objective(trial, df, config):
     """Função objetivo para Optuna."""
-    # Sugerir parâmetros
-    config['strategy']['ema_fast_period'] = trial.suggest_int('ema_fast_period', 5, 21)
-    config['strategy']['ema_mid_period'] = trial.suggest_int('ema_mid_period', 10, 55)
-    config['strategy']['ema_slow_period'] = trial.suggest_int('ema_slow_period', 55, 200)
-    config['strategy']['sma_fast_period'] = trial.suggest_int('sma_fast_period', 5, 21)
-    config['strategy']['sma_mid_period'] = trial.suggest_int('sma_mid_period', 10, 55)
-    config['strategy']['sma_slow_period'] = trial.suggest_int('sma_slow_period', 55, 200)
-    config['strategy']['lot_size'] = trial.suggest_float('lot_size', 0.0005, 0.005)
-    config['strategy']['percent_trailing_pct'] = trial.suggest_float('percent_trailing_pct', 0.01, 0.05)
+    # Sugerir parâmetros baseados no search_space do config
+    search_space = config['optimize']['search_space']
+    
+    for param_name, param_cfg in search_space.items():
+        param_type = param_cfg['type']
+        
+        if param_type == 'int':
+            config['strategy'][param_name] = trial.suggest_int(
+                param_name, param_cfg['low'], param_cfg['high']
+            )
+        elif param_type == 'float':
+            config['strategy'][param_name] = trial.suggest_float(
+                param_name, param_cfg['low'], param_cfg['high']
+            )
+        elif param_type == 'categorical':
+            config['strategy'][param_name] = trial.suggest_categorical(
+                param_name, param_cfg['choices']
+            )
 
     # Backtest
     result = backtest_ema_only(df, config)
 
-    # Objetivo: maximizar Sharpe ratio diário
+    # Objetivo: maximizar Sharpe ratio diário (ou outro definido no config)
+    # Aqui vamos usar o retorno total como proxy ou sharpe conforme config
     returns = pd.Series(result['equity']).pct_change().dropna()
-    if len(returns) > 1:
-        sharpe = returns.mean() / returns.std() * (365 ** 0.5) if returns.std() > 0 else 0
+    
+    # Calcular Sharpe Anualizado (aprox)
+    if len(returns) > 1 and returns.std() > 0:
+        sharpe = returns.mean() / returns.std() * (365 ** 0.5)
     else:
-        sharpe = 0
-
+        sharpe = -999.0
+        
     return sharpe
 
 def run_optimization(config_path: str = 'src/strategies/ema_only/config.json'):
@@ -55,7 +67,7 @@ def run_optimization(config_path: str = 'src/strategies/ema_only/config.json'):
     best_value = study.best_value
 
     print(f"Melhores parâmetros: {best_params}")
-    print(f"Melhor Sharpe mensal: {best_value}")
+    print(f"Melhor Valor (Sharpe): {best_value}")
 
     # Salvar
     outdir = Path(config['optimize']['outdir'])

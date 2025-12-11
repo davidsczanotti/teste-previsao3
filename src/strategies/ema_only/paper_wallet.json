@@ -1,0 +1,8 @@
+{
+  "balance": 1000.0,
+  "position": 0.0,
+  "entry_price": 0.0,
+  "stop_price": 0.0,
+  "target_price": 0.0,
+  "trades_history": []
+}

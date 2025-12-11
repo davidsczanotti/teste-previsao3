@@ -83,22 +83,30 @@ def _build_ema_only_payload(cfg: Dict[str, Any], progress: float) -> Dict[str, A
     Gera payload TV para a estratégia ema_only:
     - candles 4h (ou timeframe configurado)
     - EMAs (fast/mid/slow) + ref_ema
-    - trades long-only reconstruídos a partir dos sinais.
+    - trades REAIS do backtest (incluindo SL/TP).
     """
-    # Import tardio para evitar dependência circular em contextos de teste
+    # Import tardio para evitar dependência circular
     from src.strategies.ema_only.backtest import (
         load_data_with_ref as ema_load_data_with_ref,
         calculate_mas as ema_calculate_mas,
         generate_signals as ema_generate_signals,
+        backtest_ema_only
     )
 
     data_cfg = cfg.get("data", {})
     symbol = str(data_cfg.get("symbol", "BTCUSDT"))
     timeframe = str(data_cfg.get("timeframe", "4h"))
 
+    # 1. Carregar dados e calcular indicadores para PLOTAGEM
     df = ema_load_data_with_ref(cfg)
     df = ema_calculate_mas(df, cfg)
-    df = ema_generate_signals(df, cfg)
+    df = ema_generate_signals(df, cfg) # Sinais visuais
+    
+    # 2. Executar Backtest Real para obter os TRADES corretos (com SL/TP)
+    # Precisamos de um novo DF limpo ou reutilizar, mas o backtest faz cópia interna
+    bt_result = backtest_ema_only(df, cfg)
+    raw_trades = bt_result['trades']
+
     df = df.sort_values("Date")
     df = df.set_index(pd.to_datetime(df["Date"], utc=True)).drop(columns=["Date"])
 
@@ -111,9 +119,32 @@ def _build_ema_only_payload(cfg: Dict[str, Any], progress: float) -> Dict[str, A
 
     candles_df = df[["open", "high", "low", "close"]]
 
-    trades = _build_ema_only_trades(df, cfg)
-    if cutoff_ts is not None:
-        trades = [t for t in trades if t.get("time", 0) <= int(cutoff_ts.timestamp())]
+    # 3. Converter trades do backtest para formato do Visualizador
+    trades = []
+    for t in raw_trades:
+        # Converter 'date' (Timestamp ou índice) para int timestamp
+        t_date = t['date']
+        if isinstance(t_date, pd.Timestamp):
+            ts_int = int(t_date.timestamp())
+        else:
+            # Fallback se for índice int (raro aqui)
+            try:
+                ts_int = int(df.index[t_date].timestamp())
+            except:
+                continue
+        
+        # Filtrar por progresso se necessário
+        if cutoff_ts is not None and ts_int > int(cutoff_ts.timestamp()):
+            continue
+
+        trades.append({
+            "time": ts_int,
+            "entry": float(t['entry']),
+            "exit": float(t['exit']),
+            "side": t.get('side', 'long'),
+            "pnl": float(t['pnl']),
+            "reason": t.get('reason', '') # Opcional, útil se o front mostrar
+        })
 
     init_eq = float(cfg.get("backtest", {}).get("initial_capital", 1000.0))
     pnl_sum = sum(t.get("pnl", 0.0) for t in trades)
@@ -133,6 +164,7 @@ def _build_ema_only_payload(cfg: Dict[str, Any], progress: float) -> Dict[str, A
         "ema_mid": _overlay_payload(df, "ema_mid") if "ema_mid" in df.columns else [],
         "ema_slow": _overlay_payload(df, "ema_slow") if "ema_slow" in df.columns else [],
         "ref_ema": _overlay_payload(df, "ref_ema") if "ref_ema" in df.columns else [],
+        "ema_200": _overlay_payload(df, "ema_200") if "ema_200" in df.columns else [], # Adicionando EMA 200
         "trades": trades,
         "stats": {
             "init_equity": init_eq,
@@ -149,7 +181,7 @@ def _build_ema_only_payload(cfg: Dict[str, Any], progress: float) -> Dict[str, A
             "mood_count": {"happy": 0, "sad": 0, "neutral": len(trades)},
             "experts": [],
             "gate_top_k": None,
-            "allow_short": False,
+            "allow_short": True,
             "life_unit": 100.0,
             "lives_total": 10,
             "lives_remaining": 10,

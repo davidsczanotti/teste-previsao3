@@ -21,7 +21,20 @@
         "slow_ema_period": 85,
 
     "__comment_entries": "Parâmetros legados de entrada/filtragem — mantidos para compatibilidade e para futuros modos de sinal.",
-        "signal_mode": "simple_ref_ema",
+    "signal_mode": "custom_cci_ma",
+    "custom_ma_fast": 9,
+    "custom_ma_slow": 21,
+    "custom_cci_period": 14,
+    "custom_cci_level": 100,
+    "custom_min_ma_dist": 30,
+    "custom_ma_fast": 9,
+    "custom_ma_slow": 21,
+    "custom_atr_period": 10,
+    "custom_target_factor": 1.5,
+    "custom_stop_factor": 0.9,
+    "custom_dist_atr_mult": 0.2,
+    "compounding_enabled": true,
+    "compounding_pct": 0.95,
     "pullback_pct": 0.0,
     "use_trend_filter": false,
     "trend_filter_period": null,
@@ -31,6 +44,12 @@
     "ref_buffer_pct": 0.0025,
         "lot_size": 0.004999991369280771,
     "fee_pct": 0.0004,
+    "max_long_entry_dist_fast_pct": 0.015,
+    "slow_slope_lookback_bars": 0,
+    "min_slow_slope_for_long_pct": 0.0,
+    "cci_period": 20,
+    "cci_level": 80.0,
+    "min_ema_separation_atr_mult": 0.13,
 
     "__comment_trailing": "Configuração de stop móvel. trailing_stop_type pode ser: atr_trailing, percent_trailing ou ma_trailing.",
     "trailing_stop_type": "percent_trailing",
@@ -63,35 +82,21 @@
   },
   "optimize": {
     "enabled": true,
-    "trials": 5000,
+    "trials": 200,
     "seed": 123,
     "train_frac": 0.7,
     "wfa_splits": 3,
-    "objective": "monthly",
+    "objective": "sharpe_ratio",
     "penalty_per_trade": 0.0,
-    "dd_penalty": 10.0,
+    "dd_penalty": 2.0,
     "outdir": "src/strategies/ema_only/reports/optimize",
     "search_space": {
-      "ema_fast_period": { "type": "int", "low": 5, "high": 21 },
-      "ema_mid_period": { "type": "int", "low": 10, "high": 55 },
-      "ema_slow_period": { "type": "int", "low": 55, "high": 200 },
-
-      "sma_fast_period": { "type": "int", "low": 5, "high": 21 },
-      "sma_mid_period": { "type": "int", "low": 10, "high": 55 },
-      "sma_slow_period": { "type": "int", "low": 55, "high": 200 },
-
-      "lot_size": { "type": "float", "low": 0.0005, "high": 0.005 },
-      "percent_trailing_pct": { "type": "float", "low": 0.01, "high": 0.05 },
-
-      "atr_period": { "type": "int", "low": 7, "high": 50 },
-      "atr_stop_mult": { "type": "float", "low": 1.0, "high": 4.0 },
-      "atr_trail_mult": { "type": "float", "low": 0.5, "high": 4.0 },
-      "breakeven_rr": { "type": "float", "low": 0.5, "high": 2.0 },
-
-      "trailing_stop_type": {
-        "type": "categorical",
-        "choices": ["atr_trailing", "percent_trailing", "ma_trailing"]
-      }
+      "custom_ma_fast": { "type": "int", "low": 5, "high": 30 },
+      "custom_ma_slow": { "type": "int", "low": 20, "high": 80 },
+      "custom_atr_period": { "type": "int", "low": 8, "high": 21 },
+      "custom_target_factor": { "type": "float", "low": 1.5, "high": 8.0 },
+      "custom_stop_factor": { "type": "float", "low": 0.5, "high": 3.0 },
+      "custom_dist_atr_mult": { "type": "float", "low": 0.1, "high": 1.0 }
     }
   },
   "rl": {

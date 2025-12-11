@@ -4,8 +4,22 @@ from typing import Dict, List, Any
 import json
 from pathlib import Path
 
-from ...utils.data_loader import load_data
-from ...utils.metrics import calculate_metrics, calculate_sharpe_ratio
+from src.utils.data_loader import load_data
+from src.utils.metrics import calculate_metrics, calculate_sharpe_ratio
+
+
+def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
+    """Calcula CCI (Commodity Channel Index)."""
+    tp = (df['high'] + df['low'] + df['close']) / 3.0
+    ma = tp.rolling(period).mean()
+
+    def _mean_dev(x):
+        x = pd.Series(x)
+        return (x - x.mean()).abs().mean()
+
+    mean_dev = tp.rolling(period).apply(_mean_dev, raw=False)
+    cci = (tp - ma) / (0.015 * mean_dev)
+    return cci
 
 def calculate_mas(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
     """Calcula médias móveis baseado no config."""
@@ -21,8 +35,21 @@ def calculate_mas(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
     df['ema_mid'] = df['close'].ewm(span=config['strategy']['ema_mid_period']).mean()
     df['ema_slow'] = df['close'].ewm(span=config['strategy']['ema_slow_period']).mean()
 
-    # ATR para trailing
+    # ATR para trailing / filtros de tendência
     df['atr'] = calculate_atr(df, config['strategy']['atr_period'])
+
+    # CCI para filtro de força de tendência
+    cci_period = config['strategy'].get('cci_period')
+    if cci_period:
+        df['cci'] = calculate_cci(df, int(cci_period))
+
+    # ATR Customizado para a estratégia custom_cci_ma
+    if config['strategy'].get('signal_mode') == 'custom_cci_ma':
+        custom_atr_period = config['strategy'].get('custom_atr_period', 10)
+        df['custom_atr'] = calculate_atr(df, custom_atr_period)
+        
+        # Filtro de Tendência Macro (EMA 200)
+        df['ema_200'] = df['close'].ewm(span=200).mean()
 
     return df
 
@@ -45,11 +72,64 @@ def generate_signals(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
         df['ref_bias'] = np.where(df['close'] > df['ref_ema'] * (1 + ref_buffer), 1,
                                   np.where(df['close'] < df['ref_ema'] * (1 - ref_buffer), -1, 0))
 
-    # Sinais de cruzamento (simples: ema_fast sobre ema_slow)
-    df['ema_cross'] = np.where(df['ema_fast'] > df['ema_slow'], 1, -1)
-    df['ema_cross_prev'] = df['ema_cross'].shift(1)
-    df['signal'] = np.where((df['ema_cross'] == 1) & (df['ema_cross_prev'] == -1), 1,  # Long
-                            np.where((df['ema_cross'] == -1) & (df['ema_cross_prev'] == 1), -1, 0))  # Short
+    if strategy.get('signal_mode') == 'custom_cci_ma':
+        # Lógica customizada: CCI + 2 SMAs + Filtros Dinâmicos
+        mc = df['close'].rolling(strategy['custom_ma_fast']).mean()
+        ml = df['close'].rolling(strategy['custom_ma_slow']).mean()
+        cci = calculate_cci(df, strategy['custom_cci_period'])
+        
+        # Distância dinâmica: ATR * Multiplicador (default 0.5)
+        atr = df.get('custom_atr', df['close']*0.01) # Fallback seguro
+        dist_mult = strategy.get('custom_dist_atr_mult', 0.5)
+        min_dist = atr * dist_mult
+        diff = (mc - ml).abs()
+        
+        level = strategy['custom_cci_level']
+        ema_200 = df.get('ema_200', df['close']) # Fallback
+        
+        # Inicializar
+        df['signal'] = 0
+        
+        # SinalC (Long): mc > ml AND cci > Nivel AND diff > Distancia Dinâmica AND Close > EMA200
+        cond_long = (mc > ml) & (cci > level) & (diff > min_dist) & (df['close'] > ema_200)
+        
+        # SinalV (Short): mc < ml AND cci < -Nivel AND diff > Distancia Dinâmica AND Close < EMA200
+        cond_short = (mc < ml) & (cci < -level) & (diff > min_dist) & (df['close'] < ema_200)
+        
+        df.loc[cond_long, 'signal'] = 1
+        df.loc[cond_short, 'signal'] = -1
+        
+    else:
+        # Sinais de cruzamento (simples: ema_fast sobre ema_slow)
+        df['ema_cross'] = np.where(df['ema_fast'] > df['ema_slow'], 1, -1)
+        df['ema_cross_prev'] = df['ema_cross'].shift(1)
+        df['signal'] = np.where((df['ema_cross'] == 1) & (df['ema_cross_prev'] == -1), 1,  # Long
+                                np.where((df['ema_cross'] == -1) & (df['ema_cross_prev'] == 1), -1, 0))  # Short
+
+    # Filtro: evitar entradas long muito esticadas em relação à EMA rápida
+    max_dist = strategy.get('max_long_entry_dist_fast_pct')
+    if max_dist is not None:
+        dist_fast = (df['close'] - df['ema_fast']).abs() / df['ema_fast']
+        df.loc[(df['signal'] == 1) & (dist_fast > max_dist), 'signal'] = 0
+
+    # Filtro de tendência L2: exigir que a EMA lenta tenha inclinação mínima
+    lookback = strategy.get('slow_slope_lookback_bars')
+    min_slope = strategy.get('min_slow_slope_for_long_pct')
+    if lookback is not None and min_slope is not None and lookback > 0:
+        prev_slow = df['ema_slow'].shift(int(lookback))
+        slow_slope = (df['ema_slow'] - prev_slow) / prev_slow
+        df.loc[(df['signal'] == 1) & (slow_slope < min_slope), 'signal'] = 0
+
+    # Filtro CCI: exige força de tendência no oscilador
+    cci_level = strategy.get('cci_level')
+    if cci_level is not None and 'cci' in df.columns:
+        df.loc[(df['signal'] == 1) & (df['cci'] < cci_level), 'signal'] = 0
+
+    # Filtro ATR: exige separação mínima entre EMAs em múltiplos do ATR
+    sep_mult = strategy.get('min_ema_separation_atr_mult')
+    if sep_mult is not None:
+        ema_sep = (df['ema_fast'] - df['ema_slow']).abs()
+        df.loc[(df['signal'] == 1) & (ema_sep < sep_mult * df['atr']), 'signal'] = 0
 
     # Aplicar filtros
     if strategy['ref_filter_enabled']:
@@ -81,27 +161,117 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
     """Executa backtest."""
     df = calculate_mas(df, config)
     df = generate_signals(df, config)
-    df = apply_trailing_stop(df, config)
+    # df = apply_trailing_stop(df, config) # Trailing stop padrão desativado para lógica customizada
 
-    # Simulação de trades (simplificada)
+    # Simulação de trades
     capital = config['backtest']['initial_capital']
-    position = 0
-    entry_price = 0
+    position = 0.0 # Positivo = Long, Negativo = Short
+    entry_price = 0.0
+    stop_price = 0.0
+    target_price = 0.0
+    
     trades = []
     equity = [capital]
+    
+    lot_size = config['strategy']['lot_size']
+    
+    is_custom_mode = config['strategy'].get('signal_mode') == 'custom_cci_ma'
+    target_factor = config['strategy'].get('custom_target_factor', 1.5)
+    stop_factor = config['strategy'].get('custom_stop_factor', 0.9)
 
     for i, row in df.iterrows():
-        if row['signal'] == 1 and position == 0:  # Entrada long
-            position = config['strategy']['lot_size']
-            entry_price = row['close']
-        elif row['signal'] == -1 and position > 0:  # Saída long
-            pnl = (row['close'] - entry_price) * position
-            capital += pnl
-            trades.append({'entry': entry_price, 'exit': row['close'], 'pnl': pnl})
-            position = 0
-        # Trailing stop pode ser adicionado aqui
+        # Lógica de Saída (TP/SL)
+        if position != 0:
+            pnl = 0
+            exit_price = 0
+            exit_reason = ""
+            
+            if position > 0: # Long
+                if row['low'] <= stop_price:
+                    exit_price = stop_price 
+                    if exit_price > row['high']: exit_price = row['open'] # Gap check
+                    pnl = (exit_price - entry_price) * position
+                    exit_reason = "stop_loss"
+                elif row['high'] >= target_price:
+                    exit_price = target_price
+                    pnl = (exit_price - entry_price) * position
+                    exit_reason = "take_profit"
+                # Saída por sinal reverso
+                elif row['signal'] == -1:
+                    exit_price = row['close']
+                    pnl = (exit_price - entry_price) * position
+                    exit_reason = "signal_reverse"
 
-        equity.append(capital + position * row['close'])
+            elif position < 0: # Short
+                if row['high'] >= stop_price:
+                    exit_price = stop_price
+                    if exit_price < row['low']: exit_price = row['open']
+                    pnl = (entry_price - exit_price) * abs(position)
+                    exit_reason = "stop_loss"
+                elif row['low'] <= target_price:
+                    exit_price = target_price
+                    pnl = (entry_price - exit_price) * abs(position)
+                    exit_reason = "take_profit"
+                elif row['signal'] == 1:
+                    exit_price = row['close']
+                    pnl = (entry_price - exit_price) * abs(position)
+                    exit_reason = "signal_reverse"
+
+            if exit_reason:
+                capital += pnl
+                trades.append({
+                    'entry': entry_price, 
+                    'exit': exit_price, 
+                    'pnl': pnl, 
+                    'side': 'long' if position > 0 else 'short',
+                    'reason': exit_reason,
+                    'date': row['Date'] if 'Date' in row else i
+                })
+                position = 0
+                entry_price = 0
+                stop_price = 0
+                target_price = 0
+
+        # Lógica de Entrada
+        if position == 0:
+            # Definir tamanho da posição (Fixo ou Composto)
+            use_compounding = config['strategy'].get('compounding_enabled', False)
+            if use_compounding:
+                pct = config['strategy'].get('compounding_pct', 0.95)
+                # Garante que não trade negativo se quebrou a conta
+                if capital <= 0:
+                    current_qty = 0
+                else:
+                    current_qty = (capital * pct) / row['close']
+            else:
+                current_qty = lot_size
+
+            if row['signal'] == 1 and current_qty > 0: # Long
+                position = current_qty
+                entry_price = row['close']
+                
+                if is_custom_mode:
+                    vol = row.get('custom_atr', row.get('atr', 0))
+                    target_price = entry_price + (vol * target_factor)
+                    stop_price = entry_price - (vol * stop_factor)
+                else:
+                    # Fallback padrão
+                    target_price = entry_price * 1.5
+                    stop_price = entry_price * 0.95
+
+            elif row['signal'] == -1 and current_qty > 0: # Short
+                position = -current_qty
+                entry_price = row['close']
+                
+                if is_custom_mode:
+                    vol = row.get('custom_atr', row.get('atr', 0))
+                    target_price = entry_price - (vol * target_factor)
+                    stop_price = entry_price + (vol * stop_factor)
+                else:
+                    target_price = entry_price * 0.5
+                    stop_price = entry_price * 1.05
+
+        equity.append(capital + (position * row['close'] if position > 0 else position * (2*entry_price - row['close']) if position < 0 else 0))
 
     # Calcular métricas
     equity_series = pd.Series(equity)
