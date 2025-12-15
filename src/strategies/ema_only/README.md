@@ -22,29 +22,33 @@ Arquivos principais
 -------------------
 
 - `backtest.py`  
-  Implementa:
-  - `EmaOnlyParams`: parâmetros da estratégia (período da EMA, modo de sinal,
-    pullback, filtro de tendência, lot_size, fee, uso de cruzamento/reclaim).
-  - `backtest_ema_only(df, params, initial_capital)`: função pura que recebe um
-    DataFrame OHLCV e retorna lista de trades, PnL total e estatísticas
-    agregadas. Suporta `signal_mode="price_reversion"` (legado) e
-    `signal_mode="ema_cross"` (tendência via duas EMAs).
-  - Suporte a viés de timeframe superior: quando `ref_filter_enabled=true`,
-    espera coluna `ref_ema` no DataFrame (gerada no `run.py` a partir de
-    `ref_timeframe`) e só permite entradas/posições se preço/EMA estiverem
-    acima da EMA de referência, com tolerância `ref_buffer_pct`.
+  Orquestrador principal. Não contém lógica de decisão, apenas carrega dados,
+  chama os módulos de sinal e executa o loop de simulação (backtest) calculando
+  PnL e métricas.
 
-- `pipeline.py` (modo legacy via CLI com flags)  
-  CLI original que aceita parâmetros via linha de comando (`--ema-period`,
-  `--use-cross`, etc.) e executa backtests ad‑hoc.
+- `signals.py`
+  Contém a lógica de decisão (Regras de Trade):
+  - `_signal_custom_cci_ma`: Lógica complexa (CCI + Médias + ATR).
+  - `_signal_ema_cross`: Lógica simples de cruzamento.
+  - `apply_signals`: Roteador que escolhe a estratégia baseada no `config.json`.
 
-- `config.json` (novo, config‑driven)  
-  Arquivo de configuração padrão para rodar backtests determinísticos e
-  reprodutíveis sem passar flags.
+- `indicators.py`
+  Biblioteca de cálculos matemáticos:
+  - Médias Móveis (SMA, EMA).
+  - Osciladores (CCI).
+  - Volatilidade (ATR).
 
-- `run.py` (novo)  
-  CLI limpa que lê `config.json`, carrega dados de `data/klines_cache.db` e
-  executa o backtest, salvando um JSON de resultados.
+- `config.json`
+  Arquivo de configuração central que define:
+  - Parâmetros de dados (símbolo, datas).
+  - Parâmetros de estratégia (`custom_target_factor`, `ema_period`, etc.).
+  - Qual modo de sinal usar (`signal_mode`).
+
+- `run.py`
+  Ponto de entrada (CLI) para executar o backtest:
+  ```bash
+  poetry run python -m src.strategies.ema_only.run [path/to/config.json]
+  ```
 
 Dados e cache
 -------------

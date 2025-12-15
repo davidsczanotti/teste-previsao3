@@ -13,7 +13,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.binance_client import get_historical_klines, get_current_price
-from src.strategies.ema_only.backtest import calculate_mas, generate_signals
+from src.strategies.ema_only.indicators import add_indicators # New Import
+from src.strategies.ema_only.signals import apply_signals     # New Import
 
 # Config Paths
 STRATEGY_DIR = Path(__file__).parent
@@ -136,8 +137,8 @@ def run_paper_trading():
                 continue
                 
             # 2. Calculate Indicators
-            df = calculate_mas(df, config)
-            df = generate_signals(df, config)
+            df = add_indicators(df, config) # Refactored call
+            df = apply_signals(df, config)   # Refactored call
             
             # Último candle FECHADO (decisão técnica)
             last_closed_candle = df.iloc[-2]

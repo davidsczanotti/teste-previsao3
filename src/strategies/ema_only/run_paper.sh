@@ -9,6 +9,7 @@ cd "$(dirname "$0")/../../.."
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 echo "Iniciando Paper Trading (EMA Only)..."
+echo "Ativo configurado: FXSUSDT (via config.json)"
 echo "Pressione Ctrl+C para parar."
 
 poetry run python src/strategies/ema_only/paper.py

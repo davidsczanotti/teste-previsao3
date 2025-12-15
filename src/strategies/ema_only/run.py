@@ -7,13 +7,19 @@ import json
 import sys
 from pathlib import Path
 
-# Adicionar src ao path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from backtest import run_backtest
+try:
+    # Execução como módulo: `python -m src.strategies.ema_only.run`
+    from .backtest import run_backtest
+except ImportError:  # pragma: no cover
+    # Execução como script: `python src/strategies/ema_only/run.py`
+    from backtest import run_backtest
 
 def main():
-    config_path = Path(__file__).parent / "config.json"
+    if len(sys.argv) > 1:
+        config_path = Path(sys.argv[1])
+    else:
+        config_path = Path(__file__).parent / "config.json"
+
     if not config_path.exists():
         print(f"Erro: {config_path} não encontrado.")
         sys.exit(1)
