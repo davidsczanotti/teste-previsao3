@@ -13,17 +13,9 @@ dependencies = [
     "matplotlib (>=3.10.6,<4.0.0)",
     "yfinance (>=0.2.66,<0.3.0)",
     "pytz (>=2025.2,<2026.0)",
-    "python-binance (>=1.0.29,<2.0.0)",
-    "certifi (<2025)",
-    "mplfinance (>=0.12.10b0,<0.13.0)",
-    "optuna (>=3.6.1,<4.0.0)",
     "optune (>=0.1.1,<0.2.0)",
-    "pandas-ta (>=0.4.71b0,<0.5.0)",
     "ta-lib (>=0.6.7,<0.7.0)",
     "requests (>=2.32.5,<3.0.0)",
-    "torch (>=2.8.0,<3.0.0)",
-    "scikit-learn (>=1.5.0,<2.0.0)",
-    "stable-baselines3 (>=2.7.0,<3.0.0)",
 ]
 
 # Optional heavy deps, installed on demand (reduce default provision time)

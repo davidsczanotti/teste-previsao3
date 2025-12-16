@@ -7,23 +7,21 @@ import os
 sys.path.append(os.getcwd())
 from src.strategies.ema_only.backtest import backtest_ema_only
 
-def run_scanner():
-    # Lista diversificada de Tickers da B3
+def run_scanner_crypto():
+    # Lista de Criptomoedas (Top Market Cap & DeFi/L1s)
     tickers = [
-        "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBAS3.SA", # Blue Chips / Bancos
-        "WEGE3.SA", "PRIO3.SA", # Crescimento / Qualidade
-        "GGBR4.SA", "CSNA3.SA", "SUZB3.SA", # Commodities / Cíclicas
-        "MGLU3.SA", "LREN3.SA", # Varejo (Alta Volatilidade)
-        "ELET3.SA", "CMIG4.SA", # Elétricas
-        "B3SA3.SA", "RENT3.SA"  # Financeiro / Locadoras
+        "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD",
+        "XRP-USD", "ADA-USD", "DOGE-USD", "AVAX-USD",
+        "LINK-USD", "DOT-USD", "MATIC-USD", "LTC-USD"
     ]
 
-    print(f"--- Iniciando Scanner em {len(tickers)} ativos (2017-2025) ---")
+    print(f"--- Iniciando Crypto Scanner em {len(tickers)} ativos (2017-2025) ---")
     print("Estratégia: EMA Only (Modo Trend Surfer v4.1)\n")
 
     results_summary = []
 
     # Configuração Padrão (Trend Surfer v4.1)
+    # Ajustamos 'days' para garantir cobertura máxima disponível
     base_config = {
         "data": { "days": 3000, "timeframe": "1d" },
         "strategy": {
@@ -42,13 +40,13 @@ def run_scanner():
             "trailing_stop_pct": 0.10,
             
             # Configuração Geral
-            "compounding_enabled": False, # Usamos RiskPct agora
-            "ref_filter_enabled": False, # Integrado na lógica (Close > Macro)
-            "lot_size": 1000, # Fallback
-            "fee_pct": 0.0003, 
+            "compounding_enabled": False, 
+            "ref_filter_enabled": False, 
+            "lot_size": 1000, 
+            "fee_pct": 0.001,  # Taxa um pouco maior pra cripto (0.1%)
             "allow_short": False
         },
-        "backtest": { "initial_capital": 100000.0 }
+        "backtest": { "initial_capital": 10000.0 }
     }
 
     for ticker in tickers:
@@ -62,15 +60,13 @@ def run_scanner():
                 print("Sem dados.")
                 continue
 
-            # Adaptação de colunas
+            # Adaptação de colunas (tratamento para MultiIndex do yfinance novo)
             if isinstance(df.columns, pd.MultiIndex):
                 try:
-                    if ticker in df.columns.get_level_values(1):
-                         df.columns = df.columns.get_level_values(0)
-                    else:
-                         df.columns = df.columns.get_level_values(0)
-                except:
+                    # Tenta pegar nível 0 se ticker não estiver no nível 1
                     df.columns = df.columns.get_level_values(0)
+                except:
+                    pass
             
             df = df.reset_index()
             cols_map = {"Date": "Date", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
@@ -100,28 +96,12 @@ def run_scanner():
             dd = (equity_curve - peak) / peak
             max_dd = dd.min()
 
-            # --- Novas Métricas Solicitadas ---
-            trades = res['trades']
-            avg_days = 0
-            avg_pnl = 0
-            
-            if trades_count > 0:
-                # 1. Tempo Médio
-                # Garante que as datas sejam datetime para subtração
-                durations = [(pd.to_datetime(t['exit_time']) - pd.to_datetime(t['entry_time'])).days for t in trades]
-                avg_days = sum(durations) / len(durations)
-                
-                # 2. Lucro Médio por Trade
-                avg_pnl = res['metrics']['total_pnl'] / trades_count
-
             results_summary.append({
                 "Ticker": ticker,
                 "Retorno Total (%)": total_return * 100,
                 "Capital Final": final_equity,
                 "Win Rate (%)": win_rate * 100,
                 "Trades": trades_count,
-                "Tempo Médio (Dias)": avg_days,
-                "Lucro Médio (R$)": avg_pnl,
                 "Max Drawdown (%)": max_dd * 100
             })
             
@@ -132,13 +112,15 @@ def run_scanner():
 
     # Gerar DataFrame e Ordenar
     df_results = pd.DataFrame(results_summary)
-    df_results = df_results.sort_values("Retorno Total (%)", ascending=False)
-
-    print("\n" + "="*80)
-    print(f"RANKING DE ATIVOS (2017-2025) | Base: R$ 10.000")
-    print("="*80)
-    print(df_results.to_string(index=False, float_format="%.2f"))
-    print("="*80)
+    if not df_results.empty:
+        df_results = df_results.sort_values("Retorno Total (%)", ascending=False)
+        print("\n" + "="*80)
+        print(f"RANKING CRYPTO (2017-2025) | Base: $ 10.000")
+        print("="*80)
+        print(df_results.to_string(index=False, float_format="%.2f"))
+        print("="*80)
+    else:
+        print("\nNenhum resultado gerado.")
 
 if __name__ == "__main__":
-    run_scanner()
+    run_scanner_crypto()

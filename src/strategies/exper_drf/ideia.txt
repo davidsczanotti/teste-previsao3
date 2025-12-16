@@ -1,6 +1,0 @@
-8) “Direção por range fracionário” (Hurst curto prazo)
-
-Ideia: estimar Hurst/ADF rápido em janelas curtas usando só ranges (Parkinson/Garman-Klass) e trocar entre mean reversion e trend dinamicamente.
-Por que pode funcionar: o alpha vem de escolher o lado certo do regime.
-Alvo: classe {trend-friendly, mean-revert} + sinal correspondente.
-Risco: estimadores instáveis com pouco dado; suavizar via média exponencial.    

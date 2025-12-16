@@ -1,2 +1,0 @@
-# Triple RSI strategy package
-

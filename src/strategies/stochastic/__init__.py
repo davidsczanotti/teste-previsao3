@@ -1,2 +1,0 @@
-# Stochastic strategy package
-

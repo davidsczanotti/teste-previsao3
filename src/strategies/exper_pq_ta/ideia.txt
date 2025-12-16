@@ -1,6 +1,0 @@
-7) Previsão quantílica + “triple barrier” adaptativa
-
-Ideia: prever P10/P50/P90 do retorno; definir barreiras (TP/SL/tempo) a partir dessas quantis e gerar o rótulo de trade “ótimo” do ponto de vista de utilidade.
-Por que pode funcionar: o próprio modelo dita o R:R e evita arbitrar thresholds fixos.
-Métrica: expected utility (não só acurácia).
-Risco: correlação entre quantis mal calibrada → usar pinball loss + checagem de monotonicidade.

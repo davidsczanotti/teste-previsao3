@@ -1,6 +1,0 @@
-5) Hawkes “pobre” com OHLCV (eventos derivados)
-
-Ideia: construir uma série de eventos (quebras de microestrutura: candles com corpo>p80, gaps intrabar, spikes de volume) e modelar autoexcitação simples (contagens e decays) como features.
-Por que pode funcionar: clusters de atividade tendem a se autocatalisar.
-Alvo: probabilidade de continuação no próximo burst.
-Risco: sem ticks reais é proxy; ainda assim, costuma capturar rajadas.

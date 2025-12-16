@@ -1,7 +1,0 @@
-2) “Calendário intradiário” com Fourier discreto aprendível
-
-Ideia: mapear hora/minuto do dia em 8–16 bases seno/cosseno e deixar o modelo (LSTM/TCN) aprender o peso sazonal.
-Por que pode funcionar: padrões intradiários (abertura/almoço/fechamento) são fortes e mudam lentamente.
-Alvo: retorno a h passos (ex.: 5 ou 15).
-Métrica-chave: uplift de acurácia por janela do dia vs. baseline sem bases.
-Risco: overfit se o dia de semana/véspera de feriado não for separado.

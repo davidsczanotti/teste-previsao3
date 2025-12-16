@@ -1,6 +1,0 @@
-6) Aprendizado contrastivo de regimes (sem rótulo)
-
-Ideia: aprender embeddings de janelas de OHLCV com uma perda contrastiva (SimCLR/Triplet) onde janelas “parecidas” (mesmo regime por vol/assimetria) se aproximam. Depois, um classificador raso por cima.
-Por que pode funcionar: separa trend/chop/shock sem rotular manualmente.
-Uso: gateia qualquer modelo direcional (opera só em regimes “bons”).
-Risco: escolhas de augmentations importam (jitter de escala/tempo).
