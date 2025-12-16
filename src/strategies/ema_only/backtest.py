@@ -43,6 +43,14 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
     fee_pct = float(config['strategy'].get('fee_pct', 0.0))
     
     is_custom_mode = config['strategy'].get('signal_mode') == 'custom_cci_ma'
+    is_trend_surfer = config['strategy'].get('signal_mode') == 'trend_surfer_v4'
+    
+    # Parâmetros Trend Surfer
+    risk_pct = config['strategy'].get('risk_per_trade_pct', 0.02)
+    initial_stop_pct = config['strategy'].get('initial_stop_pct', 0.05)
+    trail_pct = config['strategy'].get('trailing_stop_pct', 0.10)
+    max_price_in_trade = 0.0
+
     target_factor = config['strategy'].get('custom_target_factor', 1.5)
     stop_factor = config['strategy'].get('custom_stop_factor', 0.9)
 
@@ -56,7 +64,30 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
             exit_price = 0
             exit_reason = ""
             
-            if position > 0: # Long
+            # --- Lógica Específica Trend Surfer (Trailing Stop High Watermark) ---
+            if is_trend_surfer and position > 0:
+                # Atualiza Topo Histórico do Trade
+                if row['high'] > max_price_in_trade:
+                    max_price_in_trade = row['high']
+                
+                # Stop Dinâmico
+                dynamic_stop = max_price_in_trade * (1 - trail_pct)
+                
+                if row['low'] <= dynamic_stop:
+                    exit_price = dynamic_stop
+                    # Gap check de abertura (se abriu abaixo do stop, sai no open)
+                    if exit_price > row['high']: exit_price = row['open']
+                    
+                    gross_pnl = (exit_price - entry_price) * position
+                    exit_reason = "trailing_stop"
+                # Saída por sinal reverso (opcional, mas comum)
+                elif row['signal'] == -1:
+                    exit_price = row['close']
+                    gross_pnl = (exit_price - entry_price) * position
+                    exit_reason = "signal_reverse"
+            
+            # --- Lógica Padrão / Custom Antiga ---
+            elif position > 0: # Long
                 if row['low'] <= stop_price:
                     exit_price = stop_price 
                     if exit_price > row['high']: exit_price = row['open'] # Gap check
@@ -73,19 +104,36 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
                     exit_reason = "signal_reverse"
 
             elif position < 0: # Short
-                if row['high'] >= stop_price:
-                    exit_price = stop_price
-                    if exit_price < row['low']: exit_price = row['open']
-                    gross_pnl = (entry_price - exit_price) * abs(position)
-                    exit_reason = "stop_loss"
-                elif row['low'] <= target_price:
-                    exit_price = target_price
-                    gross_pnl = (entry_price - exit_price) * abs(position)
-                    exit_reason = "take_profit"
-                elif row['signal'] == 1:
-                    exit_price = row['close']
-                    gross_pnl = (entry_price - exit_price) * abs(position)
-                    exit_reason = "signal_reverse"
+                # Trend Surfer Short (se habilitado) - Lógica inversa
+                if is_trend_surfer:
+                     if row['low'] < max_price_in_trade: # Para short, max_price guarda o Low mínimo
+                        max_price_in_trade = row['low']
+                     dynamic_stop = max_price_in_trade * (1 + trail_pct)
+                     
+                     if row['high'] >= dynamic_stop:
+                        exit_price = dynamic_stop
+                        if exit_price < row['low']: exit_price = row['open']
+                        gross_pnl = (entry_price - exit_price) * abs(position)
+                        exit_reason = "trailing_stop"
+                     elif row['signal'] == 1:
+                        exit_price = row['close']
+                        gross_pnl = (entry_price - exit_price) * abs(position)
+                        exit_reason = "signal_reverse"
+
+                else:
+                    if row['high'] >= stop_price:
+                        exit_price = stop_price
+                        if exit_price < row['low']: exit_price = row['open']
+                        gross_pnl = (entry_price - exit_price) * abs(position)
+                        exit_reason = "stop_loss"
+                    elif row['low'] <= target_price:
+                        exit_price = target_price
+                        gross_pnl = (entry_price - exit_price) * abs(position)
+                        exit_reason = "take_profit"
+                    elif row['signal'] == 1:
+                        exit_price = row['close']
+                        gross_pnl = (entry_price - exit_price) * abs(position)
+                        exit_reason = "signal_reverse"
 
             if exit_reason:
                 qty = abs(position)
@@ -113,20 +161,35 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
                 entry_fee = 0.0
                 stop_price = 0
                 target_price = 0
+                max_price_in_trade = 0.0 # Reset
 
         # Lógica de Entrada
         if position == 0 and not is_last_bar:
-            # Definir tamanho da posição (Fixo ou Composto)
-            use_compounding = config['strategy'].get('compounding_enabled', False)
-            if use_compounding:
-                pct = config['strategy'].get('compounding_pct', 0.95)
-                # Garante que não trade negativo se quebrou a conta
-                if capital <= 0:
-                    current_qty = 0
+            # Definir tamanho da posição
+            if is_trend_surfer:
+                # Position Sizing do Pine Script
+                # riskEquity = strategy.equity * riskPerTrade
+                # stopDistanceMoney = close * initialStopPct
+                # entryQty = riskEquity / stopDistanceMoney
+                
+                # current_equity = capital (aproximado, pois capital atualiza fechamento trade a trade)
+                risk_money = capital * risk_pct
+                stop_distance = row['close'] * initial_stop_pct
+                if stop_distance > 0:
+                    current_qty = risk_money / stop_distance
                 else:
-                    current_qty = (capital * pct) / row['close']
+                    current_qty = 0
             else:
-                current_qty = lot_size
+                use_compounding = config['strategy'].get('compounding_enabled', False)
+                if use_compounding:
+                    pct = config['strategy'].get('compounding_pct', 0.95)
+                    # Garante que não trade negativo se quebrou a conta
+                    if capital <= 0:
+                        current_qty = 0
+                    else:
+                        current_qty = (capital * pct) / row['close']
+                else:
+                    current_qty = lot_size
 
             if row['signal'] == 1 and current_qty > 0: # Long
                 position = current_qty
@@ -135,7 +198,13 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
                 entry_fee = (abs(position) * float(entry_price)) * fee_pct
                 capital -= entry_fee
                 
-                if is_custom_mode:
+                if is_trend_surfer:
+                    max_price_in_trade = row['close'] # Inicializa com preço de entrada
+                    # Stop/Target definidos pela lógica dinâmica na saída
+                    stop_price = 0 
+                    target_price = 99999999
+                    
+                elif is_custom_mode:
                     vol = row.get('custom_atr', row.get('atr', 0))
                     target_price = entry_price + (vol * target_factor)
                     stop_price = entry_price - (vol * stop_factor)
@@ -151,7 +220,12 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
                 entry_fee = (abs(position) * float(entry_price)) * fee_pct
                 capital -= entry_fee
                 
-                if is_custom_mode:
+                if is_trend_surfer:
+                    max_price_in_trade = row['close']
+                    stop_price = 0
+                    target_price = 0
+                
+                elif is_custom_mode:
                     vol = row.get('custom_atr', row.get('atr', 0))
                     target_price = entry_price - (vol * target_factor)
                     stop_price = entry_price + (vol * stop_factor)
@@ -225,10 +299,10 @@ def load_data_with_ref(config: Dict) -> pd.DataFrame:
             data_cfg['timeframe'], 
             data_cfg['start_date'], 
             data_cfg['end_date'], 
-            use_cache_only=True
+            use_cache_only=False
         )
     else:
-        df = load_data(data_cfg['symbol'], data_cfg['timeframe'], data_cfg['days'], use_cache_only=True)
+        df = load_data(data_cfg['symbol'], data_cfg['timeframe'], data_cfg['days'], use_cache_only=False)
 
     if data_cfg.get('ref_timeframe'):
         if 'start_date' in data_cfg and 'end_date' in data_cfg:
@@ -238,10 +312,10 @@ def load_data_with_ref(config: Dict) -> pd.DataFrame:
                 data_cfg['ref_timeframe'], 
                 data_cfg['start_date'], 
                 data_cfg['end_date'], 
-                use_cache_only=True
+                use_cache_only=False
             )
         else:
-            df_ref = load_data(data_cfg['symbol'], data_cfg['ref_timeframe'], data_cfg['ref_days'], use_cache_only=True)
+            df_ref = load_data(data_cfg['symbol'], data_cfg['ref_timeframe'], data_cfg['ref_days'], use_cache_only=False)
             
         df_ref['ref_ema'] = df_ref['close'].ewm(span=config['strategy']['ref_ema_period']).mean()
         # Merge com base em data aproximada

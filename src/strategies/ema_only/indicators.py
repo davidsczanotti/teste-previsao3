@@ -110,4 +110,16 @@ def add_indicators(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
         # Filtro Macro (EMA 200 hardcoded na lógica original, agora explícito)
         df['ema_200'] = df['close'].ewm(span=200).mean()
 
+    # --- 6. Indicadores Específicos do Modo Trend Surfer v4 ---
+    if strategy.get('signal_mode') == 'trend_surfer_v4':
+        fast_p = strategy.get('ts_fast_period', 9)
+        slow_p = strategy.get('ts_slow_period', 21)
+        macro_p = strategy.get('ts_ema_macro_period', 200)
+        cci_p = strategy.get('ts_cci_period', 14)
+
+        df['ts_fast_ma'] = df['close'].rolling(fast_p).mean()
+        df['ts_slow_ma'] = df['close'].rolling(slow_p).mean()
+        df['ts_ema_macro'] = df['close'].ewm(span=macro_p).mean()
+        df['ts_cci'] = calculate_cci(df, cci_p)
+
     return df

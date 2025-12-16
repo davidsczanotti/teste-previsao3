@@ -25,6 +25,8 @@ def apply_signals(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
     # 2. Roteamento de Lógica Específica
     if mode == 'custom_cci_ma':
         df = _signal_custom_cci_ma(df, strategy)
+    elif mode == 'trend_surfer_v4':
+        df = _signal_trend_surfer_v4(df, strategy)
     elif mode == 'ema_cross':
         df = _signal_ema_cross(df, strategy)
     else:
@@ -103,4 +105,43 @@ def _signal_ema_cross(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
         dist_fast = (df['close'] - ema_fast).abs() / ema_fast
         df.loc[(df['signal'] == 1) & (dist_fast > max_dist), 'signal'] = 0
 
+    return df
+
+def _signal_trend_surfer_v4(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
+    """
+    Estratégia: EMA Strategy v4.1 [Trend Surfer]
+    Lógica:
+      - Long: CrossUp(Fast, Slow) AND Close > EMA200 AND CCI > Min
+    """
+    fast = df['ts_fast_ma']
+    slow = df['ts_slow_ma']
+    macro = df['ts_ema_macro']
+    cci = df['ts_cci']
+    cci_min = strategy.get('ts_cci_min', 0)
+
+    # Condições
+    # 1. Crossover (Rápida cruza acima da Lenta)
+    # Precisamos verificar o candle atual > e anterior <=
+    cross_up = (fast > slow) & (fast.shift(1) <= slow.shift(1))
+    
+    # 2. Trend Filter (Preço acima da EMA Macro)
+    trend_ok = df['close'] > macro
+    
+    # 3. Momentum Filter (CCI > Min)
+    mom_ok = cci > cci_min
+    
+    cond_long = cross_up & trend_ok & mom_ok
+    
+    df.loc[cond_long, 'signal'] = 1
+    
+    # A estratégia original é Long-Only, mas se allow_short estiver ativo,
+    # poderíamos implementar a lógica inversa. Por padrão, deixamos apenas Long.
+    if strategy.get('allow_short', False):
+        # Lógica inversa simples para short (opcional)
+        cross_down = (fast < slow) & (fast.shift(1) >= slow.shift(1))
+        trend_bear = df['close'] < macro
+        mom_bear = cci < -cci_min
+        cond_short = cross_down & trend_bear & mom_bear
+        df.loc[cond_short, 'signal'] = -1
+        
     return df

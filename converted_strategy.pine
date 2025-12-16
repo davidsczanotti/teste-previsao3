@@ -1,0 +1,110 @@
+//@version=5
+strategy("EMA Only Strategy [Python Logic]", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=95)
+
+// --- Parameters ---
+// Moving Averages
+fastPeriod = input.int(9, "Fast MA Period")
+slowPeriod = input.int(21, "Slow MA Period")
+
+// CCI
+cciPeriod = input.int(14, "CCI Period")
+cciLevel = input.float(100.0, "CCI Level")
+
+// ATR & Distance
+atrPeriod = input.int(10, "ATR Period")
+distAtrMult = input.float(0.05, "Min Distance ATR Multiplier")
+
+// Global/Ref Filter
+refEmaPeriod = input.int(200, "Ref EMA Period")
+refBufferPct = input.float(0.0025, "Ref Buffer %")
+ema200Period = input.int(200, "Macro EMA Period")
+
+// Exits
+targetFactor = input.float(2.0, "Take Profit ATR Multiplier")
+stopFactor = input.float(0.9, "Stop Loss ATR Multiplier")
+
+// --- Indicators ---
+// Custom MAs (SMA based on Python logic)
+fastMA = ta.sma(close, fastPeriod)
+slowMA = ta.sma(close, slowPeriod)
+
+// CCI
+cci = ta.cci(close, cciPeriod)
+
+// ATR (Python uses SMA of True Range, not Wilder's RMA)
+// ta.tr is the True Range
+atr = ta.sma(ta.tr, atrPeriod)
+
+// Macro EMAs
+ema200 = ta.ema(close, ema200Period)
+refEMA = ta.ema(close, refEmaPeriod)
+
+// --- Logic ---
+// 1. Reference Bias (Global Filter)
+// Bullish: Close > RefEMA * (1 + buffer)
+// Bearish: Close < RefEMA * (1 - buffer)
+bullBias = close > refEMA * (1 + refBufferPct)
+bearBias = close < refEMA * (1 - refBufferPct)
+
+// 2. Separation Logic
+minDist = atr * distAtrMult
+diff = math.abs(fastMA - slowMA)
+separationOK = diff > minDist
+
+// 3. Custom CCI + MA Conditions
+// Long: Fast > Slow AND CCI > Level AND Separation OK AND Close > EMA200
+longCondition = (fastMA > slowMA) and (cci > cciLevel) and separationOK and (close > ema200)
+
+// Short: Fast < Slow AND CCI < -Level AND Separation OK AND Close < EMA200
+shortCondition = (fastMA < slowMA) and (cci < -cciLevel) and separationOK and (close < ema200)
+
+// 4. Combined Signals (with Bias)
+validLong = longCondition and bullBias
+validShort = shortCondition and bearBias
+
+// --- Execution & Risk Management ---
+// We need to store entry ATR to calculate fixed TP/SL
+var float entryAtr = na
+var float entryPrice = na
+
+// Strategy Execution
+if validLong
+    if strategy.position_size <= 0
+        entryAtr := atr
+        entryPrice := close
+    strategy.entry("Long", strategy.long)
+
+if validShort
+    if strategy.position_size >= 0
+        entryAtr := atr
+        entryPrice := close
+    strategy.entry("Short", strategy.short)
+
+// Exits
+// Calculate dynamic TP/SL levels based on entry ATR
+// Note: In Pine Script, strategy.exit handles SL/TP logic cleanly.
+// However, since TP/SL are based on entry-time ATR, we need to pass specific prices.
+
+if strategy.position_size > 0
+    longStop = strategy.opentrades.entry_price(strategy.opentrades - 1) - (entryAtr * stopFactor)
+    longTarget = strategy.opentrades.entry_price(strategy.opentrades - 1) + (entryAtr * targetFactor)
+    strategy.exit("Exit Long", "Long", stop=longStop, limit=longTarget)
+
+if strategy.position_size < 0
+    shortStop = strategy.opentrades.entry_price(strategy.opentrades - 1) + (entryAtr * stopFactor)
+    shortTarget = strategy.opentrades.entry_price(strategy.opentrades - 1) - (entryAtr * targetFactor)
+    strategy.exit("Exit Short", "Short", stop=shortStop, limit=shortTarget)
+
+
+// --- Visuals ---
+plot(fastMA, "Fast MA", color=color.green)
+plot(slowMA, "Slow MA", color=color.red)
+plot(refEMA, "Ref EMA", color=color.blue, linewidth=2)
+plot(ema200, "EMA 200", color=color.orange)
+
+// Plot signals
+plotshape(validLong, "Buy", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(validShort, "Sell", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// Background color for Bias
+bgcolor(bullBias ? color.new(color.green, 90) : bearBias ? color.new(color.red, 90) : na)

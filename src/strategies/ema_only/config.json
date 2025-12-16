@@ -1,17 +1,32 @@
 {
   "data": {
-    "symbol": "FXSUSDT",
-    "timeframe": "4h",
+    "symbol": "MGLU3",
+    "timeframe": "1d",
     "days": 3650,
-    "ref_timeframe": "1d",
+    "ref_timeframe": "1w",
     "ref_days": 3650,
     "intraday_timeframe": "1h",
     "intraday_window_hours": 12,
     "intraday_min_alignment": 0.5
   },
   "strategy": {
-    "__comment_ma_block": "Definição das 6 médias móveis: 3 SMAs + 3 EMAs. Os campos ema_period/slow_ema_period permanecem para compatibilidade e espelham ema_fast_period/ema_slow_period.",
-    "sma_fast_period": 11,
+    "signal_mode": "trend_surfer_v4",
+    
+    "__comment_trend_surfer": "Parâmetros da estratégia Trend Surfer v4.1",
+    "ts_fast_period": 9,
+    "ts_slow_period": 21,
+    "ts_ema_macro_period": 200,
+    "ts_cci_period": 14,
+    "ts_cci_min": 0,
+    
+    "__comment_risk": "Gestão de Risco e Saída",
+    "risk_per_trade_pct": 0.02,
+    "initial_stop_pct": 0.05,
+    "trailing_stop_pct": 0.10,
+    "allow_short": false,
+
+    "__comment_legacy": "Mantidos para compatibilidade com código antigo se necessário",
+    "sma_fast_period": 9,
     "sma_mid_period": 53,
     "sma_slow_period": 122,
     "ema_fast_period": 5,
@@ -19,9 +34,6 @@
     "ema_slow_period": 55,
     "ema_period": 9,
     "slow_ema_period": 85,
-
-    "__comment_entries": "Parâmetros legados de entrada/filtragem — mantidos para compatibilidade e para futuros modos de sinal.",
-    "signal_mode": "custom_cci_ma",
     "custom_ma_fast": 9,
     "custom_ma_slow": 21,
     "custom_cci_period": 14,
@@ -31,16 +43,16 @@
     "custom_target_factor": 2.0,
     "custom_stop_factor": 0.9,
     "custom_dist_atr_mult": 0.05,
-    "compounding_enabled": true,
+    "compounding_enabled": false,
     "compounding_pct": 0.95,
     "pullback_pct": 0.0,
     "use_trend_filter": false,
     "trend_filter_period": null,
     "use_cross": false,
-    "ref_filter_enabled": true,
+    "ref_filter_enabled": false,
     "ref_ema_period": 200,
     "ref_buffer_pct": 0.0025,
-    "lot_size": 0.004999991369280771,
+    "lot_size": 100,
     "fee_pct": 0.0004,
     "max_long_entry_dist_fast_pct": 0.015,
     "slow_slope_lookback_bars": 0,
@@ -48,27 +60,24 @@
     "cci_period": 20,
     "cci_level": 80.0,
     "min_ema_separation_atr_mult": 0.13,
-
-    "__comment_trailing": "Configuração de stop móvel. trailing_stop_type pode ser: atr_trailing, percent_trailing ou ma_trailing.",
     "trailing_stop_type": "percent_trailing",
     "atr_period": 44,
-    "atr_stop_mult": 2.3115814859132473,
-    "atr_trail_mult": 1.9898015003429426,
-    "breakeven_rr": 0.9719826541577553,
-    "percent_trailing_pct": 0.017049588201913813,
+    "atr_stop_mult": 2.31,
+    "atr_trail_mult": 1.98,
+    "breakeven_rr": 0.97,
+    "percent_trailing_pct": 0.10,
     "ma_trail_source": "ema_slow",
-    "ma_trail_offset_atr_mult": 1.0,
-    "allow_short": true
+    "ma_trail_offset_atr_mult": 1.0
   },
   "backtest": {
-    "initial_capital": 1000.0,
+    "initial_capital": 100000.0,
     "outdir": "src/strategies/ema_only/reports/backtest",
     "monthly_target_pct": 0.01,
-    "min_trades_for_significance": 30,
-    "min_candles_for_significance": 2000
+    "min_trades_for_significance": 10,
+    "min_candles_for_significance": 500
   },
   "visualize": {
-    "zoom_days": 60,
+    "zoom_days": 120,
     "style": "tradingview_dark",
     "figure_width": 16,
     "figure_height": 9,
@@ -80,7 +89,7 @@
   },
   "optimize": {
     "enabled": true,
-    "trials": 200,
+    "trials": 50,
     "seed": 123,
     "train_frac": 0.7,
     "wfa_splits": 3,
@@ -89,124 +98,21 @@
     "dd_penalty": 2.0,
     "outdir": "src/strategies/ema_only/reports/optimize",
     "search_space": {
-      "custom_ma_fast": { "type": "int", "low": 5, "high": 30 },
-      "custom_ma_slow": { "type": "int", "low": 20, "high": 80 },
-      "custom_atr_period": { "type": "int", "low": 8, "high": 21 },
-      "custom_target_factor": { "type": "float", "low": 1.5, "high": 8.0 },
-      "custom_stop_factor": { "type": "float", "low": 0.5, "high": 3.0 },
-      "custom_dist_atr_mult": { "type": "float", "low": 0.1, "high": 1.0 }
+      "ts_fast_period": { "type": "int", "low": 5, "high": 20 },
+      "ts_slow_period": { "type": "int", "low": 15, "high": 50 },
+      "ts_cci_period": { "type": "int", "low": 10, "high": 21 },
+      "ts_cci_min": { "type": "int", "low": -100, "high": 100 },
+      "trailing_stop_pct": { "type": "float", "low": 0.05, "high": 0.20 },
+      "risk_per_trade_pct": { "type": "float", "low": 0.01, "high": 0.05 }
     }
   },
   "rl": {
-    "train": {
-      "start": "2017-01-01 00:00:00",
-      "end": "2025-01-01 00:00:00",
-      "val_end": "2026-01-01 00:00:00",
-      "total_timesteps": 300000,
-      "n_steps": 256,
-      "batch_size": 256,
-      "learning_rate": 0.0003,
-      "gamma": 0.99,
-      "n_epochs": 5,
-      "seed": 42,
-      "regime_sampling": {
-        "enabled": false,
-        "block_months": 6,
-        "num_blocks": 4,
-        "regime_thresholds": {
-          "bull": 0.01,
-          "bear": -0.01
-        },
-        "seed": 42
-      }
-    },
-    "reward": {
-      "trade_penalty": 0.0,
-      "dd_threshold_pct": 0.02,
-      "dd_penalty": 0.0,
-      "min_hold_bars": 5,
-      "churn_penalty": 0.02,
-      "align_bonus": 0.0029838948304784178,
-      "realized_bonus_coef": 0.0,
-      "atr_risk_scale": 0.3,
-      "enforce_ref_bias": false,
-      "reward_scale": 1.0,
-      "consensus_bonus": 0.003,
-      "consensus_threshold": 0.45,
-      "vol_max_atr_rel": 0.03,
-      "vol_penalty": 0.0,
-      "gating_penalty": 0.0,
-      "turnover_penalty": 0.0,
-      "living_cost_per_episode": 0.0,
-      "use_monthly_reward": true,
-      "trend_entry_bonus": 0.2,
-      "trend_entry_penalty": 0.1,
-      "trend_flip_penalty": 0.0,
-      "atr_stop_mult": 2.0,
-      "atr_trail_mult": 1.0,
-      "max_long_entry_dist_fast_pct": 0.01,
-      "max_short_entry_dist_fast_pct": 0.01,
-      "pullback_entry_bonus": 0.04385722446796245,
-      "trend_exit_penalty": 0.03980442553304314,
-      "entry_bonus_fast_over_slow": 0.1,
-      "entry_bonus_full_trend": 0.2,
-      "override_long_gate": false,
-      "override_short_gate": false,
-      "bear_regime_threshold": 0.45,
-      "block_long_in_bear": true,
-      "bear_consensus_short_threshold": 0.3,
-      "exit_on_fast_slow_cross": false,
-      "monthly_target_tiers": [
-        [0.02, 0.5],
-        [0.04, 1.0],
-        [0.05, 1.5]
-      ],
-      "monthly_shortfall_penalty": 0.5,
-      "risk_per_trade_pct": 0.015,
-      "max_position_pct": 0.95,
-      "experts_master_enable": true,
-      "experts_enabled": {
-        "exp_trend": true,
-        "exp_ref": true,
-        "exp_macd": false,
-        "exp_slope": false,
-        "exp_intraday_trend": false,
-        "consensus": true
-      },
-      "ref_slope_enabled": false,
-      "cross_lookback_bars": 0,
-      "cross_bonus_tiers": [
-        [3, 2.0],
-        [4, 1.0],
-        [5, 0.5]
-      ]
-    },
-    "optimize": {
-      "trials": 5,
-      "total_timesteps": 150000,
-      "seed": 123,
-      "search_space": {
-        "entry_bonus_fast_over_slow": [0.0, 0.1],
-        "entry_bonus_full_trend": [0.0, 0.2],
-        "pullback_entry_bonus": [0.0, 0.1],
-        "align_bonus": [0.0, 0.05],
-        "trend_exit_penalty": [0.0, 0.1]
-      }
-    }
+     "train": { "total_timesteps": 10000 }
   },
   "walk_forward": {
-    "train_months": 18,
+    "train_months": 24,
     "val_months": 6,
     "step_months": 6,
-    "regime_sampling": {
-      "enabled": true,
-      "block_months": 6,
-      "num_blocks": 4,
-      "regime_thresholds": {
-        "bull": 0.01,
-        "bear": -0.01
-      },
-      "seed": 123
-    }
+    "regime_sampling": { "enabled": false }
   }
 }
