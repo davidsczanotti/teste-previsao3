@@ -118,6 +118,8 @@ def _signal_trend_surfer_v4(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
     macro = df['ts_ema_macro']
     cci = df['ts_cci']
     cci_min = strategy.get('ts_cci_min', 0)
+    use_date_filter = bool(strategy.get("ts_use_date_filter", False))
+    start_year = int(strategy.get("ts_start_year", 2016))
 
     # Condições
     # 1. Crossover (Rápida cruza acima da Lenta)
@@ -129,8 +131,15 @@ def _signal_trend_surfer_v4(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
     
     # 3. Momentum Filter (CCI > Min)
     mom_ok = cci > cci_min
+
+    # 4. Date Filter (year >= startYear)
+    if use_date_filter and 'Date' in df.columns:
+        years = pd.to_datetime(df['Date']).dt.year
+        date_ok = years >= start_year
+    else:
+        date_ok = True
     
-    cond_long = cross_up & trend_ok & mom_ok
+    cond_long = cross_up & trend_ok & mom_ok & date_ok
     
     df.loc[cond_long, 'signal'] = 1
     

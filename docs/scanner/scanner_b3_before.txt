@@ -1,0 +1,38 @@
+--- Iniciando Scanner em 15 ativos (2017-2025) ---
+Estratégia: EMA Only (Modo Trend Surfer v4.1)
+
+> Processando PETR4.SA... OK (1380.9%)
+> Processando VALE3.SA... OK (1367.7%)
+> Processando ITUB4.SA... OK (1066.2%)
+> Processando BBAS3.SA... OK (1031.2%)
+> Processando WEGE3.SA... OK (1983.5%)
+> Processando PRIO3.SA... OK (1319.0%)
+> Processando GGBR4.SA... OK (833.7%)
+> Processando CSNA3.SA... OK (994.3%)
+> Processando SUZB3.SA... OK (938.2%)
+> Processando MGLU3.SA... OK (1694.7%)
+> Processando LREN3.SA... Sem dados.
+> Processando ELET3.SA... OK (956.8%)
+> Processando CMIG4.SA... OK (1211.6%)
+> Processando B3SA3.SA... OK (995.1%)
+> Processando RENT3.SA... OK (1496.5%)
+
+================================================================================
+RANKING DE ATIVOS (2017-2025) | Base: R$ 10.000
+================================================================================
+  Ticker  Retorno Total (%)  Capital Final  Win Rate (%)  Trades  Tempo Médio (Dias)  Lucro Médio (R$)  Max Drawdown (%)
+WEGE3.SA            1983.54      208353.54         50.00      24               61.00           4514.73            -15.36
+MGLU3.SA            1694.71      179470.71         50.00      22               29.05           3612.30            -14.18
+RENT3.SA            1496.53      159653.27         56.25      16               59.75           3728.33            -11.08
+PETR4.SA            1380.89      148089.28         46.67      30               50.53           1602.98            -13.95
+VALE3.SA            1367.65      146765.47         45.45      22               53.00           2125.70            -16.26
+PRIO3.SA            1319.03      141902.87         37.93      29               23.21           1444.93            -18.04
+CMIG4.SA            1211.56      131156.05         40.91      22               66.68           1416.18            -14.35
+ITUB4.SA            1066.18      116617.52         52.94      17               92.41            977.50            -11.96
+BBAS3.SA            1031.21      113121.46         55.00      20               67.05            656.07            -16.04
+B3SA3.SA             995.10      109509.76         33.33      24               44.42            396.24            -25.12
+CSNA3.SA             994.26      109425.67         44.44      18               15.11            523.65            -13.16
+ELET3.SA             956.75      105675.19         42.31      26               31.15            218.28            -15.05
+SUZB3.SA             938.21      103821.47         36.36      22               36.18            173.70            -18.92
+GGBR4.SA             833.70       93370.10         36.00      25               38.56           -265.20            -18.91
+================================================================================

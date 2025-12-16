@@ -2,6 +2,59 @@ import pandas as pd
 import numpy as np
 from typing import Dict
 
+def calculate_sma(series: pd.Series, period: int) -> pd.Series:
+    """Calcula SMA com o mesmo comportamento do Pine (NaN até completar a janela)."""
+    return series.rolling(window=period, min_periods=period).mean()
+
+
+def calculate_ema_tv(series: pd.Series, period: int) -> pd.Series:
+    """Calcula EMA compatível com TradingView (ta.ema).
+
+    Implementa a recursão com alpha=2/(period+1) e seed via SMA(period),
+    retornando NaN até existir janela completa (comportamento de `ta.ema`).
+    """
+    period = int(period)
+    if period <= 0:
+        raise ValueError("EMA period must be > 0")
+
+    values = pd.Series(series, copy=False).astype(float)
+    out = pd.Series(index=values.index, dtype=float)
+
+    if len(values) < period:
+        return out  # tudo NaN
+
+    alpha = 2.0 / (period + 1.0)
+
+    seed = float(values.iloc[:period].mean())
+    out.iloc[: period - 1] = np.nan
+    out.iloc[period - 1] = seed
+
+    for i in range(period, len(values)):
+        prev = out.iloc[i - 1]
+        cur = values.iloc[i]
+        out.iloc[i] = (alpha * cur) + ((1.0 - alpha) * prev)
+
+    return out
+
+
+def calculate_cci_from_series(source: pd.Series, period: int) -> pd.Series:
+    """Calcula CCI compatível com TradingView (ta.cci(source, period))."""
+    period = int(period)
+    if period <= 0:
+        raise ValueError("CCI period must be > 0")
+
+    src = pd.Series(source, copy=False).astype(float)
+    ma = calculate_sma(src, period)
+
+    def _mean_dev(x):
+        m = np.mean(x)
+        return np.mean(np.abs(x - m))
+
+    mean_dev = src.rolling(window=period, min_periods=period).apply(_mean_dev, raw=True)
+    denom = 0.015 * mean_dev
+    return (src - ma) / denom
+
+
 def calculate_atr(df: pd.DataFrame, period: int) -> pd.Series:
     """Calcula ATR (Average True Range)."""
     high_low = df['high'] - df['low']
@@ -11,16 +64,16 @@ def calculate_atr(df: pd.DataFrame, period: int) -> pd.Series:
     return tr.rolling(period).mean()
 
 def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calcula CCI (Commodity Channel Index)."""
+    """Calcula CCI (Commodity Channel Index) usando HLC3 (legado do projeto)."""
     tp = (df['high'] + df['low'] + df['close']) / 3.0
-    ma = tp.rolling(period).mean()
+    ma = calculate_sma(tp, int(period))
 
     def _mean_dev(x):
         return np.mean(np.abs(x - np.mean(x)))
 
     # Otimização: usar rolling().apply pode ser lento, mas para backtest é aceitável.
     # Se precisar de performance, vetorizar o mean_dev.
-    mean_dev = tp.rolling(period).apply(_mean_dev, raw=True)
+    mean_dev = tp.rolling(window=int(period), min_periods=int(period)).apply(_mean_dev, raw=True)
     cci = (tp - ma) / (0.015 * mean_dev)
     return cci
 
@@ -69,11 +122,11 @@ def add_indicators(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
 
     # --- 1. Médias Móveis Genéricas (para visualização ou lógica base) ---
     if 'sma_fast_period' in strategy:
-        df['sma_fast'] = df['close'].rolling(strategy['sma_fast_period']).mean()
+        df['sma_fast'] = calculate_sma(df['close'], int(strategy['sma_fast_period']))
     if 'sma_mid_period' in strategy:
-        df['sma_mid'] = df['close'].rolling(strategy['sma_mid_period']).mean()
+        df['sma_mid'] = calculate_sma(df['close'], int(strategy['sma_mid_period']))
     if 'sma_slow_period' in strategy:
-        df['sma_slow'] = df['close'].rolling(strategy['sma_slow_period']).mean()
+        df['sma_slow'] = calculate_sma(df['close'], int(strategy['sma_slow_period']))
 
     if 'ema_fast_period' in strategy:
         df['ema_fast'] = df['close'].ewm(span=strategy['ema_fast_period']).mean()
@@ -97,8 +150,8 @@ def add_indicators(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
     # --- 5. Indicadores Específicos do Modo Custom (Identity Fix) ---
     if strategy.get('signal_mode') == 'custom_cci_ma':
         # Médias específicas da lógica customizada
-        df['custom_ma_fast'] = df['close'].rolling(strategy['custom_ma_fast']).mean()
-        df['custom_ma_slow'] = df['close'].rolling(strategy['custom_ma_slow']).mean()
+        df['custom_ma_fast'] = calculate_sma(df['close'], int(strategy['custom_ma_fast']))
+        df['custom_ma_slow'] = calculate_sma(df['close'], int(strategy['custom_ma_slow']))
         
         # CCI específico
         df['custom_cci'] = calculate_cci(df, strategy['custom_cci_period'])
@@ -117,9 +170,9 @@ def add_indicators(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
         macro_p = strategy.get('ts_ema_macro_period', 200)
         cci_p = strategy.get('ts_cci_period', 14)
 
-        df['ts_fast_ma'] = df['close'].rolling(fast_p).mean()
-        df['ts_slow_ma'] = df['close'].rolling(slow_p).mean()
-        df['ts_ema_macro'] = df['close'].ewm(span=macro_p).mean()
-        df['ts_cci'] = calculate_cci(df, cci_p)
+        df['ts_fast_ma'] = calculate_sma(df['close'], int(fast_p))
+        df['ts_slow_ma'] = calculate_sma(df['close'], int(slow_p))
+        df['ts_ema_macro'] = calculate_ema_tv(df['close'], int(macro_p))
+        df['ts_cci'] = calculate_cci_from_series(df['close'], int(cci_p))
 
     return df

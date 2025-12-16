@@ -4,7 +4,6 @@ from typing import Dict, List, Any
 import json
 from pathlib import Path
 
-from src.utils.data_loader import load_data
 from src.utils.metrics import calculate_metrics, calculate_sharpe_ratio
 
 # Importação dos módulos refatorados
@@ -17,6 +16,172 @@ except ImportError:
     from signals import apply_signals
 
 
+def _backtest_trend_surfer_v4_pine(df: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+    """Backtest fiel ao Pine Script 'EMA Strategy v4.1 [Trend Surfer Corrigida]'.
+
+    Regras de execução (TradingView default):
+    - Sinais são avaliados no fechamento do candle.
+    - Entradas a mercado preenchem no próximo candle (open).
+    - `strategy.exit(..., stop=...)` cria/atualiza um stop ativo a partir do próximo candle.
+    - Gap no open além do stop: preenche no open.
+    """
+    capital = float(config["backtest"]["initial_capital"])
+    strategy = config.get("strategy", {})
+
+    fee_pct = float(strategy.get("fee_pct", 0.0))
+    risk_pct = float(strategy.get("risk_per_trade_pct", 0.02))
+    initial_stop_pct = float(strategy.get("initial_stop_pct", 0.05))
+    trail_pct = float(strategy.get("trailing_stop_pct", 0.10))
+
+    position_qty = 0.0
+    entry_price = 0.0
+    entry_time = None
+    entry_fee = 0.0
+
+    max_price_in_trade = 0.0  # maxPriceInTrade do Pine
+    active_stop_price: float | None = None  # stop ativo para ESTE candle (definido no candle anterior)
+    pending_entry: Dict[str, float] | None = None  # ordem a mercado agendada para o próximo open
+
+    trades: List[Dict[str, Any]] = []
+    equity: List[float] = []
+
+    n = int(len(df))
+    for idx in range(n):
+        row = df.iloc[idx]
+        is_last_bar = idx == n - 1
+        ts = row["Date"] if "Date" in row else df.index[idx]
+
+        o = float(row["open"])
+        h = float(row["high"])
+        l = float(row["low"])
+        c = float(row["close"])
+
+        # 1) Preenchimento de entrada a mercado (próximo open)
+        if pending_entry is not None and position_qty == 0.0:
+            qty = float(pending_entry.get("qty", 0.0))
+            if qty > 0.0:
+                position_qty = qty
+                entry_price = o
+                entry_time = ts
+                entry_fee = (qty * entry_price) * fee_pct
+                capital -= entry_fee
+
+                # No Pine, maxPriceInTrade é setado no candle do sinal (close), não no fill.
+                max_price_in_trade = float(pending_entry.get("max_price_init", c))
+
+                # No Pine, o primeiro `strategy.exit` só roda no fechamento do 1º candle já posicionado,
+                # então não existe stop ativo no candle do fill.
+                active_stop_price = None
+            pending_entry = None
+
+        # 2) Execução de stop (ordem criada/atualizada no candle anterior)
+        if position_qty > 0.0 and active_stop_price is not None:
+            stop = float(active_stop_price)
+            exit_price: float | None = None
+            if o <= stop:
+                exit_price = o  # gap abaixo do stop
+            elif l <= stop:
+                exit_price = stop  # tocou intrabar
+
+            if exit_price is not None:
+                qty = position_qty
+                exit_fee = (qty * exit_price) * fee_pct
+                gross_pnl = (exit_price - entry_price) * qty
+                capital += gross_pnl - exit_fee
+                net_pnl = gross_pnl - entry_fee - exit_fee
+                trades.append(
+                    {
+                        "entry_time": entry_time,
+                        "exit_time": ts,
+                        "entry": entry_price,
+                        "exit": exit_price,
+                        "qty": qty,
+                        "pnl_gross": gross_pnl,
+                        "fee_entry": entry_fee,
+                        "fee_exit": exit_fee,
+                        "fee_total": entry_fee + exit_fee,
+                        "pnl": net_pnl,
+                        "side": "long",
+                        "reason": "trailing_stop",
+                        "date": ts,
+                    }
+                )
+                position_qty = 0.0
+                entry_price = 0.0
+                entry_time = None
+                entry_fee = 0.0
+                active_stop_price = None
+                max_price_in_trade = 0.0
+
+        # 3) Mark-to-market (equity = capital + PnL não-realizado)
+        if position_qty > 0.0:
+            unrealized_pnl = (c - entry_price) * position_qty
+        else:
+            unrealized_pnl = 0.0
+        equity.append(capital + unrealized_pnl)
+
+        # 4) Fechamento do candle: cria/atualiza ordens para o próximo candle
+        if is_last_bar:
+            continue
+
+        signal = int(row.get("signal", 0) or 0)
+
+        # Entrada: validLong (signal==1) e flat -> agenda mercado para o próximo open
+        if position_qty == 0.0:
+            if pending_entry is None and signal == 1:
+                risk_equity = capital * risk_pct  # strategy.equity (flat) ~ capital
+                stop_distance_money = c * initial_stop_pct  # close * initialStopPct
+                qty = (risk_equity / stop_distance_money) if stop_distance_money > 0 else 0.0
+                pending_entry = {"qty": float(qty), "max_price_init": float(c)}
+
+        # Saída: atualiza high-watermark e recalcula stop para o próximo candle
+        elif position_qty > 0.0:
+            if h > max_price_in_trade:
+                max_price_in_trade = h
+            active_stop_price = max_price_in_trade * (1.0 - trail_pct)
+
+    # Fecha posição remanescente no último close (consistente com o backtest do projeto)
+    if position_qty > 0.0 and n > 0:
+        last = df.iloc[-1]
+        ts = last["Date"] if "Date" in last else df.index[-1]
+        exit_price = float(last["close"])
+        qty = position_qty
+        exit_fee = (qty * exit_price) * fee_pct
+        gross_pnl = (exit_price - entry_price) * qty
+        capital += gross_pnl - exit_fee
+        net_pnl = gross_pnl - entry_fee - exit_fee
+        trades.append(
+            {
+                "entry_time": entry_time,
+                "exit_time": ts,
+                "entry": entry_price,
+                "exit": exit_price,
+                "qty": qty,
+                "pnl_gross": gross_pnl,
+                "fee_entry": entry_fee,
+                "fee_exit": exit_fee,
+                "fee_total": entry_fee + exit_fee,
+                "pnl": net_pnl,
+                "side": "long",
+                "reason": "end_of_data",
+                "date": ts,
+            }
+        )
+        if equity:
+            equity[-1] = float(equity[-1]) - exit_fee
+        position_qty = 0.0
+
+    equity_series = pd.Series(equity)
+    returns = equity_series.pct_change().dropna()
+    metrics = calculate_metrics(trades)
+    metrics["sharpe_ratio"] = float(calculate_sharpe_ratio(returns))
+    metrics["final_equity"] = float(equity[-1]) if equity else float(capital)
+    if config.get("backtest", {}).get("initial_capital"):
+        metrics["total_return_pct"] = (metrics["final_equity"] / float(config["backtest"]["initial_capital"])) - 1.0
+
+    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics}
+
+
 def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
     """
     Executa backtest.
@@ -26,6 +191,10 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
     # 1. Preparação de Dados (Indicadores + Sinais)
     df = add_indicators(df, config)
     df = apply_signals(df, config)
+
+    # Execução fiel ao Pine para o modo Trend Surfer v4
+    if config.get("strategy", {}).get("signal_mode") == "trend_surfer_v4":
+        return _backtest_trend_surfer_v4_pine(df, config)
 
     # Simulação de trades
     capital = float(config['backtest']['initial_capital'])
@@ -290,6 +459,8 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
 
 def load_data_with_ref(config: Dict) -> pd.DataFrame:
     """Carrega dados principais e referência."""
+    from src.utils.data_loader import load_data
+
     data_cfg = config['data']
     
     if 'start_date' in data_cfg and 'end_date' in data_cfg:

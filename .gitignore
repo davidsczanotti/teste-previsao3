@@ -58,6 +58,9 @@ venv.bak/
 live_charts/
 historico/  # Ignorar dados históricos gerados (ajustar conforme necessidade)
 trascricao-estrategias/  # Ignorar transcrições temporárias
+stubs/  # stubs/type-hints (não necessários em runtime)
+ta-lib/  # árvore extraída do TA-Lib (gerável via Docker)
+.numba_cache/
 
 # Logs e bancos de dados
 *.log
@@ -78,3 +81,9 @@ moe_policy*.pt
 metrics.csv
 *.png
 reports/
+
+# Outputs do scanner (artefatos)
+scanner_results*.csv
+
+# Tarballs/artefatos de vendor
+ta-lib-*.tar.gz

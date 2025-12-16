@@ -48,7 +48,7 @@ def run_scanner():
             "fee_pct": 0.0003, 
             "allow_short": False
         },
-        "backtest": { "initial_capital": 100000.0 }
+        "backtest": { "initial_capital": 10000.0 }
     }
 
     for ticker in tickers:
@@ -89,8 +89,9 @@ def run_scanner():
             res = backtest_ema_only(df, config)
             
             # Métricas
+            initial_capital = float(config.get("backtest", {}).get("initial_capital", 10000.0))
             final_equity = res['metrics']['final_equity']
-            total_return = (final_equity - 10000) / 10000
+            total_return = (final_equity - initial_capital) / initial_capital
             win_rate = res['metrics']['win_rate']
             trades_count = res['metrics']['total_trades']
             
@@ -135,7 +136,7 @@ def run_scanner():
     df_results = df_results.sort_values("Retorno Total (%)", ascending=False)
 
     print("\n" + "="*80)
-    print(f"RANKING DE ATIVOS (2017-2025) | Base: R$ 10.000")
+    print(f"RANKING DE ATIVOS (2017-2025) | Base: R$ {int(base_config['backtest']['initial_capital']):,}".replace(',', '.'))
     print("="*80)
     print(df_results.to_string(index=False, float_format="%.2f"))
     print("="*80)
