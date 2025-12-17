@@ -175,4 +175,40 @@ def add_indicators(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
         df['ts_ema_macro'] = calculate_ema_tv(df['close'], int(macro_p))
         df['ts_cci'] = calculate_cci_from_series(df['close'], int(cci_p))
 
+    # --- 7. Indicadores Específicos do Modo EMA Strategy v5.2 ---
+    if strategy.get('signal_mode') == 'ema_strategy_v5_2':
+        fast_p = strategy.get('ts_fast_period', 9)
+        slow_p = strategy.get('ts_slow_period', 21)
+        macro_p = strategy.get('ts_ema_macro_period', 200)
+        
+        # User default: EMA (maType="EMA")
+        df['ts_fast_ma'] = calculate_ema_tv(df['close'], int(fast_p))
+        df['ts_slow_ma'] = calculate_ema_tv(df['close'], int(slow_p))
+        df['ts_ema_macro'] = calculate_ema_tv(df['close'], int(macro_p))
+
+    # --- 8. Indicadores Específicos do Modo Dynamic Volatility v6 ---
+    if strategy.get('signal_mode') == 'dynamic_volatility_v6':
+        fast_p = strategy.get('ts_fast_period', 9)
+        slow_p = strategy.get('ts_slow_period', 21)
+        macro_p = strategy.get('ts_ema_macro_period', 200)
+        adx_p = strategy.get('adx_period', 14)
+        atr_p = strategy.get('atr_period', 14)
+        
+        df['ts_fast_ma'] = calculate_ema_tv(df['close'], int(fast_p))
+        df['ts_slow_ma'] = calculate_ema_tv(df['close'], int(slow_p))
+        df['ts_ema_macro'] = calculate_ema_tv(df['close'], int(macro_p))
+        df['adx'] = calculate_adx(df, int(adx_p))
+        df['atr'] = calculate_atr(df, int(atr_p))
+
+    # --- 9. Indicadores Específicos do Modo SuperTrend AI ---
+    if strategy.get('signal_mode') == 'supertrend_ai':
+        # Importação local para evitar ciclo
+        try:
+            from src.strategies.supertrend_ai import calculate_supertrend_ai
+            df = calculate_supertrend_ai(df, config)
+        except ImportError:
+            # Fallback se executado de local diferente
+            from strategies.supertrend_ai import calculate_supertrend_ai
+            df = calculate_supertrend_ai(df, config)
+
     return df

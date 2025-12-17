@@ -4,6 +4,7 @@ import argparse
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 # Adiciona o diretório atual ao path para importar módulos locais
 sys.path.append(os.getcwd())
@@ -12,12 +13,13 @@ sys.path.append(os.getcwd())
 try:
     from src.core.indicators import add_indicators
     from src.core.signals import apply_signals
+    from src.core.backtest import backtest_ema_only
 except ImportError:
     print("Erro: Não foi possível importar os módulos do núcleo (src/core).")
     print("Verifique se a estrutura de pastas está correta.")
     sys.exit(1)
 
-def get_market_data(ticker: str, period="2y", interval="1d"):
+def get_market_data(ticker: str, period="5y", interval="1d"): # Periodo maior para gerar histórico de trades
     """Baixa dados recentes do Yahoo Finance."""
     print(f"\n[1/3] Baixando dados para {ticker}...")
     df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
@@ -58,72 +60,112 @@ def analyze_ticker(ticker: str):
         print(f"Erro ao baixar dados: {e}")
         return
 
-    # 2. Configurar Estratégia (Trend Surfer v4.1)
+    # 2. Configurar Estratégia (SuperTrend AI)
     config = {
         "strategy": {
-            "signal_mode": "trend_surfer_v4",
-            "ts_fast_period": 9,
-            "ts_slow_period": 21,
-            "ts_ema_macro_period": 200,
-            "ts_cci_period": 14,
-            "ts_cci_min": 0,
+            "signal_mode": "supertrend_ai",
+            "st_length": 10,
+            "st_min_mult": 1,
+            "st_max_mult": 5,
+            "st_step": 0.5,
+            "st_perf_alpha": 10,
+            "st_from_cluster": "Best",
             "allow_short": False
+        },
+        "backtest": {
+            "initial_capital": 1000
+        },
+        "data": { # Mock para o backtester não reclamar
+            "symbol": ticker,
+            "timeframe": "1d"
         }
     }
 
-    # 3. Calcular Indicadores e Sinais
-    print("[2/3] Calculando indicadores TrendSurfer...")
-    df = add_indicators(df, config)
-    df = apply_signals(df, config)
+    # 3. Calcular Indicadores e Sinais (Para Análise Atual)
+    print("[2/3] Processando Inteligência Artificial...")
+    df_calc = df.copy()
+    df_calc = add_indicators(df_calc, config)
+    df_calc = apply_signals(df_calc, config)
     
-    # 4. Analisar Último Candle (Hoje/Ontem)
-    last_candle = df.iloc[-1]
-    prev_candle = df.iloc[-2]
+    # 4. Executar Simulação (Para Histórico de Trades)
+    # O backtest recalcula internamente, mas é rápido.
+    res = backtest_ema_only(df_calc, config)
+    trades = res['trades']
+    
+    # --- ANÁLISE DO MOMENTO ATUAL ---
+    last = df_calc.iloc[-1]
     
     # Dados Relevantes
-    close = last_candle['close']
-    date = last_candle['Date'].strftime('%Y-%m-%d')
-    fast_ma = last_candle['ts_fast_ma']
-    slow_ma = last_candle['ts_slow_ma']
-    macro_ema = last_candle['ts_ema_macro']
-    cci = last_candle['ts_cci']
-    signal = last_candle['signal']
+    close = last['close']
+    date = last['Date'].strftime('%d/%m/%Y')
+    
+    # SuperTrend AI Data
+    st_val = last.get('supertrend_ai', 0.0)
+    st_trend = int(last.get('supertrend_ai_trend', 0)) # 1=Bull, 0=Bear
+    
+    signal = last.get('signal', 0)
+    exit_signal = last.get('exit_signal', 0)
     
     # 5. Output Bonito
-    print(f"\n{ '='*50}")
-    print(f" RELATÓRIO TREND SURFER: {ticker.upper()}")
-    print(f" Data Base: {date}")
-    print(f"{ '='*50}")
+    print(f"\n{ '='*60}")
+    print(f" 🤖 RELATÓRIO SUPERTREND AI: {ticker.upper()}")
+    print(f" 📅 Data Base: {date}")
+    print(f"{ '='*60}")
     
-    print(f"\n> PREÇO ATUAL: {close:.2f}")
+    # Bloco Preço
+    trend_emoji = "🟢 ALTA" if st_trend == 1 else "🔴 BAIXA"
+    stop_dist = ((close - st_val) / close) * 100
     
-    print("\n--- INDICADORES ---")
-    print(f"• Tendência Curta (MA 9 vs 21): {'ALTA 🟢' if fast_ma > slow_ma else 'BAIXA 🔴'}")
-    print(f"• Tendência Macro (Preço vs EMA200): {'ALTA 🟢' if close > macro_ema else 'BAIXA 🔴'}")
-    print(f"• Momento (CCI > 0): {'POSITIVO 🟢' if cci > 0 else 'NEGATIVO 🔴'} ({cci:.2f})")
+    print(f"\n📊 STATUS ATUAL")
+    print(f"   Preço:      R$ {close:.2f}")
+    print(f"   Tendência:  {trend_emoji}")
+    print(f"   Stop Loss:  R$ {st_val:.2f} ({abs(stop_dist):.1f}% de distância)")
     
-    print(f"\n--- VEREDITO ---")
+    # Bloco Histórico
+    print(f"\n📜 ÚLTIMOS 5 TRADES (Simulação)")
+    print(f"   {'DATA ENT.':<12} | {'DATA SAÍDA':<12} | {'RESULTADO':<10}")
+    print(f"   {'-'*12} + {'-'*12} + {'-'*10}")
+    
+    if not trades:
+        print("   (Nenhum trade encerrado no período)")
+    else:
+        last_trades = trades[-5:]
+        for t in reversed(last_trades): # Mais recente primeiro
+            d_in = pd.to_datetime(t['entry_time']).strftime('%d/%m/%y')
+            d_out = pd.to_datetime(t['exit_time']).strftime('%d/%m/%y')
+            pnl = (t['exit'] - t['entry']) / t['entry'] * 100
+            
+            pnl_str = f"{pnl:+.1f}%"
+            # Hack de cor ANSI simples
+            color_code = "\033[92m" if pnl > 0 else "\033[91m" # Verde / Vermelho
+            reset_code = "\033[0m"
+            
+            print(f"   {d_in:<12} | {d_out:<12} | {color_code}{pnl_str:<10}{reset_code}")
+
+    # Bloco Veredito
+    print(f"\n📢 VEREDITO DA IA")
     
     if signal == 1:
-        print("🚀 SINAL DE COMPRA DETECTADO!")
-        print("  O sistema indica entrada nesta barra.")
-        print("  Lembre-se do Stop Loss Inicial (~5%) e Trail Stop (10%).")
+        print("   🚀 COMPRAR AGORA! (Sinal Confirmado)")
+        print(f"      A tendência virou para ALTA.")
+        print(f"      Entrada na abertura de amanhã.")
         
-    elif fast_ma > slow_ma and close > macro_ema and cci > 0:
-        print("🌊 EM TENDÊNCIA (ALTA)")
-        print("  Não há sinal de entrada HOJE (o cruzamento já ocorreu).")
-        print("  Se você já está posicionado: MANTENHA (HOLD) 🛡️")
-        print("  Monitore o Trailing Stop (10% do topo).")
-        
-    else:
-        print("💤 AGUARDAR / FORA DO MERCADO")
-        print("  As condições não estão alinhadas para compra.")
-        if close < macro_ema:
-            print("  Motivo principal: Preço abaixo da Média de 200 (Macro Baixa).")
-        elif fast_ma < slow_ma:
-            print("  Motivo principal: Médias cruzadas para baixo.")
+    elif exit_signal == 1:
+        print("   ⚠️ VENDER / SAIR! (Sinal Confirmado)")
+        print(f"      A tendência virou para BAIXA.")
+        print(f"      Feche a posição imediatamente.")
 
-    print(f"{ '='*50}\n")
+    elif st_trend == 1:
+        print("   💎 MANTER (HOLD)")
+        print(f"      Você está surfando a tendência.")
+        print(f"      Só saia se fechar abaixo de R$ {st_val:.2f}.")
+            
+    else:
+        print("   💤 AGUARDAR (WAIT)")
+        print(f"      Tendência de Baixa.")
+        print(f"      Espere o preço romper R$ {st_val:.2f} para pensar em compra.")
+
+    print(f"{ '='*60}\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Trend Surfer CLI - Análise de Tendência")

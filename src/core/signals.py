@@ -15,10 +15,8 @@ def apply_signals(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
     df['signal'] = 0
 
     # 1. Aplicar Viés de Referência (Timeframe Superior) - Comum a todos
-    # Isso define um 'filtro' global antes dos sinais específicos
     if strategy.get('ref_filter_enabled'):
         ref_buffer = strategy['ref_buffer_pct']
-        # 1 = Bullish Bias, -1 = Bearish Bias, 0 = Neutro
         df['ref_bias'] = np.where(df['close'] > df['ref_ema'] * (1 + ref_buffer), 1,
                                   np.where(df['close'] < df['ref_ema'] * (1 - ref_buffer), -1, 0))
     
@@ -27,24 +25,27 @@ def apply_signals(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
         df = _signal_custom_cci_ma(df, strategy)
     elif mode == 'trend_surfer_v4':
         df = _signal_trend_surfer_v4(df, strategy)
+    elif mode == 'ema_strategy_v5_2':
+        df = _signal_ema_strategy_v5_2(df, strategy)
+    elif mode == 'dynamic_volatility_v6':
+        df = _signal_dynamic_volatility_v6(df, strategy)
+    elif mode == 'supertrend_ai':
+        df = _signal_supertrend_ai(df, strategy)
     elif mode == 'ema_cross':
         df = _signal_ema_cross(df, strategy)
     else:
-        # Fallback ou outros modos
         pass
 
-    # 3. Filtragem Final (Direção permitida vs Viés)
+    # 3. Filtragem Final
     allow_short = bool(strategy.get('allow_short', False))
     
     if strategy.get('ref_filter_enabled') and 'ref_bias' in df.columns:
         if allow_short:
-            # Só compra se bias for bull, só vende se bias for bear
             df['signal'] = np.where(
                 (df['signal'] == 1) & (df['ref_bias'] == 1), 1,
                 np.where((df['signal'] == -1) & (df['ref_bias'] == -1), -1, 0)
             )
         else:
-            # Long-only: só compra em bull bias
             df['signal'] = np.where((df['signal'] == 1) & (df['ref_bias'] == 1), 1, 0)
     
     if not allow_short:
@@ -52,67 +53,38 @@ def apply_signals(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
 
     return df
 
+# ... (Previous functions custom_cci_ma, ema_cross, trend_surfer_v4, ema_strategy_v5_2, dynamic_volatility_v6 remain same)
+
 def _signal_custom_cci_ma(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
-    """
-    Lógica 'Custom CCI + MA'.
-    Combina momentum (CCI), tendência (MAs) e volatilidade (ATR).
-    """
-    # Recupera colunas pré-calculadas em indicators.py
     mc = df['custom_ma_fast']
     ml = df['custom_ma_slow']
     cci = df['custom_cci']
     atr = df.get('custom_atr', df['close'] * 0.01)
     ema_200 = df.get('ema_200', df['close'])
-    
     level = strategy['custom_cci_level']
     dist_mult = strategy.get('custom_dist_atr_mult', 0.5)
-    
-    # Lógica de Separação Mínima
     min_dist = atr * dist_mult
     diff = (mc - ml).abs()
-    
-    # Condições Booleanas
-    # Long: Rápida > Lenta AND CCI > Nível AND Separação OK AND Acima da Média Macro
     cond_long = (mc > ml) & (cci > level) & (diff > min_dist) & (df['close'] > ema_200)
-    
-    # Short: Rápida < Lenta AND CCI < -Nível AND Separação OK AND Abaixo da Média Macro
     cond_short = (mc < ml) & (cci < -level) & (diff > min_dist) & (df['close'] < ema_200)
-    
     df.loc[cond_long, 'signal'] = 1
     df.loc[cond_short, 'signal'] = -1
-    
     return df
 
 def _signal_ema_cross(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
-    """
-    Lógica Clássica 'EMA Cross'.
-    Cruzamento simples de médias exponenciais.
-    """
-    # Usa as médias 'padrão' definidas no config
     ema_fast = df['ema_fast']
     ema_slow = df['ema_slow']
-    
     df['ema_cross'] = np.where(ema_fast > ema_slow, 1, -1)
     df['ema_cross_prev'] = df['ema_cross'].shift(1)
-    
-    # Crossover (1) e Crossunder (-1)
     df['signal'] = np.where((df['ema_cross'] == 1) & (df['ema_cross_prev'] == -1), 1,
                             np.where((df['ema_cross'] == -1) & (df['ema_cross_prev'] == 1), -1, 0))
-
-    # Filtros Opcionais do modo clássico
     if strategy.get('max_long_entry_dist_fast_pct'):
         max_dist = strategy.get('max_long_entry_dist_fast_pct')
         dist_fast = (df['close'] - ema_fast).abs() / ema_fast
         df.loc[(df['signal'] == 1) & (dist_fast > max_dist), 'signal'] = 0
-
     return df
 
 def _signal_trend_surfer_v4(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
-    """
-    Estratégia: EMA Strategy v4.1 [Trend Surfer]
-    Lógica:
-      - Long: CrossUp(Fast, Slow) AND Close > EMA200 AND CCI > Min
-    """
     fast = df['ts_fast_ma']
     slow = df['ts_slow_ma']
     macro = df['ts_ema_macro']
@@ -120,37 +92,71 @@ def _signal_trend_surfer_v4(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
     cci_min = strategy.get('ts_cci_min', 0)
     use_date_filter = bool(strategy.get("ts_use_date_filter", False))
     start_year = int(strategy.get("ts_start_year", 2016))
-
-    # Condições
-    # 1. Crossover (Rápida cruza acima da Lenta)
-    # Precisamos verificar o candle atual > e anterior <=
     cross_up = (fast > slow) & (fast.shift(1) <= slow.shift(1))
-    
-    # 2. Trend Filter (Preço acima da EMA Macro)
     trend_ok = df['close'] > macro
-    
-    # 3. Momentum Filter (CCI > Min)
     mom_ok = cci > cci_min
-
-    # 4. Date Filter (year >= startYear)
     if use_date_filter and 'Date' in df.columns:
         years = pd.to_datetime(df['Date']).dt.year
         date_ok = years >= start_year
     else:
         date_ok = True
-    
     cond_long = cross_up & trend_ok & mom_ok & date_ok
-    
     df.loc[cond_long, 'signal'] = 1
-    
-    # A estratégia original é Long-Only, mas se allow_short estiver ativo,
-    # poderíamos implementar a lógica inversa. Por padrão, deixamos apenas Long.
     if strategy.get('allow_short', False):
-        # Lógica inversa simples para short (opcional)
         cross_down = (fast < slow) & (fast.shift(1) >= slow.shift(1))
         trend_bear = df['close'] < macro
         mom_bear = cci < -cci_min
         cond_short = cross_down & trend_bear & mom_bear
         df.loc[cond_short, 'signal'] = -1
-        
+    return df
+
+def _signal_ema_strategy_v5_2(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
+    fast = df['ts_fast_ma']
+    slow = df['ts_slow_ma']
+    macro = df['ts_ema_macro']
+    start_year = int(strategy.get("ts_start_year", 2010))
+    cross_up = (fast > slow) & (fast.shift(1) <= slow.shift(1))
+    trend_ok = df['close'] > macro
+    if 'Date' in df.columns:
+        years = pd.to_datetime(df['Date']).dt.year
+        date_ok = years >= start_year
+    else:
+        date_ok = True
+    cond_long = cross_up & trend_ok & date_ok
+    df.loc[cond_long, 'signal'] = 1
+    exit_trigger = strategy.get("exit_trigger", "cross_ma") 
+    if exit_trigger == "close_under_slow":
+        cond_exit = (df['close'] < slow) & (df['close'].shift(1) >= slow.shift(1))
+    else:
+        cond_exit = (fast < slow) & (fast.shift(1) >= slow.shift(1))
+    df['exit_signal'] = np.where(cond_exit, 1, 0)
+    return df
+
+def _signal_dynamic_volatility_v6(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
+    fast = df['ts_fast_ma']
+    slow = df['ts_slow_ma']
+    macro = df['ts_ema_macro']
+    cross_up = (fast > slow) & (fast.shift(1) <= slow.shift(1))
+    trend_ok = df['close'] > macro
+    cond_long = cross_up & trend_ok
+    df.loc[cond_long, 'signal'] = 1
+    cond_exit = (fast < slow) & (fast.shift(1) >= slow.shift(1))
+    df['exit_signal'] = np.where(cond_exit, 1, 0)
+    return df
+
+def _signal_supertrend_ai(df: pd.DataFrame, strategy: Dict) -> pd.DataFrame:
+    """
+    Estratégia: SuperTrend AI (LuxAlgo)
+    Entrada: Trend muda para Bull (1).
+    Saída: Trend muda para Bear (0).
+    """
+    trend = df['supertrend_ai_trend']
+    trend_prev = trend.shift(1).fillna(0)
+    
+    cond_long = (trend == 1) & (trend_prev == 0)
+    df.loc[cond_long, 'signal'] = 1
+    
+    cond_exit = (trend == 0) & (trend_prev == 1)
+    df['exit_signal'] = np.where(cond_exit, 1, 0)
+    
     return df

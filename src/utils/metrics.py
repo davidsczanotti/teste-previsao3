@@ -25,6 +25,7 @@ def calculate_metrics(trades: List[Dict[str, Any]]) -> Dict[str, float]:
             'total_pnl': 0.0,
             'winning_trades': 0,
             'losing_trades': 0,
+            'even_trades': 0,
             'avg_win': 0.0,
             'avg_loss': 0.0,
             'max_win': 0.0,
@@ -33,16 +34,17 @@ def calculate_metrics(trades: List[Dict[str, Any]]) -> Dict[str, float]:
         }
     
     # Filtra apenas trades fechados
-    closed_trades = [t for t in trades if 'pnl' in t and t['pnl'] != 0]
+    closed_trades = [t for t in trades if 'pnl' in t]
     
     if not closed_trades:
         return {
-            'total_trades': len(trades),
+            'total_trades': 0,
             'win_rate': 0.0,
             'profit_factor': 0.0,
             'total_pnl': 0.0,
             'winning_trades': 0,
             'losing_trades': 0,
+            'even_trades': 0,
             'avg_win': 0.0,
             'avg_loss': 0.0,
             'max_win': 0.0,
@@ -51,11 +53,12 @@ def calculate_metrics(trades: List[Dict[str, Any]]) -> Dict[str, float]:
         }
     
     # Extrai P&Ls
-    pnls = [t['pnl'] for t in closed_trades]
+    pnls = [float(t['pnl']) for t in closed_trades]
     
     # Calcula métricas básicas
     winning_trades = [p for p in pnls if p > 0]
-    losing_trades = [p for p in pnls if p <= 0]
+    losing_trades = [p for p in pnls if p < 0]
+    even_trades = [p for p in pnls if p == 0]
     
     total_trades = len(closed_trades)
     win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0.0
@@ -84,6 +87,7 @@ def calculate_metrics(trades: List[Dict[str, Any]]) -> Dict[str, float]:
         'total_loss': total_loss,
         'winning_trades': len(winning_trades),
         'losing_trades': len(losing_trades),
+        'even_trades': len(even_trades),
         'avg_win': avg_win,
         'avg_loss': avg_loss,
         'max_win': max_win,

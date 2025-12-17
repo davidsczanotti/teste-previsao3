@@ -3,95 +3,92 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+from datetime import datetime
 
 sys.path.append(os.getcwd())
-from src.strategies.ema_only.backtest import backtest_ema_only
+from src.core.backtest import backtest_ema_only
 
 def run_scanner():
-    # Lista diversificada de Tickers da B3
+    # Lista Completa IDIV (Índice de Dividendos) - Teórica/Aproximada
     tickers = [
-        "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBAS3.SA", # Blue Chips / Bancos
-        "WEGE3.SA", "PRIO3.SA", # Crescimento / Qualidade
-        "GGBR4.SA", "CSNA3.SA", "SUZB3.SA", # Commodities / Cíclicas
-        "MGLU3.SA", "LREN3.SA", # Varejo (Alta Volatilidade)
-        "ELET3.SA", "CMIG4.SA", # Elétricas
-        "B3SA3.SA", "RENT3.SA"  # Financeiro / Locadoras
+        'ABCB4.SA', 'AGRO3.SA', 'BBAS3.SA', 'BBSE3.SA', 'BEEF3.SA', 'B3SA3.SA', 'BRAP4.SA', 'BRSR6.SA',
+        'CXSE3.SA', 'CMIG3.SA', 'CMIG4.SA', 'CPLE3.SA', 'CPLE6.SA', 'CPFE3.SA', 'CSMG3.SA', 'CSNA3.SA',
+        'CURY3.SA', 'DIRR3.SA', 'EGIE3.SA', 'ELET3.SA', 'ELET6.SA', 'ENAT3.SA', 'ENBR3.SA', 'GGBR4.SA',
+        'GOAU4.SA', 'ITSA4.SA', 'JBSS3.SA', 'JHSF3.SA', 'KEPL3.SA', 'KLBN11.SA', 'LEVE3.SA', 'MRFG3.SA',
+        'PETR3.SA', 'PETR4.SA', 'PSSA3.SA', 'RANI3.SA', 'ROMI3.SA', 'SANB11.SA', 'SAPR11.SA', 'SLCE3.SA',
+        'TAEE11.SA', 'TASA4.SA', 'TGMA3.SA', 'TRPL4.SA', 'UNIP6.SA', 'VALE3.SA', 'VIVT3.SA', 'WIZC3.SA'
     ]
 
-    print(f"--- Iniciando Scanner em {len(tickers)} ativos (2017-2025) ---")
-    print("Estratégia: EMA Only (Modo Trend Surfer v4.1)\n")
+    print(f"--- Iniciando Scanner em {len(tickers)} ativos do IDIV (2017-2025) ---")
+    print("Estratégia: SuperTrend AI (Clustering Adaptativo)\n")
 
     results_summary = []
 
-    # Configuração Padrão (Trend Surfer v4.1)
+    # Configuração Padrão (SuperTrend AI)
     base_config = {
         "data": { "days": 3000, "timeframe": "1d" },
         "strategy": {
-            "signal_mode": "trend_surfer_v4",
+            "signal_mode": "supertrend_ai",
             
-            # Parâmetros Específicos Trend Surfer
-            "ts_fast_period": 9, 
-            "ts_slow_period": 21, 
-            "ts_ema_macro_period": 200, 
-            "ts_cci_period": 14, 
-            "ts_cci_min": 0,
+            # Parâmetros SuperTrend AI
+            "st_length": 10,
+            "st_min_mult": 1,
+            "st_max_mult": 5,
+            "st_step": 0.5,
+            "st_perf_alpha": 10,
+            "st_from_cluster": "Best",
             
             # Gestão de Risco
-            "risk_per_trade_pct": 0.02,
-            "initial_stop_pct": 0.05,
-            "trailing_stop_pct": 0.10,
+            "use_all_equity": True,
             
             # Configuração Geral
-            "compounding_enabled": False, # Usamos RiskPct agora
-            "ref_filter_enabled": False, # Integrado na lógica (Close > Macro)
-            "lot_size": 1000, # Fallback
+            "lot_size": 1000, 
             "fee_pct": 0.0003, 
             "allow_short": False
         },
-        "backtest": { "initial_capital": 10000.0 }
+        "backtest": { "initial_capital": 1000.0 }
     }
 
     for ticker in tickers:
         try:
             print(f"> Processando {ticker}...", end=" ")
             
-            # Download
-            df = yf.download(ticker, start="2017-01-01", end="2025-12-15", progress=False, auto_adjust=True)
+            # Download (Agora usa o utils.data_loader idealmente, mas vamos manter inline para evitar refactor gigante agora)
+            # Mas espera, yf.download direto aqui pode dar erro de compatibilidade se não tratarmos igual ao main.py
+            # Vamos usar o data_loader que consertamos!
             
-            if df.empty:
-                print("Sem dados.")
+            from src.utils.data_loader import load_data
+            try:
+                # Carrega ultimos ~8 anos (3000 dias)
+                df = load_data(ticker, "1d", days=3000)
+            except Exception as e:
+                print(f"Sem dados ({e}).")
                 continue
 
-            # Adaptação de colunas
-            if isinstance(df.columns, pd.MultiIndex):
-                try:
-                    if ticker in df.columns.get_level_values(1):
-                         df.columns = df.columns.get_level_values(0)
-                    else:
-                         df.columns = df.columns.get_level_values(0)
-                except:
-                    df.columns = df.columns.get_level_values(0)
-            
-            df = df.reset_index()
-            cols_map = {"Date": "Date", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
-            df = df.rename(columns=cols_map)
-            df['Date'] = pd.to_datetime(df['Date'])
-            df = df.dropna()
+            if df.empty:
+                print("Sem dados (DF Vazio).")
+                continue
 
             # Config do Ticker
             config = base_config.copy()
             config['data']['symbol'] = ticker
             
-            # Cálculo Referência
+            # Cálculo Referência (Opcional, mas bom ter)
             df['ref_ema'] = df['close'].ewm(span=200).mean()
 
             # Backtest
             res = backtest_ema_only(df, config)
             
-            # Métricas
+            # Métricas Estratégia
             initial_capital = float(config.get("backtest", {}).get("initial_capital", 10000.0))
             final_equity = res['metrics']['final_equity']
             total_return = (final_equity - initial_capital) / initial_capital
+            
+            # Métricas Buy & Hold
+            first_price = df['close'].iloc[0]
+            last_price = df['close'].iloc[-1]
+            bh_return = (last_price - first_price) / first_price
+
             win_rate = res['metrics']['win_rate']
             trades_count = res['metrics']['total_trades']
             
@@ -99,47 +96,44 @@ def run_scanner():
             equity_curve = pd.Series(res['equity'])
             peak = equity_curve.cummax()
             dd = (equity_curve - peak) / peak
-            max_dd = dd.min()
-
-            # --- Novas Métricas Solicitadas ---
-            trades = res['trades']
-            avg_days = 0
-            avg_pnl = 0
-            
-            if trades_count > 0:
-                # 1. Tempo Médio
-                # Garante que as datas sejam datetime para subtração
-                durations = [(pd.to_datetime(t['exit_time']) - pd.to_datetime(t['entry_time'])).days for t in trades]
-                avg_days = sum(durations) / len(durations)
-                
-                # 2. Lucro Médio por Trade
-                avg_pnl = res['metrics']['total_pnl'] / trades_count
+            max_dd = dd.min() if not dd.empty else 0.0
 
             results_summary.append({
                 "Ticker": ticker,
-                "Retorno Total (%)": total_return * 100,
-                "Capital Final": final_equity,
+                "Estratégia (%)": total_return * 100,
+                "Buy & Hold (%)": bh_return * 100,
+                "Diff (%)": (total_return - bh_return) * 100,
                 "Win Rate (%)": win_rate * 100,
                 "Trades": trades_count,
-                "Tempo Médio (Dias)": avg_days,
-                "Lucro Médio (R$)": avg_pnl,
-                "Max Drawdown (%)": max_dd * 100
+                "Max DD (%)": max_dd * 100
             })
             
-            print(f"OK ({total_return*100:.1f}%)")
+            print(f"OK (Est: {total_return*100:.1f}% | B&H: {bh_return*100:.1f}%)")
 
         except Exception as e:
             print(f"Erro: {e}")
 
     # Gerar DataFrame e Ordenar
     df_results = pd.DataFrame(results_summary)
-    df_results = df_results.sort_values("Retorno Total (%)", ascending=False)
+    if not df_results.empty:
+        df_results = df_results.sort_values("Estratégia (%)", ascending=False)
+        
+        # Salvar Relatório
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        filename_csv = f"reports/scanner_idiv_{timestamp}.csv"
+        df_results.to_csv(filename_csv, index=False, float_format="%.2f")
 
-    print("\n" + "="*80)
-    print(f"RANKING DE ATIVOS (2017-2025) | Base: R$ {int(base_config['backtest']['initial_capital']):,}".replace(',', '.'))
-    print("="*80)
-    print(df_results.to_string(index=False, float_format="%.2f"))
-    print("="*80)
+        print("\n" + "="*100)
+        print(f"COMPARATIVO: ESTRATÉGIA vs BUY & HOLD (2017-2025) | Base: R$ {int(base_config['backtest']['initial_capital']):,}".replace(',', '.'))
+        print("="*100)
+        print(df_results.to_string(index=False, float_format="%.1f"))
+        print("="*100)
+        print(f"\n📄 Relatório salvo em: {filename_csv}")
+    else:
+        print("\nNenhum resultado gerado.")
+
+if __name__ == "__main__":
+    run_scanner()
 
 if __name__ == "__main__":
     run_scanner()

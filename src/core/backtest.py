@@ -140,37 +140,6 @@ def _backtest_trend_surfer_v4_pine(df: pd.DataFrame, config: Dict[str, Any]) -> 
                 max_price_in_trade = h
             active_stop_price = max_price_in_trade * (1.0 - trail_pct)
 
-    # Fecha posição remanescente no último close (consistente com o backtest do projeto)
-    if position_qty > 0.0 and n > 0:
-        last = df.iloc[-1]
-        ts = last["Date"] if "Date" in last else df.index[-1]
-        exit_price = float(last["close"])
-        qty = position_qty
-        exit_fee = (qty * exit_price) * fee_pct
-        gross_pnl = (exit_price - entry_price) * qty
-        capital += gross_pnl - exit_fee
-        net_pnl = gross_pnl - entry_fee - exit_fee
-        trades.append(
-            {
-                "entry_time": entry_time,
-                "exit_time": ts,
-                "entry": entry_price,
-                "exit": exit_price,
-                "qty": qty,
-                "pnl_gross": gross_pnl,
-                "fee_entry": entry_fee,
-                "fee_exit": exit_fee,
-                "fee_total": entry_fee + exit_fee,
-                "pnl": net_pnl,
-                "side": "long",
-                "reason": "end_of_data",
-                "date": ts,
-            }
-        )
-        if equity:
-            equity[-1] = float(equity[-1]) - exit_fee
-        position_qty = 0.0
-
     equity_series = pd.Series(equity)
     returns = equity_series.pct_change().dropna()
     metrics = calculate_metrics(trades)
@@ -179,7 +148,472 @@ def _backtest_trend_surfer_v4_pine(df: pd.DataFrame, config: Dict[str, Any]) -> 
     if config.get("backtest", {}).get("initial_capital"):
         metrics["total_return_pct"] = (metrics["final_equity"] / float(config["backtest"]["initial_capital"])) - 1.0
 
-    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics}
+    # Compatível com TradingView: posição aberta permanece aberta no último candle.
+    open_pnl = 0.0
+    open_position: Dict[str, Any] | None = None
+    if position_qty > 0.0 and n > 0:
+        last = df.iloc[-1]
+        last_ts = last["Date"] if "Date" in last else df.index[-1]
+        last_close = float(last["close"])
+        open_pnl = (last_close - entry_price) * position_qty
+        open_position = {
+            "entry_time": entry_time,
+            "entry": entry_price,
+            "qty": position_qty,
+            "last_time": last_ts,
+            "last_close": last_close,
+            "open_pnl": open_pnl,
+            "max_price_in_trade": max_price_in_trade,
+            "stop_price_next_bar": active_stop_price,
+        }
+
+    metrics["open_pnl"] = float(open_pnl)
+    metrics["open_trades"] = 1 if open_position is not None else 0
+
+    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics, "open_position": open_position}
+
+
+def _backtest_ema_strategy_v5_2(df: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Backtest fiel ao Pine Script 'EMA Strategy v5.2 [Painel Visível]'.
+    """
+    capital = float(config["backtest"]["initial_capital"])
+    strategy = config.get("strategy", {})
+
+    fee_pct = float(strategy.get("fee_pct", 0.0))
+    
+    # Gestão de Capital
+    use_all_equity = bool(strategy.get("use_all_equity", True))
+    risk_pct = float(strategy.get("risk_per_trade_pct", 0.02))
+    stop_loss_fixo_pct = float(strategy.get("stop_loss_fixo_pct", 0.06))
+    
+    # Regras de Saída
+    trail_pct = float(strategy.get("trailing_stop_pct", 0.15))
+
+    position_qty = 0.0
+    entry_price = 0.0
+    entry_time = None
+    entry_fee = 0.0
+
+    max_price_in_trade = 0.0
+    active_stop_price: float | None = None
+    
+    trades: List[Dict[str, Any]] = []
+    equity: List[float] = []
+
+    # Se exit_signal não foi gerado, cria coluna zerada
+    if 'exit_signal' not in df.columns:
+        df['exit_signal'] = 0
+
+    n = int(len(df))
+    for idx in range(n):
+        row = df.iloc[idx]
+        is_last_bar = idx == n - 1
+        ts = row["Date"] if "Date" in row else df.index[idx]
+
+        o = float(row["open"])
+        h = float(row["high"])
+        l = float(row["low"])
+        c = float(row["close"])
+        
+        # Sinais (Close do candle anterior define ação no Open deste)
+        # Porém, no Pine, strategies rodam no close. A execução padrão é Next Open.
+        # Aqui, estamos iterando candles. O sinal foi calculado com base no Close deste candle (row).
+        # Então a execução deve ocorrer no PRÓXIMO candle.
+        # Mas para simplificar a lógica de loop único, verificamos o sinal do candle ANTERIOR.
+        # OU processamos "fechamento" e "abertura" separadamente.
+        
+        # Vamos seguir o modelo do Trend Surfer:
+        # 1. Processar Execuções Pendentes (Entradas/Saídas baseadas no candle anterior)
+        # mas aqui simplificaremos para execução imediata no Close (simulação Close-Close) ou Open-Next (mais realista).
+        # O Pine strategy.entry processa no próximo tick.
+        
+        # Vamos usar a lógica: Checar Stop/Exit Intraba (se posicionado) -> Checar Entrada (se flat).
+        
+        exit_reason = None
+        exit_price_exec = 0.0
+
+        # --- SE POSICIONADO ---
+        if position_qty > 0.0:
+            # 1. Atualizar Trailing Stop (High Watermark)
+            if h > max_price_in_trade:
+                max_price_in_trade = h
+            
+            # O stop ativo para ESTE candle é baseado no topo ATÉ O MOMENTO (Intrabar update no Pine)
+            # No Pine: if high > maxPriceInTrade ... dynamicStop = ... strategy.exit
+            # Então se o High deste candle subir, o stop sobe NA MESMA BARRA.
+            dynamic_stop = max_price_in_trade * (1.0 - trail_pct)
+            
+            # Checar Stop Loss (Trailing)
+            if l <= dynamic_stop:
+                exit_price_exec = dynamic_stop
+                # Gap check
+                if exit_price_exec > h: exit_price_exec = o # Gap de baixa pulou o stop
+                exit_reason = "trailing_stop"
+            
+            # Checar Saída Técnica (Exit Signal)
+            # O sinal de saída é calculado no fechamento. Então ele só executa no próximo Open?
+            # Pine: if exitSignal strategy.close(). Executa market no próximo Open.
+            # Aqui, 'exit_signal' é 1 se o cruzamento ocorreu NO FECHAMENTO DESTE CANDLE.
+            # Portanto, devemos executar no PRÓXIMO.
+            # MAS, estamos iterando. Se exit_signal[i] == 1, vendemos em i+1 [Open].
+            # Para simplificar, podemos olhar se exit_signal ANTERIOR foi 1.
+            # OU: Implementamos a saída técnica como uma "pendência" para o próximo loop.
+            
+            # Vamos olhar se TEMOS um sinal de saída técnica AGORA (neste candle).
+            # Se sim, e não fomos stopados, fechamos no CLOSE deste candle (simulação levemente otimista)
+            # ou marcamos para sair no Open do próximo.
+            # Vamos sair no CLOSE deste candle para "Exit Signal" para simplificar, 
+            # assumindo liquidez no leilão de fechamento.
+            elif row['exit_signal'] == 1:
+                exit_price_exec = c
+                exit_reason = "exit_signal"
+
+            # Executar Saída
+            if exit_reason:
+                qty = position_qty
+                exit_fee = (qty * exit_price_exec) * fee_pct
+                gross_pnl = (exit_price_exec - entry_price) * qty
+                capital += gross_pnl - exit_fee
+                net_pnl = gross_pnl - entry_fee - exit_fee
+                
+                trades.append({
+                    "entry_time": entry_time,
+                    "exit_time": ts,
+                    "entry": entry_price,
+                    "exit": exit_price_exec,
+                    "qty": qty,
+                    "pnl_gross": gross_pnl,
+                    "pnl": net_pnl,
+                    "reason": exit_reason,
+                    "date": ts
+                })
+                position_qty = 0.0
+                entry_price = 0.0
+                max_price_in_trade = 0.0
+
+        # --- SE FLAT (Verificar Entrada) ---
+        if position_qty == 0.0 and not is_last_bar:
+            # Sinal de compra (1)
+            if row['signal'] == 1:
+                # Calcular Tamanho da Posição
+                buy_price = c # Entrada no Close (ou Open do próximo, mas Close é aceitável para estimativa)
+                
+                if use_all_equity:
+                    # positionSize := strategy.equity
+                    pos_value = capital
+                    # Qty = Value / Price
+                    qty = pos_value / buy_price
+                else:
+                    # riskEquity = strategy.equity * riskPerTrade
+                    # stopDistanceMoney = close * stopLossFixoPct
+                    # positionSize := (riskEquity / stopDistanceMoney) * close
+                    # Qty = positionSize / close = riskEquity / stopDistanceMoney
+                    
+                    risk_val = capital * risk_pct
+                    stop_dist = buy_price * stop_loss_fixo_pct
+                    if stop_dist > 0:
+                        qty = risk_val / stop_dist
+                    else:
+                        qty = 0.0
+                
+                if qty > 0:
+                    position_qty = qty
+                    entry_price = buy_price
+                    entry_time = ts
+                    entry_fee = (qty * entry_price) * fee_pct
+                    capital -= entry_fee
+                    
+                    # Inicializa Trailing
+                    max_price_in_trade = entry_price
+
+        # Mark-to-market
+        if position_qty > 0.0:
+            unrealized_pnl = (c - entry_price) * position_qty
+        else:
+            unrealized_pnl = 0.0
+        equity.append(capital + unrealized_pnl)
+
+    # Fechamento Final
+    open_pnl = 0.0
+    open_position = None
+    if position_qty > 0.0 and n > 0:
+        last_close = df.iloc[-1]["close"]
+        open_pnl = (last_close - entry_price) * position_qty
+        open_position = {
+            "entry_time": entry_time,
+            "entry": entry_price,
+            "qty": position_qty,
+            "open_pnl": open_pnl
+        }
+
+    metrics = calculate_metrics(trades)
+    equity_series = pd.Series(equity)
+    returns = equity_series.pct_change().dropna()
+    metrics["sharpe_ratio"] = float(calculate_sharpe_ratio(returns))
+    metrics["final_equity"] = float(equity[-1]) if equity else float(config["backtest"]["initial_capital"])
+    if config.get("backtest", {}).get("initial_capital"):
+        metrics["total_return_pct"] = (metrics["final_equity"] / float(config["backtest"]["initial_capital"])) - 1.0
+    
+    metrics["open_pnl"] = float(open_pnl)
+    metrics["open_trades"] = 1 if open_position is not None else 0
+
+    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics, "open_position": open_position}
+
+def _backtest_supertrend_ai(df: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Backtest SuperTrend AI.
+    Saída baseada exclusivamente na virada de tendência (Trailing Stop do SuperTrend).
+    """
+    capital = float(config["backtest"]["initial_capital"])
+    strategy = config.get("strategy", {})
+
+    fee_pct = float(strategy.get("fee_pct", 0.0))
+    risk_pct = float(strategy.get("risk_per_trade_pct", 0.02))
+    use_all_equity = bool(strategy.get("use_all_equity", True))
+    
+    position_qty = 0.0
+    entry_price = 0.0
+    entry_time = None
+    entry_fee = 0.0
+    
+    trades: List[Dict[str, Any]] = []
+    equity: List[float] = []
+
+    if 'exit_signal' not in df.columns: df['exit_signal'] = 0
+
+    n = int(len(df))
+    for idx in range(n):
+        row = df.iloc[idx]
+        is_last_bar = idx == n - 1
+        ts = row["Date"] if "Date" in row else df.index[idx]
+        c = row["close"]
+        
+        # --- SE POSICIONADO ---
+        if position_qty > 0.0:
+            # Saída apenas se houver sinal de saída (Trend Flip)
+            # O cálculo do SuperTrend já considerou Low < StopLine na barra atual
+            if row['exit_signal'] == 1:
+                # O preço de saída ideal seria o StopLine (SuperTrend Value)
+                # Mas como é um flip no fechamento, saímos no Close.
+                # Ou se quisermos ser precisos, saímos no toque do SuperTrend (row['supertrend_ai']).
+                # Vamos usar o Close para simplificar e evitar olhar futuro, 
+                # pois o flip é confirmado no close.
+                exit_price_exec = c
+                exit_reason = "trend_flip"
+                
+                qty = position_qty
+                exit_fee = (qty * exit_price_exec) * fee_pct
+                gross_pnl = (exit_price_exec - entry_price) * qty
+                capital += gross_pnl - exit_fee
+                net_pnl = gross_pnl - entry_fee - exit_fee
+                
+                trades.append({
+                    "entry_time": entry_time,
+                    "exit_time": ts,
+                    "entry": entry_price,
+                    "exit": exit_price_exec,
+                    "qty": qty,
+                    "pnl_gross": gross_pnl,
+                    "pnl": net_pnl,
+                    "reason": exit_reason,
+                    "date": ts
+                })
+                position_qty = 0.0
+                entry_price = 0.0
+
+        # --- SE FLAT ---
+        if position_qty == 0.0 and not is_last_bar:
+            if row['signal'] == 1:
+                buy_price = c
+                
+                if use_all_equity:
+                    qty = capital / buy_price
+                else:
+                    qty = (capital * risk_pct) / (buy_price * 0.05) # Dummy 5% stop dist
+
+                if qty > 0:
+                    position_qty = qty
+                    entry_price = buy_price
+                    entry_time = ts
+                    entry_fee = (qty * entry_price) * fee_pct
+                    capital -= entry_fee
+
+        # Mark-to-market
+        if position_qty > 0.0:
+            unrealized_pnl = (c - entry_price) * position_qty
+        else:
+            unrealized_pnl = 0.0
+        equity.append(capital + unrealized_pnl)
+
+    # Fechamento Final
+    open_pnl = 0.0
+    open_position = None
+    if position_qty > 0.0 and n > 0:
+        last_close = df.iloc[-1]["close"]
+        open_pnl = (last_close - entry_price) * position_qty
+        open_position = {
+            "entry_time": entry_time,
+            "entry": entry_price,
+            "qty": position_qty,
+            "open_pnl": open_pnl
+        }
+
+    metrics = calculate_metrics(trades)
+    equity_series = pd.Series(equity)
+    returns = equity_series.pct_change().dropna()
+    metrics["sharpe_ratio"] = float(calculate_sharpe_ratio(returns))
+    metrics["final_equity"] = float(equity[-1]) if equity else float(config["backtest"]["initial_capital"])
+    if config.get("backtest", {}).get("initial_capital"):
+        metrics["total_return_pct"] = (metrics["final_equity"] / float(config["backtest"]["initial_capital"])) - 1.0
+    
+    metrics["open_pnl"] = float(open_pnl)
+    metrics["open_trades"] = 1 if open_position is not None else 0
+
+    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics, "open_position": open_position}
+
+
+def _backtest_dynamic_volatility_v6(df: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Backtest Modo V6 Robust:
+    - Stop Loss Dinâmico via ATR (Chandelier Exit adaptado).
+    - Trailing Stop: High - (ATR * Mult).
+    """
+    capital = float(config["backtest"]["initial_capital"])
+    strategy = config.get("strategy", {})
+
+    fee_pct = float(strategy.get("fee_pct", 0.0))
+    risk_pct = float(strategy.get("risk_per_trade_pct", 0.02))
+    use_all_equity = bool(strategy.get("use_all_equity", True))
+    
+    # Parâmetros ATR Trailing
+    stop_atr_mult = float(strategy.get("stop_atr_mult", 2.5))
+    
+    position_qty = 0.0
+    entry_price = 0.0
+    entry_time = None
+    entry_fee = 0.0
+    
+    current_stop_price = 0.0
+    
+    trades: List[Dict[str, Any]] = []
+    equity: List[float] = []
+
+    if 'exit_signal' not in df.columns: df['exit_signal'] = 0
+    if 'atr' not in df.columns: df['atr'] = df['close'] * 0.02 # Fallback
+
+    n = int(len(df))
+    for idx in range(n):
+        row = df.iloc[idx]
+        is_last_bar = idx == n - 1
+        ts = row["Date"] if "Date" in row else df.index[idx]
+
+        o, h, l, c = row["open"], row["high"], row["low"], row["close"]
+        atr = row['atr']
+        
+        exit_reason = None
+        exit_price_exec = 0.0
+
+        # --- SE POSICIONADO ---
+        if position_qty > 0.0:
+            # 1. Atualizar Trailing Stop (ATR Based)
+            # Stop = High - (ATR * Mult). O stop só sobe.
+            potential_new_stop = h - (atr * stop_atr_mult)
+            if potential_new_stop > current_stop_price:
+                current_stop_price = potential_new_stop
+            
+            # Checar Stop Loss
+            if l <= current_stop_price:
+                exit_price_exec = current_stop_price
+                if exit_price_exec > h: exit_price_exec = o # Gap
+                exit_reason = "atr_trailing_stop"
+            
+            # Checar Saída Técnica
+            elif row['exit_signal'] == 1:
+                exit_price_exec = c
+                exit_reason = "cross_exit"
+
+            # Executar Saída
+            if exit_reason:
+                qty = position_qty
+                exit_fee = (qty * exit_price_exec) * fee_pct
+                gross_pnl = (exit_price_exec - entry_price) * qty
+                capital += gross_pnl - exit_fee
+                net_pnl = gross_pnl - entry_fee - exit_fee
+                
+                trades.append({
+                    "entry_time": entry_time,
+                    "exit_time": ts,
+                    "entry": entry_price,
+                    "exit": exit_price_exec,
+                    "qty": qty,
+                    "pnl_gross": gross_pnl,
+                    "pnl": net_pnl,
+                    "reason": exit_reason,
+                    "date": ts
+                })
+                position_qty = 0.0
+                entry_price = 0.0
+                current_stop_price = 0.0
+
+        # --- SE FLAT ---
+        if position_qty == 0.0 and not is_last_bar:
+            if row['signal'] == 1:
+                buy_price = c
+                
+                # Tamanho da Posição
+                if use_all_equity:
+                    qty = capital / buy_price
+                else:
+                    # Risco Baseado em Volatilidade?
+                    # Ou fixo % do capital? Vamos manter fixo por enquanto ou full.
+                    # Se quiséssemos Volatility Targeting: Risk$ / (ATR * Mult)
+                    qty = (capital * risk_pct) / (atr * stop_atr_mult) # Exemplo
+                    # Mas vamos simplificar para manter coerência com o pedido
+                    qty = (capital * risk_pct) / (buy_price * 0.02) # Dummy risk calc
+
+                if qty > 0:
+                    position_qty = qty
+                    entry_price = buy_price
+                    entry_time = ts
+                    entry_fee = (qty * entry_price) * fee_pct
+                    capital -= entry_fee
+                    
+                    # Inicializa Stop ATR
+                    current_stop_price = entry_price - (atr * stop_atr_mult)
+
+        # Mark-to-market
+        if position_qty > 0.0:
+            unrealized_pnl = (c - entry_price) * position_qty
+        else:
+            unrealized_pnl = 0.0
+        equity.append(capital + unrealized_pnl)
+
+    # Fechamento Final
+    open_pnl = 0.0
+    open_position = None
+    if position_qty > 0.0 and n > 0:
+        last_close = df.iloc[-1]["close"]
+        open_pnl = (last_close - entry_price) * position_qty
+        open_position = {
+            "entry_time": entry_time,
+            "entry": entry_price,
+            "qty": position_qty,
+            "open_pnl": open_pnl
+        }
+
+    metrics = calculate_metrics(trades)
+    equity_series = pd.Series(equity)
+    returns = equity_series.pct_change().dropna()
+    metrics["sharpe_ratio"] = float(calculate_sharpe_ratio(returns))
+    metrics["final_equity"] = float(equity[-1]) if equity else float(config["backtest"]["initial_capital"])
+    if config.get("backtest", {}).get("initial_capital"):
+        metrics["total_return_pct"] = (metrics["final_equity"] / float(config["backtest"]["initial_capital"])) - 1.0
+    
+    metrics["open_pnl"] = float(open_pnl)
+    metrics["open_trades"] = 1 if open_position is not None else 0
+
+    return {"config": config, "trades": trades, "equity": equity, "metrics": metrics, "open_position": open_position}
 
 
 def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
@@ -195,6 +629,18 @@ def backtest_ema_only(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
     # Execução fiel ao Pine para o modo Trend Surfer v4
     if config.get("strategy", {}).get("signal_mode") == "trend_surfer_v4":
         return _backtest_trend_surfer_v4_pine(df, config)
+
+    # Execução fiel ao Pine para o modo v5.2
+    if config.get("strategy", {}).get("signal_mode") == "ema_strategy_v5_2":
+        return _backtest_ema_strategy_v5_2(df, config)
+
+    # Execução Modo V6 Robust
+    if config.get("strategy", {}).get("signal_mode") == "dynamic_volatility_v6":
+        return _backtest_dynamic_volatility_v6(df, config)
+
+    # Execução Modo SuperTrend AI
+    if config.get("strategy", {}).get("signal_mode") == "supertrend_ai":
+        return _backtest_supertrend_ai(df, config)
 
     # Simulação de trades
     capital = float(config['backtest']['initial_capital'])
